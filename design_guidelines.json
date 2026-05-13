@@ -1,0 +1,97 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 5 (Jewel & Luxury)",
+  "colors": {
+    "background": "#050505",
+    "surface": "rgba(255, 255, 255, 0.03)",
+    "surface_glass": "rgba(20, 20, 20, 0.6)",
+    "primary": "#9333EA",
+    "primary_glow": "rgba(147, 51, 234, 0.5)",
+    "secondary": "#FBBF24",
+    "secondary_glow": "rgba(251, 191, 36, 0.4)",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A1A1AA",
+    "border": "rgba(255, 255, 255, 0.08)",
+    "success": "#10B981",
+    "danger": "#EF4444",
+    "gradients": {
+      "royal_purple": "linear-gradient(135deg, #6B21A8 0%, #9333EA 100%)",
+      "elite_gold": "linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)",
+      "glass": "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)"
+    }
+  },
+  "typography": {
+    "heading_font": "Outfit",
+    "body_font": "Inter",
+    "scales": {
+      "h1": "text-5xl md:text-6xl font-semibold tracking-tight text-white",
+      "h2": "text-3xl md:text-4xl font-semibold tracking-tight text-white",
+      "h3": "text-xl md:text-2xl font-medium tracking-tight text-white",
+      "body": "text-base text-zinc-400 leading-relaxed",
+      "small": "text-sm text-zinc-500 tracking-wide uppercase"
+    }
+  },
+  "layout": {
+    "marketing_grid": "grid-cols-1 md:grid-cols-12 gap-8",
+    "dashboard_grid": "grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6",
+    "container_padding": "px-6 md:px-12 lg:px-24 py-12 md:py-24",
+    "card_padding": "p-6 md:p-8"
+  },
+  "effects": {
+    "glassmorphism": "backdrop-blur-xl bg-white/5 border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.4)]",
+    "neon_glow_purple": "drop-shadow-[0_0_15px_rgba(147,51,234,0.5)]",
+    "neon_glow_gold": "drop-shadow-[0_0_15px_rgba(251,191,36,0.5)]",
+    "hover_lift": "hover:-translate-y-1 hover:shadow-[0_12px_40px_rgba(147,51,234,0.2)] transition-all duration-300 ease-out",
+    "border_radius": "rounded-2xl"
+  },
+  "components": {
+    "button_primary": "bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-xl px-6 py-3 transition-all duration-300 shadow-[0_0_15px_rgba(147,51,234,0.4)] hover:shadow-[0_0_25px_rgba(147,51,234,0.6)]",
+    "button_secondary": "bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium rounded-xl px-6 py-3 transition-all duration-300",
+    "card": "backdrop-blur-xl bg-[#0F0F13]/80 border border-white/10 rounded-2xl p-6 relative overflow-hidden",
+    "input": "bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-all",
+    "table": "w-full text-left border-collapse",
+    "table_header": "text-xs font-semibold text-zinc-400 uppercase tracking-wider border-b border-white/10 pb-3",
+    "table_cell": "py-4 border-b border-white/5 text-sm text-zinc-300",
+    "badge_gold": "bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-full text-xs font-medium",
+    "badge_purple": "bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2.5 py-0.5 rounded-full text-xs font-medium"
+  },
+  "media": {
+    "images": [
+      {
+        "category": "hero_background",
+        "url": "https://images.unsplash.com/photo-1771226281605-f1e505ade901?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTB8MHwxfHNlYXJjaHwyfHxsdXh1cnklMjBhYnN0cmFjdCUyMGRhcmslMjB0ZXh0dXJlfGVufDB8fHx8MTc3ODUyNjk0MHww&ixlib=rb-4.1.0&q=85",
+        "description": "Abstract dark geometric pattern with golden accents - use for marketing hero background with overlay bg-black/60"
+      },
+      {
+        "category": "vip_card_background",
+        "url": "https://images.unsplash.com/photo-1572798793517-03198986ca9e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNTl8MHwxfHNlYXJjaHwyfHxsdXh1cnklMjBWSVAlMjBjYXJkJTIwZGFya3xlbnwwfHx8fDE3Nzg1MjY5NTl8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Black luxury card - use for membership tier visual background"
+      },
+      {
+        "category": "dashboard_texture",
+        "url": "https://images.unsplash.com/photo-1760224254117-7a40f7f03fe2?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxOTB8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBhYnN0cmFjdCUyMGRhcmslMjB0ZXh0dXJlfGVufDB8fHx8MTc3ODUyNjk0MHww&ixlib=rb-4.1.0&q=85",
+        "description": "Dark blue/black fabric soft reflections - use as subtle background for specific dashboard widgets"
+      }
+    ]
+  },
+  "icons_library": "lucide-react",
+  "data_visualization": {
+    "library": "recharts",
+    "tooltip_style": "glassmorphism",
+    "color_palette": ["#9333EA", "#FBBF24", "#A855F7", "#F59E0B"]
+  },
+  "testing": {
+    "required_attributes": ["data-testid"]
+  },
+  "instructions_to_main_agent": [
+    "Install and use Outfit font from Google Fonts for all headings, Inter for body.",
+    "Implement pure HTML/Tailwind for marketing pages (Home, About, Plans). Heavy use of glassmorphism and the Tracing Beam effect for cards.",
+    "For Dashboard pages (User & Admin), use Shadcn components but heavily customize them with the glassmorphism and dark luxury theme provided.",
+    "Do NOT use pure white #FFFFFF for backgrounds. Stick strictly to #050505 as the base body background.",
+    "Use lucide-react for all icons, setting stroke widths to 1.5 for elegance.",
+    "Ensure the referral tree and task progress bars utilize the gold and purple gradients.",
+    "All cards must have a 1px border of white/10 (rgba(255,255,255,0.1)) to maintain the premium 'Crystal' glass look.",
+    "Use recharts for the profit analytics charts, with deep purple/gold strokes and transparent/glass tooltips.",
+    "Avoid the standard 'Vercel look' in Shadcn. Overwrite background classes to use black/40 and add subtle shadow glows on active states."
+  ]
+}
