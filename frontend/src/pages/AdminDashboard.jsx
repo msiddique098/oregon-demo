@@ -13,7 +13,7 @@ export default function AdminDashboard() {
     return (
         <AdminLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Royal Admin</p>
-            <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Console Overview</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Console Overview</h1>
 
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mt-8">
                 <StatCard testId="admin-stat-users" label="Total Users" value={stats.total_users} sub={`${stats.active_users} active`} icon={Users} accent="purple" />

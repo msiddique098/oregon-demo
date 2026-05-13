@@ -50,10 +50,10 @@ export default function AdminUsers() {
 
     return (
         <AdminLayout>
-            <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">User Management</p>
-                    <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Royal Subjects</h1>
+                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Subjects</h1>
                 </div>
                 <div className="relative">
                     <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -63,7 +63,7 @@ export default function AdminUsers() {
 
             <div className="glass-strong mt-6 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[720px]">
                         <thead className="bg-black/40">
                             <tr className="text-xs uppercase tracking-widest text-zinc-500">
                                 <th className="text-left px-5 py-3">User</th><th className="text-left">Coin</th><th className="text-left">Balance</th><th className="text-left">Daily</th><th className="text-left">Tasks</th><th className="text-left">Membership</th><th className="text-left">Status</th><th></th>
@@ -96,7 +96,7 @@ export default function AdminUsers() {
             {editing && (
                 <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="glass-strong max-w-2xl w-full p-6 max-h-[90vh] overflow-auto">
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                             <h3 className="font-display text-xl">Edit user</h3>
                             <button onClick={() => setEditing(null)}><X className="w-5 h-5 text-zinc-400" /></button>
                         </div>

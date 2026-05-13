@@ -33,7 +33,7 @@ export default function Home() {
                                 <Youtube className="w-4 h-4 text-red-400" />
                                 <span className="text-xs tracking-wider uppercase text-zinc-300">Verified YouTube task rewards</span>
                             </div>
-                            <h1 className="text-5xl md:text-6xl lg:text-7xl font-display font-semibold leading-[1.05] tracking-tight">
+                            <h1 className="text-3xl sm:text-5xl md:text-6xl lg:text-7xl font-display font-semibold leading-[1.05] tracking-tight">
                                 Complete tasks.
                                 <span className="block gradient-text-gold text-glow-gold">Upload proof.</span>
                                 Earn approved rewards.
@@ -58,7 +58,7 @@ export default function Home() {
                                 <p className="text-xs uppercase tracking-widest text-zinc-500">Example task card</p>
                                 <h2 className="text-2xl font-display mt-3">Subscribe to campaign channel</h2>
                                 <p className="text-sm text-zinc-400 mt-2">Open the YouTube channel, subscribe, then upload a screenshot showing the channel name and Subscribed button.</p>
-                                <div className="grid grid-cols-2 gap-3 mt-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-6">
                                     <div className="bg-black/40 border border-white/5 rounded-xl p-4"><p className="text-[10px] text-zinc-500 uppercase tracking-widest">Reward</p><p className="text-2xl font-display gradient-text-gold">+2.00 USDT</p></div>
                                     <div className="bg-black/40 border border-white/5 rounded-xl p-4"><p className="text-[10px] text-zinc-500 uppercase tracking-widest">Status</p><p className="text-lg text-amber-300">Pending review</p></div>
                                 </div>
@@ -72,7 +72,7 @@ export default function Home() {
             <section className="max-w-7xl mx-auto px-6 lg:px-12 py-16">
                 <div className="text-center max-w-3xl mx-auto mb-12">
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">How it works</p>
-                    <h2 className="text-3xl md:text-4xl font-display font-semibold mt-2">A clear proof-based earning flow</h2>
+                    <h2 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-2">A clear proof-based earning flow</h2>
                     <p className="text-zinc-400 mt-3">Every reward is linked to a task submission and review decision.</p>
                 </div>
                 <div className="grid md:grid-cols-5 gap-4">
@@ -89,9 +89,9 @@ export default function Home() {
             </section>
 
             <section className="max-w-5xl mx-auto px-6 lg:px-12 py-16 text-center">
-                <div className="glass-strong p-8 md:p-10">
+                <div className="glass-strong p-4 sm:p-6 lg:p-8 md:p-10">
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Important transparency note</p>
-                    <h2 className="text-3xl font-display mt-3">Rewards are not guaranteed until proof is approved.</h2>
+                    <h2 className="text-2xl sm:text-3xl font-display mt-3">Rewards are not guaranteed until proof is approved.</h2>
                     <p className="text-zinc-400 mt-4">Task availability, reward amounts, approval decisions, account levels, and withdrawal eligibility are controlled by platform rules. Always read task instructions before submitting proof.</p>
                     <Link to={primaryPath} className="btn-royal mt-6 inline-flex">{user ? primaryLabel : "Create account"} <ArrowRight className="w-4 h-4" /></Link>
                 </div>

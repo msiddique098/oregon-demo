@@ -124,10 +124,10 @@ export default function Rewards() {
 
     return <DashboardLayout>
         <ConfettiBurst active={burst} />
-        <div className="flex items-center justify-between flex-wrap gap-3 mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3 mb-8">
             <div>
                 <p className="text-xs uppercase tracking-widest text-amber-400/80">Daily retention engine</p>
-                <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Reward Hub</h1>
+                <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Reward Hub</h1>
                 <p className="text-sm text-zinc-400 mt-2">Claim daily check-ins, use available spin tokens, and complete approved YouTube tasks to grow your reward balance.</p>
             </div>
             <Badge color="gold">{overview?.spin_tokens || 0} spin tokens</Badge>
@@ -150,12 +150,12 @@ export default function Rewards() {
                 <div className="flex items-start justify-between gap-4">
                     <div>
                         <p className="text-xs uppercase tracking-widest text-zinc-500">Current Reward Balance</p>
-                        <h2 className="text-3xl font-display mt-2 gradient-text-gold">$<AnimatedCounter value={balance} decimals={2} /></h2>
+                        <h2 className="text-2xl sm:text-3xl font-display mt-2 gradient-text-gold">$<AnimatedCounter value={balance} decimals={2} /></h2>
                         <p className="text-sm text-zinc-400 mt-2">This is your real updated balance after approved tasks, daily check-ins, spins, referral rewards, and deposit bonuses.</p>
                     </div>
                     <div className="w-12 h-12 rounded-2xl gradient-purple flex items-center justify-center neon-purple"><Wallet className="w-6 h-6" /></div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-4 text-xs">
                     <div className="rounded-xl bg-black/35 border border-white/5 p-3"><span className="text-zinc-500">Bonus Balance</span><p className="text-amber-200 font-semibold">${Number(overview?.wallet?.bonus_balance || 0).toFixed(2)}</p></div>
                     <div className="rounded-xl bg-black/35 border border-white/5 p-3"><span className="text-zinc-500">First Task Bonus</span><p className="text-amber-200 font-semibold">{overview?.first_task_reward?.claimed ? "Claimed" : `$${Number(overview?.first_task_reward?.amount || 10).toFixed(2)} pending`}</p></div>
                 </div>
@@ -192,7 +192,7 @@ export default function Rewards() {
             </Card>
 
             <div className="lg:col-span-2 space-y-4">
-                <div className="flex items-center justify-between"><h2 className="text-xl font-display">Available Tasks</h2><Badge>{tasks.length} tasks</Badge></div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><h2 className="text-xl font-display">Available Tasks</h2><Badge>{tasks.length} tasks</Badge></div>
                 <div className="grid sm:grid-cols-2 gap-4">
                     <AnimatePresence>
                         {tasks.map(task => <motion.div key={task.id} layout initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="glass-strong p-5 group hover:border-amber-500/30 transition-all">
@@ -201,7 +201,7 @@ export default function Rewards() {
                                 {task.status === "locked" ? <Lock className="w-5 h-5 text-zinc-500" /> : task.status === "cooldown" ? <Timer className="w-5 h-5 text-amber-300" /> : <CheckCircle2 className="w-5 h-5 text-emerald-300" />}
                             </div>
                             <p className="text-sm text-zinc-400 mt-2 min-h-[42px]">{task.description || "Complete the task and submit screenshot proof in the Task Center."}</p>
-                            <div className="flex items-center justify-between mt-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
                                 <span className="text-2xl font-display gradient-text-gold">+{task.reward}</span>
                                 <button disabled={task.status !== "available"} onClick={() => complete(task)} className={`px-4 py-2 rounded-xl text-sm ${task.status === "available" ? "btn-gold" : "bg-white/5 text-zinc-500 border border-white/10"}`}>{task.status === "available" ? "submit proof" : task.status}</button>
                             </div>

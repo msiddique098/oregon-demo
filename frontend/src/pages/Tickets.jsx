@@ -25,10 +25,10 @@ export default function Tickets() {
 
     return (
         <DashboardLayout>
-            <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Royal Concierge</p>
-                    <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Support Tickets</h1>
+                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Support Tickets</h1>
                 </div>
                 <button onClick={() => setCreating(true)} className="btn-gold" data-testid="new-ticket-btn"><Plus className="w-4 h-4" /> New Ticket</button>
             </div>
@@ -51,7 +51,7 @@ export default function Tickets() {
                                     <p className="text-sm font-semibold truncate flex-1">{t.subject}</p>
                                     {t.unread_for_user > 0 && <span className="bg-amber-500 text-black text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shrink-0">{t.unread_for_user}</span>}
                                 </div>
-                                <div className="flex gap-2 mt-2">
+                                <div className="flex flex-wrap gap-2 mt-2">
                                     <Badge color={STATUS_COLORS[t.status]}>{t.status}</Badge>
                                     <Badge color={PRIORITY_COLORS[t.priority]}>{t.priority}</Badge>
                                 </div>
@@ -116,7 +116,7 @@ export function TicketThread({ role, ticket, messages, setMessages, onBack, onUp
                         <p className="text-xs text-zinc-500">{role === "admin" ? `${ticket.user_name} · ${ticket.user_email}` : `Ticket #${ticket.id.slice(0, 8)}`}</p>
                     </div>
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex flex-wrap gap-2 shrink-0">
                     <Badge color={STATUS_COLORS[ticket.status]}>{ticket.status}</Badge>
                     <Badge color={PRIORITY_COLORS[ticket.priority]}>{ticket.priority}</Badge>
                 </div>
@@ -139,7 +139,7 @@ export function TicketThread({ role, ticket, messages, setMessages, onBack, onUp
             <div className="p-4 border-t border-white/5 space-y-2">
                 {err && <p className="text-xs text-rose-400"><AlertCircle className="w-3.5 h-3.5 inline mr-1" />{err}</p>}
                 {file && <div className="text-xs text-emerald-300 flex items-center gap-2"><Paperclip className="w-3.5 h-3.5" /> Attachment ready <button onClick={() => setFile("")}><X className="w-3 h-3" /></button></div>}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <label className="btn-ghost py-2 px-3 cursor-pointer"><Paperclip className="w-4 h-4" /><input type="file" accept="image/*" className="hidden" onChange={onFile} /></label>
                     <input className="input-royal flex-1" placeholder="Type your message..." value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} data-testid={`${role}-ticket-input`} />
                     <button onClick={send} className="btn-royal" data-testid={`${role}-ticket-send`}><Send className="w-4 h-4" /></button>
@@ -172,7 +172,7 @@ function NewTicketModal({ onClose, onCreated }) {
     return (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
             <form onSubmit={submit} className="glass-strong max-w-lg w-full p-6 space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <h3 className="font-display text-xl">New Royal Ticket</h3>
                     <button type="button" onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button>
                 </div>

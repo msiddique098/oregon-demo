@@ -5,7 +5,7 @@ import { Crown } from "lucide-react";
 export default function Footer() {
     return (
         <footer className="border-t border-white/5 mt-24" data-testid="public-footer">
-            <div className="max-w-7xl mx-auto px-6 lg:px-12 py-12 grid md:grid-cols-4 gap-8">
+            <div className="max-w-7xl mx-auto px-6 lg:px-12 py-12 grid md:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
                 <div>
                     <div className="flex items-center gap-2 mb-4">
                         <span className="w-9 h-9 rounded-xl gradient-purple flex items-center justify-center neon-purple">

@@ -142,7 +142,7 @@ function AuthFrame({ title, subtitle, children }) {
                     </span>
                     <span className="font-display text-xl font-semibold">Royal<span className="gradient-text-gold">Crypto</span></span>
                 </Link>
-                <div className="glass-strong p-8 relative">
+                <div className="glass-strong p-4 sm:p-6 lg:p-8 relative">
                     <div className="absolute top-0 left-6 right-6 h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent"></div>
                     <h1 className="font-display text-2xl font-semibold">{title}</h1>
                     <p className="text-sm text-zinc-400 mb-6">{subtitle}</p>

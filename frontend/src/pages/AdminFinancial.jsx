@@ -59,10 +59,10 @@ export function AdminFinancialLogs() {
 
     return (
         <AdminLayout>
-            <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Financial Logs</p>
-                    <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Royal Ledger</h1>
+                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Ledger</h1>
                 </div>
                 <button onClick={exportCsv} className="btn-gold" data-testid="export-csv-btn"><Download className="w-4 h-4" /> Export CSV</button>
             </div>
@@ -90,7 +90,7 @@ export function AdminFinancialLogs() {
 
             <div className="glass-strong mt-4 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[720px]">
                         <thead className="bg-black/40">
                             <tr className="text-xs uppercase text-zinc-500">
                                 <th className="text-left px-5 py-3">User</th><th className="text-left">Type</th><th className="text-left">Amount</th><th className="text-left">Coin</th><th className="text-left">Before → After</th><th className="text-left">Note</th><th className="text-left">When</th>
@@ -135,10 +135,10 @@ export function AdminActivity() {
 
     return (
         <AdminLayout>
-            <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Activity Logs</p>
-                    <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">User Activity</h1>
+                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">User Activity</h1>
                 </div>
                 <select className="input-royal w-auto py-2 px-3 text-xs" value={userId} onChange={e => setUserId(e.target.value)}>
                     <option value="">All users</option>
@@ -147,7 +147,7 @@ export function AdminActivity() {
             </div>
             <div className="glass-strong mt-6 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[720px]">
                         <thead className="bg-black/40"><tr className="text-xs uppercase text-zinc-500">
                             <th className="text-left px-5 py-3">User</th><th className="text-left">Action</th><th className="text-left">IP</th><th className="text-left">User Agent</th><th className="text-left">When</th>
                         </tr></thead>

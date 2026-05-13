@@ -44,10 +44,10 @@ export function AdminPackages() {
 
     return (
         <AdminLayout>
-            <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Membership Packages</p>
-                    <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Royal Tiers</h1>
+                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Tiers</h1>
                 </div>
                 <button className="btn-gold" onClick={() => { setForm(EMPTY); setEditing("new"); }} data-testid="add-package-btn"><Plus className="w-4 h-4" /> New Package</button>
             </div>
@@ -55,7 +55,7 @@ export function AdminPackages() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5 mt-6">
                 {items.map(p => (
                     <div key={p.id} className="glass-strong p-6">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
                                 <Badge color="gold">{p.tier}</Badge>
                                 <h3 className="mt-2 font-display text-xl">{p.name}</h3>
@@ -69,7 +69,7 @@ export function AdminPackages() {
                             <li><span className="text-amber-300">{p.spin_tokens || 0} spins</span> included with this plan</li>
                             <li className="text-xs text-zinc-500">Admin outcomes configured: {(p.spin_reward_queue || []).length || 0}</li>
                         </ul>
-                        <div className="flex gap-2 mt-4">
+                        <div className="flex flex-wrap gap-2 mt-4">
                             <button onClick={() => { setEditing(p.id); setForm({ ...p, perks: p.perks.join("\n"), spin_reward_queue: spinValuesToText(p.spin_reward_queue) }); }} className="btn-ghost text-xs py-1.5 px-3"><Edit3 className="w-3.5 h-3.5" /> Edit</button>
                             <button onClick={() => del(p.id)} className="btn-ghost text-xs py-1.5 px-3 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
@@ -80,7 +80,7 @@ export function AdminPackages() {
             {editing && (
                 <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
                     <div className="glass-strong max-w-2xl w-full p-6 max-h-[90vh] overflow-auto">
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                             <h3 className="font-display text-xl">{editing === "new" ? "New Package" : "Edit Package"}</h3>
                             <button onClick={() => setEditing(null)}><X className="w-5 h-5 text-zinc-400" /></button>
                         </div>
@@ -136,7 +136,7 @@ export function AdminWallets() {
     return (
         <AdminLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Deposit Wallets</p>
-            <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Wallet Vaults</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Wallet Vaults</h1>
             <form className="glass-strong p-6 mt-6 grid sm:grid-cols-2 lg:grid-cols-5 gap-3" onSubmit={add}>
                 <input className="input-royal" placeholder="Coin" value={form.coin} onChange={e => setForm({...form, coin: e.target.value})} />
                 <input className="input-royal" placeholder="Network" value={form.network} onChange={e => setForm({...form, network: e.target.value})} />
@@ -147,7 +147,7 @@ export function AdminWallets() {
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
                 {items.map(w => (
                     <div key={w.id} className="glass-strong p-5">
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-2">
                             <Badge color="gold">{w.coin}</Badge>
                             <span className="text-xs text-zinc-500">{w.network}</span>
                         </div>
@@ -172,10 +172,10 @@ export function AdminWithdrawals() {
     };
     return (
         <AdminLayout>
-            <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Withdrawals</p>
-                    <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Approval Center</h1>
+                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Approval Center</h1>
                 </div>
                 <select className="input-royal w-40" value={filter} onChange={e => setFilter(e.target.value)}>
                     <option value="">All</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option>
@@ -183,7 +183,7 @@ export function AdminWithdrawals() {
             </div>
             <div className="glass-strong mt-6 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[720px]">
                         <thead className="bg-black/40"><tr className="text-xs uppercase text-zinc-500">
                             <th className="text-left px-5 py-3">User</th><th className="text-left">Amount</th><th className="text-left">Coin</th><th className="text-left">Address</th><th className="text-left">Status</th><th className="text-left">SLA</th><th></th>
                         </tr></thead>
@@ -199,7 +199,7 @@ export function AdminWithdrawals() {
                                         <input className="input-royal w-16 py-1" defaultValue={w.processing_hours} onBlur={(e) => decide(w.id, w.status, e.target.value)} />
                                     </td>
                                     <td className="pr-5">
-                                        <div className="flex gap-2 justify-end">
+                                        <div className="flex flex-wrap gap-2 justify-end">
                                             <button onClick={() => decide(w.id, "approved")} className="btn-ghost text-xs py-1 px-2 hover:bg-emerald-500/10 hover:text-emerald-300" data-testid={`wd-approve-${w.id}`}>Approve</button>
                                             <button onClick={() => decide(w.id, "rejected")} className="btn-ghost text-xs py-1 px-2 hover:bg-rose-500/10 hover:text-rose-300">Reject</button>
                                         </div>
@@ -229,10 +229,10 @@ export function AdminDeposits() {
     return (
         <AdminLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Deposits</p>
-            <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Royal Vault Inflows</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Vault Inflows</h1>
             <div className="glass-strong mt-6 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[720px]">
                         <thead className="bg-black/40"><tr className="text-xs uppercase text-zinc-500">
                             <th className="text-left px-5 py-3">User</th><th className="text-left">Amount</th><th className="text-left">Coin</th><th className="text-left">Tx</th><th className="text-left">Proof</th><th className="text-left">Spin Values</th><th className="text-left">Status</th><th></th>
                         </tr></thead>
@@ -251,7 +251,7 @@ export function AdminDeposits() {
                                     </td>
                                     <td><Badge color={d.status === "approved" ? "emerald" : d.status === "rejected" ? "rose" : "gold"}>{d.status}</Badge></td>
                                     <td className="pr-5">
-                                        <div className="flex gap-2 justify-end">
+                                        <div className="flex flex-wrap gap-2 justify-end">
                                             <button onClick={() => decide(d.id, "approved")} className="btn-ghost text-xs py-1 px-2 hover:bg-emerald-500/10 hover:text-emerald-300">Approve</button>
                                             <button onClick={() => decide(d.id, "rejected")} className="btn-ghost text-xs py-1 px-2 hover:bg-rose-500/10 hover:text-rose-300">Reject</button>
                                         </div>
@@ -277,7 +277,7 @@ export function AdminAnnouncements() {
     return (
         <AdminLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">CMS</p>
-            <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Royal Announcements</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Announcements</h1>
             <form className="glass-strong p-6 mt-6 space-y-3" onSubmit={add}>
                 <input className="input-royal" placeholder="Title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} required />
                 <textarea className="input-royal min-h-[100px]" placeholder="Body" value={form.body} onChange={e => setForm({...form, body: e.target.value})} required />

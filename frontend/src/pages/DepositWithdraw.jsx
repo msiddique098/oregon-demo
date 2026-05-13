@@ -49,7 +49,7 @@ export function Deposit() {
     return (
         <DashboardLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Royal Vault</p>
-            <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Deposit</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Deposit</h1>
 
             <div className="grid lg:grid-cols-2 gap-5 mt-8">
                 <div className="glass-strong p-6">
@@ -59,7 +59,7 @@ export function Deposit() {
                             <button key={w.id} type="button" onClick={() => setSelected(w)}
                                 data-testid={`wallet-${w.coin}-${w.network}`}
                                 className={`w-full text-left p-4 rounded-xl border transition-all ${selected?.id === w.id ? "bg-purple-500/10 border-purple-500/40" : "bg-black/40 border-white/5 hover:bg-white/5"}`}>
-                                <div className="flex items-center justify-between">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                                     <div className="flex items-center gap-3">
                                         <span className="w-9 h-9 rounded-lg gradient-purple flex items-center justify-center"><WalletIcon className="w-4 h-4 text-white" /></span>
                                         <div>
@@ -75,7 +75,7 @@ export function Deposit() {
                     {selected && (
                         <div className="mt-5 bg-black/40 border border-white/5 rounded-xl p-4">
                             <p className="text-xs text-zinc-500 uppercase tracking-widest">Wallet Address</p>
-                            <div className="flex items-center justify-between mt-2 gap-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-2 gap-2">
                                 <code className="text-sm text-amber-200 break-all">{selected.address}</code>
                                 <button onClick={() => copy(selected.address, selected.id)} className="btn-ghost text-xs py-1.5 px-3">
                                     {copied === selected.id ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -110,7 +110,7 @@ export function Deposit() {
                     <p className="text-sm text-zinc-500">No deposits yet.</p>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table className="w-full text-sm min-w-[720px]">
                             <thead><tr className="text-xs uppercase text-zinc-500"><th className="text-left py-2">Coin</th><th className="text-left">Amount</th><th className="text-left">Status</th><th className="text-left">Date</th></tr></thead>
                             <tbody>
                                 {deposits.map(d => (
@@ -183,7 +183,7 @@ export function Withdraw() {
     return (
         <DashboardLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Withdrawal Request</p>
-            <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Withdraw</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Withdraw</h1>
             <p className="text-zinc-400 max-w-3xl mt-2">Withdrawals are checked against your withdrawable balance, pending withdrawals, locked balance, minimum amount, and admin review rules.</p>
 
             <div className="grid lg:grid-cols-3 gap-5 mt-8">
@@ -219,7 +219,7 @@ export function Withdraw() {
                         <p className="text-sm text-zinc-500">No withdrawals yet.</p>
                     ) : (
                         <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
+                            <table className="w-full text-sm min-w-[720px]">
                                 <thead><tr className="text-xs uppercase text-zinc-500"><th className="text-left py-2">Amount</th><th className="text-left">Coin</th><th className="text-left">Address</th><th className="text-left">Status</th><th className="text-left">ETA</th><th className="text-left">Date</th><th className="text-left">Note</th><th></th></tr></thead>
                                 <tbody>
                                     {list.map(w => (
@@ -243,7 +243,7 @@ export function Withdraw() {
             {showTimeline && (
                 <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowTimeline(null)}>
                     <div className="glass-strong max-w-2xl w-full p-6" onClick={e => e.stopPropagation()}>
-                        <div className="flex items-center justify-between mb-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                             <div>
                                 <h3 className="font-display text-xl">Withdrawal #{showTimeline.id.slice(0, 8)}</h3>
                                 <p className="text-sm text-zinc-400">{showTimeline.amount} {showTimeline.coin}</p>

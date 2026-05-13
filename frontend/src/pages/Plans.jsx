@@ -17,7 +17,7 @@ export default function Plans() {
                 <div className="absolute inset-0 royal-radial pointer-events-none"></div>
                 <div className="relative text-center max-w-3xl mx-auto mb-12">
                     <p className="text-xs uppercase tracking-widest text-amber-400/80 mb-3">Royal Membership</p>
-                    <h1 className="text-4xl md:text-6xl font-display font-semibold">Choose your <span className="gradient-text-gold">crown</span></h1>
+                    <h1 className="text-2xl sm:text-4xl md:text-6xl font-display font-semibold">Choose your <span className="gradient-text-gold">crown</span></h1>
                     <p className="text-zinc-400 mt-4">Each plan shows exactly how many spin-wheel attempts it includes. Bigger plans unlock more spins and faster review priority.</p>
                 </div>
                 <div className="relative grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
@@ -31,7 +31,7 @@ export default function Plans() {
                                     {isRoyal && <Crown className="w-4 h-4 text-amber-300" />}
                                     <p className="text-xs uppercase tracking-widest text-zinc-500">{p.tier}</p>
                                 </div>
-                                <h3 className={`text-3xl font-display font-semibold ${isRoyal ? "gradient-text-gold" : "text-white"}`}>${p.investment}</h3>
+                                <h3 className={`text-2xl sm:text-3xl font-display font-semibold ${isRoyal ? "gradient-text-gold" : "text-white"}`}>${p.investment}</h3>
                                 <p className="text-sm text-emerald-300 mt-1">{p.spin_tokens || 0} spin-wheel attempts included</p>
                                 <div className="my-4 h-px bg-white/5"></div>
                                 <ul className="space-y-2 text-sm text-zinc-300">

@@ -82,7 +82,7 @@ export default function AdminRegistrationCodes() {
                 <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
                     <div>
                         <p className="text-xs uppercase tracking-[0.3em] text-amber-400/70">Admin Growth Control</p>
-                        <h1 className="font-display text-3xl md:text-4xl font-semibold mt-2">Registration Codes</h1>
+                        <h1 className="font-display text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-semibold mt-2">Registration Codes</h1>
                         <p className="text-zinc-400 mt-2 max-w-2xl">
                             Create unique invite codes, assign the Free plan, and control the first-task reward amount for every new user.
                         </p>
@@ -97,18 +97,18 @@ export default function AdminRegistrationCodes() {
                     <Stat icon={CrownIcon} label="Assigned Rewards" value={stats.rewards} money />
                 </div>
 
-                <div className="grid lg:grid-cols-[420px_1fr] gap-6 items-start">
+                <div className="grid lg:grid-cols-[420px_1fr] gap-4 sm:gap-6 items-start">
                     <form onSubmit={createCode} className="glass-strong p-5 space-y-4 border-amber-500/20">
                         <div>
                             <h2 className="font-display text-xl font-semibold">Create Code</h2>
                             <p className="text-sm text-zinc-400 mt-1">Leave code empty to auto-generate a unique Royal code.</p>
                         </div>
                         <Input label="Code" value={form.code} onChange={(v) => setForm({ ...form, code: v.toUpperCase() })} placeholder="Auto / ROYAL-ABCD1234" />
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <Input label="Reward Amount" type="number" value={form.reward_amount} onChange={(v) => setForm({ ...form, reward_amount: v })} />
                             <Input label="Reward Coin" value={form.reward_coin} onChange={(v) => setForm({ ...form, reward_coin: v.toUpperCase() })} />
                         </div>
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <Input label="Plan" value={form.plan_name} onChange={(v) => setForm({ ...form, plan_name: v })} />
                             <Input label="Max Uses" type="number" value={form.max_uses} onChange={(v) => setForm({ ...form, max_uses: v })} />
                         </div>
@@ -130,10 +130,10 @@ export default function AdminRegistrationCodes() {
                                 {[1, 2, 3].map((i) => <div key={i} className="h-16 rounded-2xl bg-white/5 animate-pulse" />)}
                             </div>
                         ) : codes.length === 0 ? (
-                            <div className="p-8 text-center text-zinc-400">No registration codes yet.</div>
+                            <div className="p-4 sm:p-6 lg:p-8 text-center text-zinc-400">No registration codes yet.</div>
                         ) : (
                             <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
+                                <table className="w-full text-sm min-w-[720px]">
                                     <thead className="text-xs text-zinc-500 uppercase bg-white/[0.03]">
                                         <tr>
                                             <th className="text-left px-5 py-3">Code</th>
@@ -183,7 +183,7 @@ export default function AdminRegistrationCodes() {
 function Stat({ icon: Icon, label, value, money }) {
     return (
         <div className="glass p-5 border-amber-500/10">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                 <p className="text-sm text-zinc-400">{label}</p>
                 <Icon className="w-5 h-5 text-amber-300" />
             </div>

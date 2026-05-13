@@ -15,7 +15,7 @@ export default function WithdrawalTimeline({ status, processingHours, adminNote 
 
     return (
         <div className="bg-black/40 border border-white/5 rounded-xl p-4" data-testid="withdrawal-timeline">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                 <p className="text-xs uppercase tracking-widest text-zinc-500">Royal Processing Queue</p>
                 {processingHours != null && (
                     <p className="text-xs text-amber-300">ETA ~{processingHours}h</p>
@@ -36,7 +36,7 @@ export default function WithdrawalTimeline({ status, processingHours, adminNote 
                         <div className="absolute top-4 left-4 right-4 h-px bg-white/10"></div>
                         <div className="absolute top-4 left-4 h-px gradient-gold transition-all duration-700"
                              style={{ width: `calc(${(currentIdx / (STAGES.length - 1)) * 100}% - 32px * ${(currentIdx) / (STAGES.length - 1)})` }}></div>
-                        <div className="relative grid grid-cols-5 gap-2">
+                        <div className="relative grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2">
                             {STAGES.map((s, i) => {
                                 const Icon = s.icon;
                                 const reached = i <= currentIdx;

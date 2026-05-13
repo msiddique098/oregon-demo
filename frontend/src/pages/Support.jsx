@@ -9,7 +9,7 @@ export default function Support() {
             <PublicNav />
             <section className="max-w-4xl mx-auto px-6 lg:px-12 py-16 md:py-20">
                 <p className="text-xs uppercase tracking-widest text-amber-400/80 mb-3">Royal Concierge</p>
-                <h1 className="text-4xl md:text-5xl font-display font-semibold">We&rsquo;re here, your majesty.</h1>
+                <h1 className="text-2xl sm:text-4xl md:text-3xl sm:text-5xl font-display font-semibold">We&rsquo;re here, your majesty.</h1>
                 <p className="text-zinc-400 mt-4">Reach out and our concierge desk will return with white-glove care.</p>
                 <div className="grid md:grid-cols-3 gap-4 mt-10">
                     <div className="glass-strong p-6"><Mail className="w-5 h-5 text-amber-300 mb-3" /><p className="font-semibold">Email</p><p className="text-sm text-zinc-400 mt-1">concierge@royalcrypto.com</p></div>

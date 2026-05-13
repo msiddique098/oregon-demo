@@ -11,7 +11,7 @@ export default function About() {
                 <div className="absolute inset-0 royal-radial pointer-events-none"></div>
                 <div className="relative">
                     <p className="text-xs uppercase tracking-widest text-amber-400/80 mb-3">About Royal Crypto</p>
-                    <h1 className="text-4xl md:text-6xl font-display font-semibold leading-tight">
+                    <h1 className="text-2xl sm:text-4xl md:text-6xl font-display font-semibold leading-tight">
                         Built for a <span className="gradient-text-gold">premium</span> rewards generation.
                     </h1>
                     <p className="text-zinc-400 mt-6 max-w-2xl">

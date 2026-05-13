@@ -61,7 +61,7 @@ export default function NotificationBell() {
             </button>
             {open && (
                 <div className="absolute right-0 mt-2 w-[340px] max-w-[90vw] glass-strong p-4 z-50 animate-fade-up" data-testid="notification-dropdown">
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
                         <p className="text-xs uppercase tracking-widest text-zinc-500">Royal Inbox</p>
                         <div className="flex items-center gap-2">
                             <button onClick={markAll} className="text-[11px] text-amber-300 hover:underline">Mark all read</button>
@@ -69,13 +69,13 @@ export default function NotificationBell() {
                         </div>
                     </div>
                     <div className="max-h-[400px] overflow-y-auto space-y-2">
-                        {items.length === 0 && <p className="text-sm text-zinc-500 py-8 text-center">No notifications yet.</p>}
+                        {items.length === 0 && <p className="text-sm text-zinc-500 py-5 sm:py-6 lg:py-8 text-center">No notifications yet.</p>}
                         {items.slice(0, 12).map(n => {
                             const Icon = ICONS[n.category] || Sparkles;
                             const color = COLORS[n.category] || COLORS.system;
                             return (
                                 <div key={n.id} className={`p-3 rounded-xl border ${n.read ? "border-white/5 bg-black/30" : "border-purple-500/20 bg-purple-500/[0.04]"}`}>
-                                    <div className="flex gap-3">
+                                    <div className="flex flex-wrap gap-3">
                                         <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
                                             <Icon className="w-4 h-4" strokeWidth={1.6} />
                                         </span>

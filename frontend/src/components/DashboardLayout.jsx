@@ -29,11 +29,11 @@ export default function DashboardLayout({ children }) {
     };
 
     return (
-        <div className="min-h-screen bg-[#050505] text-white">
+        <div className="min-h-screen bg-[#050505] text-white overflow-x-hidden">
             <div className="fixed inset-0 royal-radial pointer-events-none"></div>
             <div className="relative flex">
                 {/* Sidebar */}
-                <aside className="hidden lg:flex flex-col w-64 min-h-screen border-r border-white/5 bg-black/40 backdrop-blur-xl" data-testid="dashboard-sidebar">
+                <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 z-30 flex-col w-64 border-r border-white/5 bg-black/40 backdrop-blur-xl" data-testid="dashboard-sidebar">
                     <Link to="/" className="flex items-center gap-2 px-6 py-6 border-b border-white/5">
                         <span className="w-9 h-9 rounded-xl gradient-purple flex items-center justify-center neon-purple">
                             <Crown className="w-5 h-5 text-white" strokeWidth={1.6} />
@@ -85,8 +85,8 @@ export default function DashboardLayout({ children }) {
                     </div>
                 </div>
 
-                <main className="flex-1 min-h-screen pt-16 lg:pt-0 pb-24 lg:pb-0">
-                    <div className="hidden lg:flex items-center justify-end gap-3 px-8 pt-6">
+                <main className="relative min-h-screen pt-16 lg:pt-0 pb-24 lg:pb-0 lg:ml-64 min-w-0">
+                    <div className="hidden lg:flex items-center justify-end gap-3 px-4 sm:px-6 lg:px-8 pt-6">
                         <RealtimeStatus />
                         <NotificationBell />
                     </div>
@@ -103,7 +103,7 @@ export default function DashboardLayout({ children }) {
                             <button onClick={handleLogout} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs whitespace-nowrap text-rose-200 bg-rose-500/10 border border-rose-500/20"><LogOut className="w-3.5 h-3.5" /> Logout</button>
                         </div>
                     </div>
-                    <div className="px-4 md:px-8 py-6 md:py-8 max-w-7xl mx-auto">
+                    <div className="px-4 sm:px-6 lg:px-8 py-5 sm:py-6 lg:py-8 max-w-7xl mx-auto min-w-0">
                         {children}
                     </div>
                 </main>

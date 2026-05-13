@@ -7,7 +7,7 @@ function LegalPage({ title, intro, sections }) {
         <div className="min-h-screen bg-[#050505] text-white">
             <PublicNav />
             <section className="max-w-4xl mx-auto px-6 lg:px-12 py-16 md:py-20">
-                <h1 className="text-4xl md:text-5xl font-display font-semibold">{title}</h1>
+                <h1 className="text-2xl sm:text-4xl md:text-3xl sm:text-5xl font-display font-semibold">{title}</h1>
                 <p className="text-zinc-400 mt-4">{intro}</p>
                 <div className="mt-10 space-y-8">
                     {sections.map((s, i) => (

@@ -14,7 +14,7 @@ export default function BottomNav() {
     return (
         <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50" data-testid="mobile-bottom-nav">
             <div className="mx-3 mb-3 backdrop-blur-2xl bg-black/70 border border-white/10 rounded-2xl shadow-[0_0_40px_rgba(147,51,234,0.25)]">
-                <div className="grid grid-cols-5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                     {items.map(({ to, label, icon: Icon, end }) => (
                         <NavLink key={to} to={to} end={end}
                             data-testid={`bottom-nav-${label.toLowerCase()}`}

@@ -108,7 +108,7 @@ export default function AdminEnterprise() {
                 <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
                     <div>
                         <p className="text-xs uppercase tracking-[0.3em] text-amber-400/70">Enterprise Control Center</p>
-                        <h1 className="font-display text-3xl md:text-4xl font-semibold mt-2">Safe Growth & Risk Controls</h1>
+                        <h1 className="font-display text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-semibold mt-2">Safe Growth & Risk Controls</h1>
                         <p className="text-zinc-400 mt-2 max-w-3xl">Transparent withdrawal rules, real social proof, campaigns, analytics, profit accrual tools, anti-fraud monitoring, and WhatsApp/Telegram support configuration.</p>
                     </div>
                     <button onClick={load} className="btn-ghost"><RefreshCw className="w-4 h-4" /> Refresh</button>
@@ -122,7 +122,7 @@ export default function AdminEnterprise() {
                     <Stat icon={ShieldAlert} label="High Risk 7d" value={stats.high_risk_7d} danger />
                 </div>
 
-                <div className="grid xl:grid-cols-3 gap-6 items-start">
+                <div className="grid xl:grid-cols-3 gap-4 sm:gap-6 items-start">
                     <Panel title="Configurable Withdrawal Rules" icon={SlidersHorizontal}>
                         <div className="grid grid-cols-[1fr_auto] gap-2 mb-4">
                             <Input label="Minimum Withdrawal" type="number" value={minimum} onChange={setMinimum} />
@@ -165,13 +165,13 @@ export default function AdminEnterprise() {
                             <Select label="Target" value={profit.target} onChange={(v) => setProfit({ ...profit, target: v })} options={["all", "tier", "ids"]} />
                             <Input label="Tier or User IDs" value={profit.target === "tier" ? profit.tier : profit.user_ids} onChange={(v) => setProfit(profit.target === "tier" ? { ...profit, tier: v } : { ...profit, user_ids: v })} placeholder="Gold or id1,id2" />
                             <Select label="Balance Field" value={profit.balance_field} onChange={(v) => setProfit({ ...profit, balance_field: v })} options={["balance", "bonus_balance", "daily_profit"]} />
-                            <div className="grid grid-cols-2 gap-2"><Input label="Amount" type="number" value={profit.amount} onChange={(v) => setProfit({ ...profit, amount: v })} /><Input label="Percent" type="number" value={profit.percent} onChange={(v) => setProfit({ ...profit, percent: v })} /></div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2"><Input label="Amount" type="number" value={profit.amount} onChange={(v) => setProfit({ ...profit, amount: v })} /><Input label="Percent" type="number" value={profit.percent} onChange={(v) => setProfit({ ...profit, percent: v })} /></div>
                             <button className="btn-gold w-full" type="submit">Run Audited Accrual</button>
                         </form>
                     </Panel>
                 </div>
 
-                <div className="grid xl:grid-cols-2 gap-6 items-start">
+                <div className="grid xl:grid-cols-2 gap-4 sm:gap-6 items-start">
                     <Panel title="Anti-Fraud Risk Monitor" icon={ShieldAlert}>
                         <List items={fraud.slice(0, 12)} render={(r) => <><span>{r.user_id}</span><small>{r.risk_level} · score {r.risk_score}</small></>} />
                     </Panel>
@@ -192,8 +192,8 @@ export default function AdminEnterprise() {
     );
 }
 
-function Stat({ icon: Icon, label, value, danger }) { return <div className="glass p-5 border-white/10"><div className="flex items-center justify-between"><p className="text-sm text-zinc-400">{label}</p><Icon className={`w-5 h-5 ${danger ? "text-rose-300" : "text-amber-300"}`} /></div><p className="font-display text-2xl mt-4"><AnimatedCounter value={Number(value || 0)} decimals={0} /></p></div>; }
+function Stat({ icon: Icon, label, value, danger }) { return <div className="glass p-5 border-white/10"><div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><p className="text-sm text-zinc-400">{label}</p><Icon className={`w-5 h-5 ${danger ? "text-rose-300" : "text-amber-300"}`} /></div><p className="font-display text-2xl mt-4"><AnimatedCounter value={Number(value || 0)} decimals={0} /></p></div>; }
 function Panel({ title, icon: Icon, children }) { return <div className="glass-strong p-5 border-amber-500/10"><div className="flex items-center gap-2 mb-4"><Icon className="w-5 h-5 text-amber-300" /><h2 className="font-display text-xl font-semibold">{title}</h2></div>{children}</div>; }
 function Input({ label, value, onChange, type = "text", placeholder }) { return <label className="block space-y-1"><span className="text-xs text-zinc-400">{label}</span><input type={type} value={value ?? ""} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400/40" /></label>; }
 function Select({ label, value, onChange, options }) { return <label className="block space-y-1"><span className="text-xs text-zinc-400">{label}</span><select value={value} onChange={(e) => onChange(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400/40">{options.map((o) => <option key={o} value={o}>{o}</option>)}</select></label>; }
-function List({ items, render }) { return <div className="mt-4 space-y-2 max-h-72 overflow-auto pr-1">{(!items || items.length === 0) ? <p className="text-sm text-zinc-500">No records yet.</p> : items.map((item, i) => <div key={item.id || item.user_id || i} className="flex items-center justify-between gap-3 bg-white/[0.03] border border-white/5 rounded-xl p-3 text-sm"><div className="flex flex-col">{render(item)}</div></div>)}</div>; }
+function List({ items, render }) { return <div className="mt-4 space-y-2 max-h-72 overflow-auto pr-1">{(!items || items.length === 0) ? <p className="text-sm text-zinc-500">No records yet.</p> : items.map((item, i) => <div key={item.id || item.user_id || i} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 gap-3 bg-white/[0.03] border border-white/5 rounded-xl p-3 text-sm"><div className="flex flex-col">{render(item)}</div></div>)}</div>; }

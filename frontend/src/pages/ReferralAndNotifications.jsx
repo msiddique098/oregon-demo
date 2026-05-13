@@ -31,13 +31,13 @@ export function Referral() {
     return (
         <DashboardLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Referral Rewards</p>
-            <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Invite members and earn together</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Invite members and earn together</h1>
             <p className="text-sm text-zinc-400 mt-2 max-w-3xl">Referral code is optional during signup. When an invited member gets their first task approved, both accounts receive the configured task referral rewards. You also earn a one-time commission from that member's first approved deposit.</p>
 
             <div className="grid lg:grid-cols-3 gap-5 mt-8">
                 <div className="glass-strong p-6 lg:col-span-2 relative overflow-hidden">
                     <div className="absolute top-0 left-0 right-0 h-px bg-amber-400/60"></div>
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 gap-3 flex-wrap">
                         <div>
                             <p className="text-xs uppercase tracking-widest text-zinc-500">Your referral link</p>
                             <p className="text-xs text-zinc-500 mt-1">Reward rules: first approved task + first approved deposit commission</p>
@@ -67,7 +67,7 @@ export function Referral() {
                         <ul className="space-y-2 max-h-80 overflow-auto pr-1">
                             {records.map((r, i) => (
                                 <li key={r.id || i} className="p-3 bg-black/40 border border-white/5 rounded-xl">
-                                    <div className="flex items-center justify-between gap-2">
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 gap-2">
                                         <p className="text-sm font-medium truncate">{r.referred_user_id}</p>
                                         <Badge color={r.status === "rewarded" ? "gold" : "purple"}>{r.status}</Badge>
                                     </div>
@@ -100,7 +100,7 @@ export function Notifications() {
     return (
         <DashboardLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Notifications</p>
-            <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Royal Inbox</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Inbox</h1>
             <div className="glass-strong p-6 mt-8">
                 {list.length === 0 ? (
                     <p className="text-sm text-zinc-500">No notifications yet.</p>

@@ -57,7 +57,7 @@ export default function LiveFeed({ variant = "default" }) {
     return (
         <div className="glass-strong p-5 relative overflow-hidden" data-testid="live-feed-widget">
             <div className="absolute top-0 left-0 right-0 h-px bg-emerald-400/40"></div>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2">
                     <span className="relative flex w-2 h-2">
                         <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping"></span>

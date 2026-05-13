@@ -130,3 +130,52 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: rgba(147,51,234,0.6); }
 
 ::selection { background: rgba(147,51,234,0.4); color: #fff; }
+
+@layer utilities {
+    .page-shell {
+        @apply w-full min-w-0 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 lg:py-8;
+    }
+    .responsive-card-grid {
+        @apply grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6;
+    }
+    .responsive-action-row {
+        @apply flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3;
+    }
+    .responsive-table-wrap {
+        @apply w-full overflow-x-auto -mx-4 sm:mx-0 px-4 sm:px-0;
+        -webkit-overflow-scrolling: touch;
+    }
+    .mobile-safe {
+        @apply min-w-0 break-words;
+    }
+}
+
+@media (max-width: 767px) {
+    html, body, #root {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+    }
+
+    .glass,
+    .glass-strong {
+        max-width: 100%;
+    }
+
+    .glass:has(table),
+    .glass-strong:has(table) {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+        min-width: 720px;
+    }
+
+    input,
+    select,
+    textarea,
+    button {
+        max-width: 100%;
+    }
+}

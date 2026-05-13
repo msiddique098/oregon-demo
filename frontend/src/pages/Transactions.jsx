@@ -86,7 +86,7 @@ export default function Transactions() {
     return (
         <DashboardLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Royal Wallet Ledger</p>
-            <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Transaction History</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Transaction History</h1>
 
             <div className="grid sm:grid-cols-3 gap-4 mt-6">
                 <div className="glass-strong p-5"><p className="text-xs uppercase tracking-widest text-zinc-500">Total Inflow</p><p className="text-2xl font-display font-semibold text-emerald-300 mt-1">+{formatAmount(totals.inflow)}</p></div>

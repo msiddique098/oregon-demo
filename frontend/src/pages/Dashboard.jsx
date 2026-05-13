@@ -32,10 +32,10 @@ export default function Dashboard() {
 
     return (
         <DashboardLayout>
-            <div className="flex items-center justify-between flex-wrap gap-3 mb-8" data-testid="dashboard-header">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3 mb-8" data-testid="dashboard-header">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Welcome back, {u.name}</p>
-                    <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Royal Overview</h1>
+                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Overview</h1>
                 </div>
                 <div className="flex items-center gap-3">
                     <Badge color="gold">{u.membership_name || "Free"}</Badge>
@@ -50,7 +50,7 @@ export default function Dashboard() {
                     <div className="flex items-start justify-between">
                         <div>
                             <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Total Balance</p>
-                            <p className="text-3xl font-display font-semibold gradient-text-gold">
+                            <p className="text-2xl sm:text-3xl font-display font-semibold gradient-text-gold">
                                 <AnimatedCounter value={u.balance} decimals={2} prefix={sym} />
                             </p>
                             <p className="text-xs text-zinc-400 mt-2">Display coin: {coin}</p>
@@ -61,7 +61,7 @@ export default function Dashboard() {
                 <div className="glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.20)]" data-testid="stat-daily">
                     <div className="absolute top-0 left-0 right-0 h-px bg-emerald-500/40"></div>
                     <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Daily Profit</p>
-                    <p className="text-3xl font-display font-semibold text-emerald-300">
+                    <p className="text-2xl sm:text-3xl font-display font-semibold text-emerald-300">
                         <AnimatedCounter value={u.daily_profit} decimals={2} prefix={sym} />
                     </p>
                     <p className="text-xs text-zinc-400 mt-2">Curated by Royal Admin</p>
@@ -71,7 +71,7 @@ export default function Dashboard() {
                 <div className="glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(147,51,234,0.20)]" data-testid="stat-referral">
                     <div className="absolute top-0 left-0 right-0 h-px bg-purple-500/40"></div>
                     <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Referral Earnings</p>
-                    <p className="text-3xl font-display font-semibold gradient-text-purple">
+                    <p className="text-2xl sm:text-3xl font-display font-semibold gradient-text-purple">
                         <AnimatedCounter value={u.referral_earnings} decimals={2} prefix={sym} />
                     </p>
                     <p className="text-xs text-zinc-400 mt-2">Commission rate {u.commission_rate}%</p>
@@ -84,7 +84,7 @@ export default function Dashboard() {
             {/* Chart + Membership */}
             <div className="grid lg:grid-cols-3 gap-5 mt-6">
                 <div className="lg:col-span-2 glass-strong p-6">
-                    <div className="flex items-center justify-between mb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                         <div>
                             <p className="text-xs uppercase tracking-widest text-zinc-500">Profit Analytics</p>
                             <h3 className="font-display text-lg">Last 14 days</h3>
@@ -164,7 +164,7 @@ export default function Dashboard() {
                     ) : (
                         <div className="space-y-2">
                             {data.withdrawals.slice(0, 5).map(w => (
-                                <div key={w.id} className="flex items-center justify-between p-3 bg-black/40 border border-white/5 rounded-xl">
+                                <div key={w.id} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 bg-black/40 border border-white/5 rounded-xl">
                                     <div className="flex items-center gap-3">
                                         <span className="w-9 h-9 rounded-lg bg-rose-500/10 flex items-center justify-center"><ArrowUpRight className="w-4 h-4 text-rose-300" /></span>
                                         <div>

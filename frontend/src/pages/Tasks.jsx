@@ -92,10 +92,10 @@ export default function Tasks() {
 
     return (
         <DashboardLayout>
-            <div className="flex items-center justify-between flex-wrap gap-3 mb-8">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3 mb-8">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Verified YouTube Tasks</p>
-                    <h1 className="text-3xl md:text-4xl font-display font-semibold mt-1">Task Center</h1>
+                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Task Center</h1>
                     <p className="text-zinc-400 max-w-3xl mt-2">Open the YouTube assignment, complete the action, upload screenshot proof, then wait for admin review. Rewards are credited only after approval.</p>
                 </div>
                 <button onClick={load} className="btn-ghost"><RefreshCcw className="w-4 h-4" /> Refresh</button>
@@ -156,7 +156,7 @@ export default function Tasks() {
                         </ul>
                     </Card>
                     <Card>
-                        <div className="flex items-center justify-between mb-4"><h3 className="font-display text-lg">Recent submissions</h3><Badge>{submissions.length}</Badge></div>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4"><h3 className="font-display text-lg">Recent submissions</h3><Badge>{submissions.length}</Badge></div>
                         {submissions.length === 0 ? <p className="text-sm text-zinc-500">No submissions yet.</p> : <div className="space-y-3 max-h-[560px] overflow-y-auto pr-1">
                             {submissions.slice(0, 12).map(s => <div key={s.id} className="p-3 rounded-xl bg-black/35 border border-white/5">
                                 <div className="flex items-start justify-between gap-3"><p className="text-sm font-medium">{s.task_title}</p><Badge color={s.status === "approved" ? "emerald" : s.status === "rejected" ? "rose" : "gold"}>{s.status}</Badge></div>

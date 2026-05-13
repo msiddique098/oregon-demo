@@ -22,7 +22,7 @@ export function StatCard({ label, value, sub, accent = "purple", icon: Icon, tes
             <div className="flex items-start justify-between">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">{label}</p>
-                    <p className={`text-3xl font-display font-semibold ${a.text}`}>{value}</p>
+                    <p className={`text-2xl sm:text-3xl font-display font-semibold ${a.text}`}>{value}</p>
                     {sub && <p className="text-xs text-zinc-400 mt-2">{sub}</p>}
                 </div>
                 {Icon && <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center"><Icon className="w-5 h-5 text-white/80" strokeWidth={1.5} /></div>}
