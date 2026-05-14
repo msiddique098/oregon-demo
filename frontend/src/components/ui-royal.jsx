@@ -2,7 +2,7 @@ import React from "react";
 
 export function Card({ className = "", children, ...rest }) {
     return (
-        <div className={`glass-strong p-6 relative overflow-hidden ${className}`} {...rest}>
+        <div className={`glass-strong p-4 sm:p-6 relative overflow-hidden ${className}`} {...rest}>
             {children}
         </div>
     );
@@ -17,7 +17,7 @@ export function StatCard({ label, value, sub, accent = "purple", icon: Icon, tes
     };
     const a = accentMap[accent] || accentMap.purple;
     return (
-        <div className={`glass-strong p-6 relative overflow-hidden ${a.glow}`} data-testid={testId}>
+        <div className={`glass-strong p-4 sm:p-6 relative overflow-hidden ${a.glow}`} data-testid={testId}>
             <div className={`absolute top-0 left-0 right-0 h-px ${a.bar}`}></div>
             <div className="flex items-start justify-between">
                 <div>

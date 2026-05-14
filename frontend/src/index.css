@@ -204,3 +204,43 @@ body {
 .animate-slide-in-left {
     animation: slide-in-left 180ms ease-out both;
 }
+
+
+/* Phone-first dashboard polish */
+@layer utilities {
+    .mobile-page-shell {
+        width: 100%;
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+}
+
+@media (max-width: 640px) {
+    html, body, #root {
+        width: 100%;
+        max-width: 100vw;
+        overflow-x: hidden;
+    }
+
+    .glass,
+    .glass-strong {
+        border-radius: 1rem;
+    }
+
+    .btn-gold,
+    .btn-royal {
+        min-height: 44px;
+        padding-left: 1rem;
+        padding-right: 1rem;
+        font-size: 0.875rem;
+    }
+
+    .recharts-wrapper,
+    .recharts-surface {
+        max-width: 100% !important;
+    }
+
+    table {
+        max-width: 100%;
+    }
+}
