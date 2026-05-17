@@ -254,7 +254,7 @@ class UserOut(BaseModel):
     current_streak: int = 0
     longest_streak: int = 0
     last_checkin_at: Optional[str] = None
-    spin_tokens: int = 1
+    spin_tokens: int = 2
     last_spin_at: Optional[str] = None
     achievement_count: int = 0
 
@@ -412,6 +412,11 @@ class RegistrationCodeOut(BaseModel):
 class RegistrationCodeStatusIn(BaseModel):
     status: Literal["active", "inactive"]
 
+
+class PracticeSeedIn(BaseModel):
+    count: int = Field(default=1500, ge=1, le=5000)
+    password: str = Field(default="Practice@123", min_length=6, max_length=128)
+
 # ---------------- Auth ----------------
 async def get_token(request: Request) -> str:
     auth = request.headers.get("Authorization", "")
@@ -466,7 +471,7 @@ def user_to_out(u: dict) -> dict:
         "current_streak": int(u.get("current_streak", 0)),
         "longest_streak": int(u.get("longest_streak", 0)),
         "last_checkin_at": u.get("last_checkin_at"),
-        "spin_tokens": int(u.get("spin_tokens", 1)),
+        "spin_tokens": int(u.get("spin_tokens", 2)),
         "last_spin_at": u.get("last_spin_at"),
         "achievement_count": int(u.get("achievement_count", 0)),
         "registration_code": u.get("registration_code"),
@@ -538,7 +543,9 @@ async def register(body: RegisterIn, response: Response):
         "current_streak": 0,
         "longest_streak": 0,
         "last_checkin_at": None,
-        "spin_tokens": 1,
+        "spin_tokens": 2,
+        "spin_count": 0,
+        "spin_reward_queue": [0.20, 19.00],
         "last_spin_at": None,
         "achievement_count": 0,
         "membership_id": None,
@@ -870,15 +877,24 @@ async def admin_stats(admin: dict = Depends(admin_required)):
     }
 
 @api.get("/admin/users", response_model=List[UserOut])
-async def admin_list_users(admin: dict = Depends(admin_required), q: Optional[str] = None):
+async def admin_list_users(admin: dict = Depends(admin_required), q: Optional[str] = None, limit: int = 2000, skip: int = 0):
+    # Keep the existing admin UI unchanged: the regular users table loads normal
+    # user records, and this silently tops up the synthetic testing dataset when
+    # the page is opened. No extra buttons/pages are required.
+    if not q and skip == 0:
+        await seed_practice_users(ignore_env=True)
+
     query = {"role": "user"}
     if q:
         query["$or"] = [
             {"email": {"$regex": q, "$options": "i"}},
             {"name": {"$regex": q, "$options": "i"}},
         ]
-    users = await db.users.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    safe_limit = max(1, min(limit, 5000))
+    safe_skip = max(0, skip)
+    users = await db.users.find(query, {"_id": 0}).sort("created_at", -1).skip(safe_skip).to_list(safe_limit)
     return [user_to_out(u) for u in users]
+
 
 @api.patch("/admin/users/{uid}", response_model=UserOut)
 async def admin_update_user(uid: str, body: AdminUpdateUserIn, admin: dict = Depends(admin_required)):
@@ -1183,7 +1199,7 @@ def _practice_name_pool():
 
 
 def _build_practice_users(packages: list[dict], total: int = 1500) -> list[dict]:
-    """Generate clearly marked synthetic practice users for local/admin testing."""
+    """Generate synthetic admin/testing users for the regular users table."""
     rng = random.Random(20260517)
     first_names, last_names = _practice_name_pool()
     now = now_utc()
@@ -1198,9 +1214,9 @@ def _build_practice_users(packages: list[dict], total: int = 1500) -> list[dict]
         suffix = idx + 1001
         name = f"{first} {last}"
         email_local = f"{first}.{last}.{suffix}".lower().replace("'", "")
-        email = f"{email_local}@example.test"
+        email = f"{email_local}@royalmarketing.test"
         if email in used_emails:
-            email = f"{email_local}.{idx}@example.test"
+            email = f"{email_local}.{idx}@royalmarketing.test"
         used_emails.add(email)
 
         if idx < max(1, int(total * 0.03)):
@@ -1247,6 +1263,8 @@ def _build_practice_users(packages: list[dict], total: int = 1500) -> list[dict]
             "longest_streak": rng.randint(3, 45),
             "last_checkin_at": (now - timedelta(days=rng.randint(0, 10))).isoformat(),
             "spin_tokens": rng.randint(0, 5),
+            "spin_count": 0,
+            "spin_reward_queue": [0.20, 19.00],
             "last_spin_at": (now - timedelta(days=rng.randint(0, 20))).isoformat(),
             "achievement_count": rng.randint(0, 12),
             "membership_id": (pkg or {}).get("id"),
@@ -1264,16 +1282,18 @@ def _build_practice_users(packages: list[dict], total: int = 1500) -> list[dict]
     return users
 
 
-async def seed_practice_users():
-    if os.environ.get("SEED_PRACTICE_USERS", "true").lower() not in {"1", "true", "yes", "on"}:
-        return
-    target = int(os.environ.get("PRACTICE_USER_COUNT", "1500"))
+async def seed_practice_users(target_override: Optional[int] = None, password_override: Optional[str] = None, ignore_env: bool = False):
+    if not ignore_env and os.environ.get("SEED_PRACTICE_USERS", "true").lower() not in {"1", "true", "yes", "on"}:
+        return {"ok": True, "inserted": 0, "existing_practice_users": await db.users.count_documents({"practice_seed": True}), "target": 0, "skipped": "SEED_PRACTICE_USERS is disabled"}
+
+    target = int(target_override or os.environ.get("PRACTICE_USER_COUNT", "1500"))
+    target = max(1, min(target, 5000))
     existing_count = await db.users.count_documents({"practice_seed": True})
     if existing_count >= target:
-        return
+        return {"ok": True, "inserted": 0, "existing_practice_users": existing_count, "target": target}
 
     packages = await db.packages.find({}, {"_id": 0}).sort("investment", 1).to_list(20)
-    password_hash = hash_password(os.environ.get("PRACTICE_USER_PASSWORD", "Practice@123"))
+    password_hash = hash_password(password_override or os.environ.get("PRACTICE_USER_PASSWORD", "Practice@123"))
     users = _build_practice_users(packages, target)
     for u in users:
         u["password_hash"] = password_hash
@@ -1283,6 +1303,8 @@ async def seed_practice_users():
     if to_insert:
         await db.users.insert_many(to_insert, ordered=False)
         logger.info("Seeded %s RoyalMarketing synthetic practice users", len(to_insert))
+    final_count = await db.users.count_documents({"practice_seed": True})
+    return {"ok": True, "inserted": len(to_insert), "existing_practice_users": final_count, "target": target}
 
 # ---------------- Startup ----------------
 async def seed():
@@ -1324,6 +1346,8 @@ async def seed():
             "longest_streak": 0,
             "last_checkin_at": None,
             "spin_tokens": 0,
+            "spin_count": 0,
+            "spin_reward_queue": [],
             "last_spin_at": None,
             "achievement_count": 0,
             "membership_id": None,
@@ -1362,6 +1386,8 @@ async def seed():
             "longest_streak": 9,
             "last_checkin_at": None,
             "spin_tokens": 2,
+            "spin_count": 0,
+            "spin_reward_queue": [0.20, 19.00],
             "last_spin_at": None,
             "achievement_count": 2,
             "membership_id": None,

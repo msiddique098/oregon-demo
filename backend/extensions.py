@@ -11,13 +11,14 @@ from pydantic import BaseModel, Field
 
 
 REWARD_WHEEL_PRIZES = [
-    {"label": "$0.25", "value": 0.25, "type": "cash_reward"},
+    {"label": "$0.20", "value": 0.20, "type": "cash_reward"},
     {"label": "$0.50", "value": 0.50, "type": "cash_reward"},
     {"label": "$1.00", "value": 1.00, "type": "cash_reward"},
     {"label": "$2.00", "value": 2.00, "type": "cash_reward"},
     {"label": "$5.00", "value": 5.00, "type": "cash_reward"},
     {"label": "$10.00", "value": 10.00, "type": "cash_reward"},
     {"label": "$15.00", "value": 15.00, "type": "cash_reward"},
+    {"label": "$19.00", "value": 19.00, "type": "cash_reward"},
     {"label": "$25.00", "value": 25.00, "type": "cash_reward"},
     {"label": "$50.00", "value": 50.00, "type": "cash_reward"},
     {"label": "$75.00", "value": 75.00, "type": "cash_reward"},
@@ -171,11 +172,11 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
     async def seed_phase2():
         await db.users.update_many(
             {"locked_balance": {"$exists": False}},
-            {"$set": {"locked_balance": 0.0, "bonus_balance": 0.0, "current_streak": 0, "longest_streak": 0, "spin_tokens": 2, "spin_count": 0, "spin_reward_queue": [0.50, 25.00], "daily_checkin_next_reward": DAILY_CHECKIN_MIN, "daily_checkin_direction": 1, "achievement_count": 0}},
+            {"$set": {"locked_balance": 0.0, "bonus_balance": 0.0, "current_streak": 0, "longest_streak": 0, "spin_tokens": 2, "spin_count": 0, "spin_reward_queue": [0.20, 19.00], "daily_checkin_next_reward": DAILY_CHECKIN_MIN, "daily_checkin_direction": 1, "achievement_count": 0}},
         )
         await db.users.update_many({"spin_tokens": {"$exists": False}, "role": "user"}, {"$set": {"spin_tokens": 2}})
         await db.users.update_many({"spin_count": {"$exists": False}}, {"$set": {"spin_count": 0}})
-        await db.users.update_many({"spin_reward_queue": {"$exists": False}, "role": "user"}, {"$set": {"spin_reward_queue": [0.50, 25.00]}})
+        await db.users.update_many({"spin_reward_queue": {"$exists": False}, "role": "user"}, {"$set": {"spin_reward_queue": [0.20, 19.00]}})
         await db.users.update_many({"daily_checkin_next_reward": {"$exists": False}}, {"$set": {"daily_checkin_next_reward": DAILY_CHECKIN_MIN}})
         await db.users.update_many({"daily_checkin_direction": {"$exists": False}}, {"$set": {"daily_checkin_direction": 1}})
         await db.tasks.create_index([("active", 1), ("type", 1), ("vip_level", 1)])
@@ -435,7 +436,7 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
             "task_summary": {"approved": approved_tasks, "pending_review": pending_tasks, "rejected": rejected_tasks},
             "recent_transactions": recent,
             "recent_bonuses": bonuses,
-            "spin_tokens": int(user.get("spin_tokens", 1)),
+            "spin_tokens": int(user.get("spin_tokens", 2)),
             "first_task_reward": {
                 "amount": float(user.get("first_task_reward_amount", 10.0)),
                 "claimed": bool(user.get("first_task_reward_claimed", False)),
@@ -615,21 +616,41 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
     @router.post("/rewards/spin")
     async def spin_wheel(user: dict = Depends(get_current_user)):
         tokens = int(user.get("spin_tokens", 0))
-        queue = user.get("spin_reward_queue", []) or []
-        if tokens <= 0 or not queue:
+        if tokens <= 0:
             raise HTTPException(status_code=429, detail="No spin tokens available")
 
         spin_count = int(user.get("spin_count", 0))
+        queue = user.get("spin_reward_queue", []) or []
+        deterministic_defaults = [0.20, 19.00]
+
+        # Use the configured queue first. If older accounts have a spin token but
+        # no queue, fall back to the deterministic signup sequence instead of
+        # throwing an error while the UI still shows an available spin.
+        if queue:
+            raw_reward = queue[0]
+            update_ops = {
+                "$inc": {"spin_tokens": -1, "spin_count": 1},
+                "$pop": {"spin_reward_queue": -1},
+                "$set": {"last_spin_at": now_utc().isoformat()},
+            }
+        else:
+            raw_reward = deterministic_defaults[spin_count] if spin_count < len(deterministic_defaults) else 0.0
+            update_ops = {
+                "$inc": {"spin_tokens": -1, "spin_count": 1},
+                "$set": {"last_spin_at": now_utc().isoformat()},
+            }
+
         try:
-            reward = round(float(queue[0]), 2)
+            reward = round(float(raw_reward), 2)
         except (TypeError, ValueError):
             reward = 0.0
-        prize = next((p for p in REWARD_WHEEL_PRIZES if p["type"] == "cash_reward" and float(p["value"]) == reward), {"label": "Try Again" if reward <= 0 else f"${reward:.2f}", "value": reward, "type": "no_reward" if reward <= 0 else "cash_reward"})
 
-        await db.users.update_one(
-            {"id": user["id"]},
-            {"$inc": {"spin_tokens": -1, "spin_count": 1}, "$pop": {"spin_reward_queue": -1}, "$set": {"last_spin_at": now_utc().isoformat()}},
+        prize = next(
+            (p for p in REWARD_WHEEL_PRIZES if p["type"] == "cash_reward" and float(p["value"]) == reward),
+            {"label": "Try Again" if reward <= 0 else f"${reward:.2f}", "value": reward, "type": "no_reward" if reward <= 0 else "cash_reward"},
         )
+
+        await db.users.update_one({"id": user["id"]}, update_ops)
         jackpot = {"id": str(uuid.uuid4()), "user_id": user["id"], "reward": reward, "label": prize.get("label"), "prize_type": prize.get("type"), "type": "spin", "created_at": now_utc().isoformat()}
         await db.jackpots.insert_one(jackpot)
         if reward > 0:

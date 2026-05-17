@@ -10,13 +10,14 @@ import { api, formatApiError } from "../lib/api";
 import { toast } from "sonner";
 
 const FALLBACK_WHEEL = [
-    { label: "$0.25", value: 0.25, type: "cash_reward" },
+    { label: "$0.20", value: 0.20, type: "cash_reward" },
     { label: "$0.50", value: 0.50, type: "cash_reward" },
     { label: "$1.00", value: 1.00, type: "cash_reward" },
     { label: "$2.00", value: 2.00, type: "cash_reward" },
     { label: "$5.00", value: 5.00, type: "cash_reward" },
     { label: "$10.00", value: 10.00, type: "cash_reward" },
     { label: "$15.00", value: 15.00, type: "cash_reward" },
+    { label: "$19.00", value: 19.00, type: "cash_reward" },
     { label: "$25.00", value: 25.00, type: "cash_reward" },
     { label: "$50.00", value: 50.00, type: "cash_reward" },
     { label: "$75.00", value: 75.00, type: "cash_reward" },
