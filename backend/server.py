@@ -504,6 +504,11 @@ async def register(body: RegisterIn, response: Response):
         if ref:
             referred_by = ref["id"]
 
+    signup_reward = round(float(reg_code.get("reward_amount", 10.0)), 2)
+    signup_reward_coin = reg_code.get("reward_coin", "USDT").upper()
+    created_at = now_utc().isoformat()
+    reward_claimed = signup_reward > 0
+
     user = {
         "id": str(uuid.uuid4()),
         "email": email,
@@ -514,19 +519,22 @@ async def register(body: RegisterIn, response: Response):
         "referred_by": referred_by,
         "registration_code": registration_code,
         "registration_code_id": reg_code["id"],
-        "coin_symbol": reg_code.get("reward_coin", "USDT"),
-        "balance": 0.0,
+        "coin_symbol": signup_reward_coin,
+        # Admin registration-code amount is credited immediately as the signup
+        # user's first task completion reward, so the balance shown after
+        # registration matches the amount configured by the admin.
+        "balance": signup_reward if reward_claimed else 0.0,
         "daily_profit": 0.0,
-        "total_earnings": 0.0,
+        "total_earnings": signup_reward if reward_claimed else 0.0,
         "referral_earnings": 0.0,
         "task_progress": 0.0,
-        "tasks_completed": 0,
+        "tasks_completed": 1 if reward_claimed else 0,
         "tasks_pending": 5,
         "commission_rate": 5.0,
         "status": "active",
         "withdrawal_processing_hours": 24,
         "locked_balance": 0.0,
-        "bonus_balance": 0.0,
+        "bonus_balance": signup_reward if reward_claimed else 0.0,
         "current_streak": 0,
         "longest_streak": 0,
         "last_checkin_at": None,
@@ -535,13 +543,43 @@ async def register(body: RegisterIn, response: Response):
         "achievement_count": 0,
         "membership_id": None,
         "membership_name": reg_code.get("plan_name", "Free"),
-        "first_task_reward_amount": float(reg_code.get("reward_amount", 10.0)),
-        "first_task_reward_coin": reg_code.get("reward_coin", "USDT"),
-        "first_task_reward_claimed": False,
-        "first_task_reward_claimed_at": None,
-        "created_at": now_utc().isoformat(),
+        "first_task_reward_amount": signup_reward,
+        "first_task_reward_coin": signup_reward_coin,
+        "first_task_reward_claimed": reward_claimed,
+        "first_task_reward_claimed_at": created_at if reward_claimed else None,
+        "created_at": created_at,
     }
     await db.users.insert_one(user)
+
+    if reward_claimed:
+        bonus = {
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "amount": signup_reward,
+            "source": "first_task_reward",
+            "note": f"First task completion reward from registration code {registration_code}",
+            "created_at": created_at,
+        }
+        await db.bonuses.insert_one(bonus)
+        await record_tx(
+            user["id"],
+            "first_task_reward",
+            signup_reward,
+            signup_reward_coin,
+            0.0,
+            signup_reward,
+            reference_id=bonus["id"],
+            note="First task completion reward credited at registration",
+        )
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "title": "First Task Reward Credited",
+            "body": f"You received {signup_reward:g} {signup_reward_coin} from your registration code.",
+            "category": "rewards",
+            "read": False,
+            "created_at": created_at,
+        })
     await db.registration_codes.update_one(
         {"id": reg_code["id"]},
         {
@@ -1115,6 +1153,137 @@ async def admin_create_notification(body: NotificationIn, admin: dict = Depends(
         await _phase2_emit_user(body.user_id, "notification.created", rec)
     return rec
 
+
+def _practice_name_pool():
+    first_names = [
+        "James", "Mary", "Robert", "Patricia", "John", "Jennifer", "Michael", "Linda", "David", "Elizabeth",
+        "William", "Barbara", "Richard", "Susan", "Joseph", "Jessica", "Thomas", "Sarah", "Christopher", "Karen",
+        "Charles", "Nancy", "Daniel", "Lisa", "Matthew", "Betty", "Anthony", "Margaret", "Mark", "Sandra",
+        "Donald", "Ashley", "Steven", "Kimberly", "Paul", "Emily", "Andrew", "Donna", "Joshua", "Michelle",
+        "Kenneth", "Dorothy", "Kevin", "Carol", "Brian", "Amanda", "George", "Melissa", "Edward", "Deborah",
+        "Ronald", "Stephanie", "Timothy", "Rebecca", "Jason", "Sharon", "Jeffrey", "Laura", "Ryan", "Cynthia",
+        "Jacob", "Kathleen", "Gary", "Amy", "Nicholas", "Shirley", "Eric", "Angela", "Jonathan", "Helen",
+        "Stephen", "Anna", "Larry", "Brenda", "Justin", "Pamela", "Scott", "Nicole", "Brandon", "Emma",
+        "Benjamin", "Samantha", "Samuel", "Katherine", "Gregory", "Christine", "Alexander", "Debra", "Patrick", "Rachel",
+        "Frank", "Catherine", "Raymond", "Carolyn", "Jack", "Janet", "Dennis", "Ruth", "Jerry", "Maria"
+    ]
+    last_names = [
+        "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez",
+        "Hernandez", "Lopez", "Gonzalez", "Wilson", "Anderson", "Thomas", "Taylor", "Moore", "Jackson", "Martin",
+        "Lee", "Perez", "Thompson", "White", "Harris", "Sanchez", "Clark", "Ramirez", "Lewis", "Robinson",
+        "Walker", "Young", "Allen", "King", "Wright", "Scott", "Torres", "Nguyen", "Hill", "Flores",
+        "Green", "Adams", "Nelson", "Baker", "Hall", "Rivera", "Campbell", "Mitchell", "Carter", "Roberts",
+        "Gomez", "Phillips", "Evans", "Turner", "Diaz", "Parker", "Cruz", "Edwards", "Collins", "Reyes",
+        "Stewart", "Morris", "Morales", "Murphy", "Cook", "Rogers", "Gutierrez", "Ortiz", "Morgan", "Cooper",
+        "Peterson", "Bailey", "Reed", "Kelly", "Howard", "Ramos", "Kim", "Cox", "Ward", "Richardson",
+        "Watson", "Brooks", "Chavez", "Wood", "James", "Bennett", "Gray", "Mendoza", "Ruiz", "Hughes",
+        "Price", "Alvarez", "Castillo", "Sanders", "Patel", "Myers", "Long", "Ross", "Foster", "Jimenez"
+    ]
+    return first_names, last_names
+
+
+def _build_practice_users(packages: list[dict], total: int = 1500) -> list[dict]:
+    """Generate clearly marked synthetic practice users for local/admin testing."""
+    rng = random.Random(20260517)
+    first_names, last_names = _practice_name_pool()
+    now = now_utc()
+    package_choices = packages or []
+    tiers = [p.get("name") for p in package_choices] or ["Basic", "Silver", "Gold", "Platinum", "Elite VIP"]
+    users = []
+    used_emails = set()
+
+    for idx in range(total):
+        first = first_names[idx % len(first_names)]
+        last = last_names[(idx * 7 + idx // len(first_names)) % len(last_names)]
+        suffix = idx + 1001
+        name = f"{first} {last}"
+        email_local = f"{first}.{last}.{suffix}".lower().replace("'", "")
+        email = f"{email_local}@example.test"
+        if email in used_emails:
+            email = f"{email_local}.{idx}@example.test"
+        used_emails.add(email)
+
+        if idx < max(1, int(total * 0.03)):
+            balance = round(rng.uniform(25000, 50000), 2)
+        else:
+            balance = round(max(1200, rng.gauss(3600, 825)), 2)
+
+        referral_earnings = round(balance * rng.uniform(0.06, 0.22), 2)
+        bonus_balance = round(balance * rng.uniform(0.015, 0.08), 2)
+        locked_balance = round(balance * rng.uniform(0.0, 0.08), 2)
+        daily_profit = round(balance * rng.uniform(0.003, 0.012), 2)
+        total_earnings = round(balance + referral_earnings + bonus_balance + rng.uniform(100, 1800), 2)
+        tasks_completed = rng.randint(8, 180)
+        tasks_pending = rng.randint(0, 8)
+        joined_days_ago = rng.randint(14, 540)
+        created_at = (now - timedelta(days=joined_days_ago, hours=rng.randint(0, 23), minutes=rng.randint(0, 59))).isoformat()
+        pkg = package_choices[min(len(package_choices)-1, rng.choices(range(len(tiers)), weights=[42, 30, 18, 8, 2][:len(tiers)], k=1)[0])] if package_choices else None
+        membership_name = (pkg or {}).get("name") or rng.choice(tiers)
+        status = rng.choices(["active", "pending", "suspended"], weights=[92, 6, 2], k=1)[0]
+        user_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"royalmarketing-practice-user-{idx}"))
+
+        users.append({
+            "id": user_id,
+            "email": email,
+            "name": name,
+            "password_hash": None,  # filled by seed() once to avoid repeated bcrypt work
+            "role": "user",
+            "referral_code": f"RM{suffix:06d}",
+            "referred_by": None,
+            "coin_symbol": "USDT",
+            "balance": balance,
+            "daily_profit": daily_profit,
+            "total_earnings": total_earnings,
+            "referral_earnings": referral_earnings,
+            "task_progress": round(rng.uniform(5, 98), 1),
+            "tasks_completed": tasks_completed,
+            "tasks_pending": tasks_pending,
+            "commission_rate": round(rng.choice([5, 7.5, 10, 12, 15, 18, 20]), 1),
+            "status": status,
+            "withdrawal_processing_hours": rng.choice([2, 12, 24, 36, 48]),
+            "locked_balance": locked_balance,
+            "bonus_balance": bonus_balance,
+            "current_streak": rng.randint(0, 18),
+            "longest_streak": rng.randint(3, 45),
+            "last_checkin_at": (now - timedelta(days=rng.randint(0, 10))).isoformat(),
+            "spin_tokens": rng.randint(0, 5),
+            "last_spin_at": (now - timedelta(days=rng.randint(0, 20))).isoformat(),
+            "achievement_count": rng.randint(0, 12),
+            "membership_id": (pkg or {}).get("id"),
+            "membership_name": membership_name,
+            "practice_seed": True,
+            "created_at": created_at,
+            "last_active": (now - timedelta(days=rng.randint(0, 30))).isoformat(),
+        })
+
+    # Link a portion of practice users into referral chains without exposing anything publicly.
+    for idx, u in enumerate(users):
+        if idx > 0 and rng.random() < 0.42:
+            sponsor_index = rng.randint(max(0, idx - 75), idx - 1)
+            u["referred_by"] = users[sponsor_index]["id"]
+    return users
+
+
+async def seed_practice_users():
+    if os.environ.get("SEED_PRACTICE_USERS", "true").lower() not in {"1", "true", "yes", "on"}:
+        return
+    target = int(os.environ.get("PRACTICE_USER_COUNT", "1500"))
+    existing_count = await db.users.count_documents({"practice_seed": True})
+    if existing_count >= target:
+        return
+
+    packages = await db.packages.find({}, {"_id": 0}).sort("investment", 1).to_list(20)
+    password_hash = hash_password(os.environ.get("PRACTICE_USER_PASSWORD", "Practice@123"))
+    users = _build_practice_users(packages, target)
+    for u in users:
+        u["password_hash"] = password_hash
+
+    existing_emails = set(await db.users.distinct("email", {"email": {"$in": [u["email"] for u in users]}}))
+    to_insert = [u for u in users if u["email"] not in existing_emails]
+    if to_insert:
+        await db.users.insert_many(to_insert, ordered=False)
+        logger.info("Seeded %s RoyalMarketing synthetic practice users", len(to_insert))
+
 # ---------------- Startup ----------------
 async def seed():
     await db.users.create_index("email", unique=True)
@@ -1211,6 +1380,9 @@ async def seed():
         ]
         for d in defaults:
             await db.packages.insert_one({"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **d})
+
+    # Seed synthetic practice users for admin/testing workflows. Public pages remain aggregate-only.
+    await seed_practice_users()
 
     # Seed wallets
     if await db.wallets.count_documents({}) == 0:
