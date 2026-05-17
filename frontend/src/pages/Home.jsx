@@ -39,7 +39,7 @@ export default function Home() {
                                 Earn approved rewards.
                             </h1>
                             <p className="text-zinc-400 text-base md:text-lg leading-relaxed max-w-2xl mt-6">
-                                Oregon is a task-based reward platform where users complete simple YouTube promotional assignments, submit screenshot proof, and receive wallet rewards after admin approval.
+                                RoyalMarketing is a task-based reward platform where users complete promotional assignments, submit screenshot proof, and receive wallet rewards after admin approval.
                             </p>
                             <div className="flex flex-wrap gap-3 mt-8">
                                 <Link to={primaryPath} className="btn-royal">{primaryLabel} <ArrowRight className="w-4 h-4" /></Link>

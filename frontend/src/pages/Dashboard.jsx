@@ -64,7 +64,7 @@ export default function Dashboard() {
                     <p className="text-2xl sm:text-3xl font-display font-semibold text-emerald-300">
                         <AnimatedCounter value={u.daily_profit} decimals={2} prefix={sym} />
                     </p>
-                    <p className="text-xs text-zinc-400 mt-2">Curated by Royal Admin</p>
+                    <p className="text-xs text-zinc-400 mt-2">Curated by RoyalMarketing Admin</p>
                 </div>
                 <StatCard testId="stat-tasks" label="Tasks Done" accent="purple" icon={CheckSquare}
                     value={`${u.tasks_completed}/${u.tasks_completed + u.tasks_pending}`} sub={`${u.task_progress}% royal progress`} />

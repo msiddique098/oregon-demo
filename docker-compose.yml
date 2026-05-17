@@ -14,7 +14,7 @@ services:
       MONGO_URL: mongodb://mongo:27017
       DB_NAME: royal_crypto
       JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@royalcrypto.com}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@royalmarketing.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@123}
     ports:
       - "8000:8000"

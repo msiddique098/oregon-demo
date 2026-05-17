@@ -38,7 +38,7 @@ export function AdminTickets() {
         <AdminLayout>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
-                    <p className="text-xs uppercase tracking-widest text-amber-400/80">Royal Concierge</p>
+                    <p className="text-xs uppercase tracking-widest text-amber-400/80">RoyalMarketing Support</p>
                     <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Support Inbox</h1>
                 </div>
                 <div className="flex flex-wrap gap-2 items-center">
@@ -201,7 +201,7 @@ export function AdminBulk() {
                     </select>
                     {form.target === "tier" && (
                         <select className="input-royal" value={form.tier} onChange={e => setForm({...form, tier: e.target.value})}>
-                            <option>Basic</option><option>Silver</option><option>Gold</option><option>Platinum</option><option>Royal VIP</option>
+                            <option>Basic</option><option>Silver</option><option>Gold</option><option>Platinum</option><option>Elite VIP</option>
                         </select>
                     )}
                     <input type="number" step="any" min="0" className="input-royal" placeholder="Bonus amount" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} required />
@@ -217,7 +217,7 @@ export function AdminBulk() {
                     </select>
                     {cform.target === "tier" && (
                         <select className="input-royal" value={cform.tier} onChange={e => setCform({...cform, tier: e.target.value})}>
-                            <option>Basic</option><option>Silver</option><option>Gold</option><option>Platinum</option><option>Royal VIP</option>
+                            <option>Basic</option><option>Silver</option><option>Gold</option><option>Platinum</option><option>Elite VIP</option>
                         </select>
                     )}
                     <input type="number" step="any" className="input-royal" placeholder="Δ percentage (e.g. +2 or -1)" value={cform.delta_percent} onChange={e => setCform({...cform, delta_percent: e.target.value})} required />

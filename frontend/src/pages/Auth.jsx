@@ -140,7 +140,7 @@ function AuthFrame({ title, subtitle, children }) {
                     <span className="w-10 h-10 rounded-xl gradient-purple flex items-center justify-center neon-purple">
                         <Crown className="w-5 h-5 text-white" strokeWidth={1.6} />
                     </span>
-                    <span className="font-display text-xl font-semibold">Royal<span className="gradient-text-gold">Crypto</span></span>
+                    <span className="font-display text-xl font-semibold">Royal<span className="gradient-text-gold">Marketing</span></span>
                 </Link>
                 <div className="glass-strong p-4 sm:p-6 lg:p-8 relative">
                     <div className="absolute top-0 left-6 right-6 h-px bg-gradient-to-r from-transparent via-amber-400/60 to-transparent"></div>

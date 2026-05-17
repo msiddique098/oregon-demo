@@ -27,7 +27,7 @@ export default function Tickets() {
         <DashboardLayout>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
-                    <p className="text-xs uppercase tracking-widest text-amber-400/80">Royal Concierge</p>
+                    <p className="text-xs uppercase tracking-widest text-amber-400/80">RoyalMarketing Support</p>
                     <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Support Tickets</h1>
                 </div>
                 <button onClick={() => setCreating(true)} className="btn-gold" data-testid="new-ticket-btn"><Plus className="w-4 h-4" /> New Ticket</button>
@@ -127,7 +127,7 @@ export function TicketThread({ role, ticket, messages, setMessages, onBack, onUp
                     return (
                         <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                             <div className={`max-w-[80%] p-3 rounded-2xl ${mine ? "bg-purple-500/15 border border-purple-500/30 rounded-tr-sm" : "bg-white/5 border border-white/10 rounded-tl-sm"}`}>
-                                <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{m.author_role === "admin" ? "Royal Concierge" : "You"}</p>
+                                <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{m.author_role === "admin" ? "RoyalMarketing Support" : "You"}</p>
                                 <p className="text-sm whitespace-pre-wrap">{m.body}</p>
                                 {m.attachment_data_url && <img src={m.attachment_data_url} alt="attachment" className="mt-2 rounded-lg max-h-40" />}
                                 <p className="text-[10px] text-zinc-600 mt-1">{new Date(m.created_at).toLocaleString()}</p>

@@ -227,7 +227,7 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
                 {"name": "Silver", "level": 1, "required_balance": 500, "required_deposit": 500, "reward_multiplier": 1.1, "commission_boost_pct": 5, "badge_color": "slate", "benefits": ["+10% task rewards", "Priority support"]},
                 {"name": "Gold", "level": 2, "required_balance": 2000, "required_deposit": 2000, "reward_multiplier": 1.25, "commission_boost_pct": 10, "badge_color": "gold", "benefits": ["Gold badge", "VIP tasks", "Faster withdrawals"]},
                 {"name": "Platinum", "level": 3, "required_balance": 5000, "required_deposit": 5000, "reward_multiplier": 1.5, "commission_boost_pct": 15, "badge_color": "purple", "benefits": ["Dedicated manager", "Premium boosts", "Priority queue"]},
-                {"name": "Royal VIP", "level": 4, "required_balance": 15000, "required_deposit": 15000, "reward_multiplier": 2, "commission_boost_pct": 25, "badge_color": "gold", "benefits": ["Royal crown", "Concierge support", "Highest multipliers"]},
+                {"name": "Elite VIP", "level": 4, "required_balance": 15000, "required_deposit": 15000, "reward_multiplier": 2, "commission_boost_pct": 25, "badge_color": "gold", "benefits": ["Royal crown", "Concierge support", "Highest multipliers"]},
             ]
             for lvl in levels:
                 await db.vip_levels.insert_one({"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **lvl})
@@ -240,7 +240,7 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
             })
 
     def _vip_rank(name: Optional[str]) -> int:
-        order = {"Free": 0, "Basic": 0, "Silver": 1, "Gold": 2, "Platinum": 3, "Royal VIP": 4}
+        order = {"Free": 0, "Basic": 0, "Silver": 1, "Gold": 2, "Platinum": 3, "Elite VIP": 4}
         return order.get(name or "Free", 0)
 
     async def _log_balance(user: dict, balance_type: str, amount: float, reason: str, ref: Optional[str] = None):
@@ -653,17 +653,20 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
 
     @router.get("/leaderboard")
     async def leaderboard(metric: Literal["balance", "referrals", "tasks"] = "balance"):
-        if metric == "referrals":
-            users = await db.users.find({"role": "user"}, {"_id": 0, "id": 1, "name": 1, "membership_name": 1, "created_at": 1}).to_list(200)
-            out = []
-            for u in users:
-                out.append({**u, "score": await db.users.count_documents({"referred_by": u["id"]})})
-            return sorted(out, key=lambda x: x["score"], reverse=True)[:50]
-        if metric == "tasks":
-            users = await db.users.find({"role": "user"}, {"_id": 0, "id": 1, "name": 1, "membership_name": 1, "tasks_completed": 1}).sort("tasks_completed", -1).to_list(50)
-            return [{**u, "score": int(u.get("tasks_completed", 0))} for u in users]
-        users = await db.users.find({"role": "user"}, {"_id": 0, "id": 1, "name": 1, "membership_name": 1, "balance": 1}).sort("balance", -1).to_list(50)
-        return [{**u, "score": float(u.get("balance", 0))} for u in users]
+        # Public/user-facing summary only: do not expose individual member names,
+        # plans, balances, task counts, referral counts, or join dates in this endpoint.
+        total_balance = await db.users.aggregate([
+            {"$match": {"role": "user", "status": {"$ne": "banned"}}},
+            {"$group": {"_id": None, "score": {"$sum": {"$ifNull": ["$balance", 0]}}}},
+        ]).to_list(1)
+        total_users = await db.users.count_documents({"role": "user", "status": {"$ne": "banned"}})
+        score = float(total_balance[0]["score"]) if total_balance else 0.0
+        return [{
+            "id": "community-approved-total",
+            "name": "Community approved total",
+            "membership_name": f"{total_users} active member accounts",
+            "score": score,
+        }]
 
     @router.get("/vip/levels")
     async def vip_levels():

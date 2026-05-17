@@ -180,7 +180,7 @@ def build_enterprise_router(db, get_current_user, admin_required, record_tx, ws_
                 ok = (now_utc() - created_dt).days >= min_days
                 item["target_days"] = min_days
             elif rt == "vip_level":
-                order = {"Free": 0, "Basic": 0, "Silver": 1, "Gold": 2, "Platinum": 3, "Royal VIP": 4}
+                order = {"Free": 0, "Basic": 0, "Silver": 1, "Gold": 2, "Platinum": 3, "Elite VIP": 4}
                 ok = order.get(user.get("membership_name") or "Free", 0) >= order.get(value.get("level") or "Free", 0)
                 item["required_level"] = value.get("level")
             elif rt == "kyc_required":

@@ -25,7 +25,7 @@ export default function PublicNav() {
                         <Crown className="w-5 h-5 text-white" strokeWidth={1.6} />
                     </span>
                     <span className="font-display text-lg font-semibold">
-                        Oregon<span className="gradient-text-gold">Tasks</span>
+                        Royal<span className="gradient-text-gold">Marketing</span>
                     </span>
                 </Link>
 

@@ -11,9 +11,9 @@ export default function Footer() {
                         <span className="w-9 h-9 rounded-xl gradient-purple flex items-center justify-center neon-purple">
                             <Crown className="w-5 h-5 text-white" strokeWidth={1.6} />
                         </span>
-                        <span className="font-display text-lg font-semibold">Royal<span className="gradient-text-gold">Crypto</span></span>
+                        <span className="font-display text-lg font-semibold">Royal<span className="gradient-text-gold">Marketing</span></span>
                     </div>
-                    <p className="text-sm text-zinc-500 leading-relaxed">A luxury crypto rewards ecosystem crafted for elite earners. Built for visual experience.</p>
+                    <p className="text-sm text-zinc-500 leading-relaxed">A task-based marketing rewards platform crafted for approved members. Built for campaign workflows.</p>
                 </div>
                 <div>
                     <p className="text-xs uppercase tracking-widest text-zinc-500 mb-4">Platform</p>
@@ -40,7 +40,7 @@ export default function Footer() {
                 </div>
             </div>
             <div className="border-t border-white/5 py-6 text-center text-xs text-zinc-600">
-                © {new Date().getFullYear()} Royal Crypto Rewards. Visual rewards platform.
+                © {new Date().getFullYear()} RoyalMarketing. Task rewards platform.
             </div>
         </footer>
     );

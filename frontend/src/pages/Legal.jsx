@@ -24,16 +24,16 @@ function LegalPage({ title, intro, sections }) {
 }
 
 export function Terms() {
-    return <LegalPage title="Terms & Conditions" intro="By using Royal Crypto Rewards you accept these terms of service."
+    return <LegalPage title="Terms & Conditions" intro="By using RoyalMarketing you accept these terms of service."
         sections={[
-            { h: "Visual platform", b: "This platform showcases a luxury rewards experience. Balances and rewards are administratively curated and do not represent actual cryptocurrency holdings." },
+            { h: "Reward platform", b: "RoyalMarketing manages task rewards, plan benefits, commissions, and withdrawal requests through admin approval workflows. Displayed balances should represent approved platform records, not external cryptocurrency custody." },
             { h: "Account responsibility", b: "Keep your password secure. You are responsible for activity under your account." },
-            { h: "Limitations of liability", b: "Royal Crypto provides this experience as-is for showcase purposes. We accept no liability for misuse." },
+            { h: "Limitations of liability", b: "RoyalMarketing provides this experience as-is for task reward management. We accept no liability for misuse." },
         ]} />;
 }
 
 export function Privacy() {
-    return <LegalPage title="Privacy Policy" intro="Royal Crypto respects your privacy and uses minimal personal data."
+    return <LegalPage title="Privacy Policy" intro="RoyalMarketing respects your privacy and uses minimal personal data."
         sections={[
             { h: "Information we collect", b: "We store only the email, name and hashed password you provide on signup." },
             { h: "How we use it", b: "Strictly for authentication, account management and concierge support." },

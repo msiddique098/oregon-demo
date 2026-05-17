@@ -23,7 +23,7 @@ export default function AdminDashboard() {
     return (
         <AdminLayout>
             <div className="mobile-safe">
-                <p className="text-[11px] sm:text-xs uppercase tracking-widest text-amber-400/80">Royal Admin</p>
+                <p className="text-[11px] sm:text-xs uppercase tracking-widest text-amber-400/80">RoyalMarketing Admin</p>
                 <h1 className="text-2xl sm:text-3xl lg:text-4xl font-display font-semibold mt-1">Console Overview</h1>
             </div>
 

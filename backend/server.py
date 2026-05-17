@@ -33,11 +33,11 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("royal-crypto")
+logger = logging.getLogger("royalmarketing")
 
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="Royal Crypto Rewards API")
+app = FastAPI(title="RoyalMarketing API")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -86,68 +86,36 @@ def _masked_name(first: str, last: str) -> str:
     return f"{first[:first_visible]}{'*' * max(1, len(first) - first_visible)} {last[:last_visible]}{'*' * max(1, len(last) - last_visible)}"
 
 
-def _build_live_feed_seed(total: int = 60) -> list[dict]:
-    first_names = [
-        'Adeel', 'Farhan', 'Usman', 'Sana', 'Areeba', 'Hina', 'Zubair', 'Bilal', 'Hamza', 'Saad',
-        'Mariam', 'Noor', 'Ahsan', 'Iqra', 'Danish', 'Talha', 'Kashif', 'Rida', 'Mahnoor', 'Shayan',
-        'Hassan', 'Nimra', 'Abdullah', 'Komal', 'Aliya', 'Sameer', 'Yasir', 'Zain', 'Hadia', 'Laiba',
-        'Amina', 'Uzair', 'Junaid', 'Mehak', 'Shahzaib', 'Anaya', 'Asad', 'Saba', 'Arham', 'Zoha'
+def _build_live_feed_seed(total: int = 80) -> list[dict]:
+    """Seed neutral public feed messages without exposing individual member records."""
+    templates = [
+        ("check", "Task proof queue updated: new submissions are ready for admin review"),
+        ("wallet", "Wallet workflow refreshed: approved rewards are reflected after review"),
+        ("crown", "Membership plan workflow updated with current task and spin rules"),
+        ("users", "Referral dashboard refreshed with eligible commission status"),
+        ("sparkles", "Daily check-in workflow is available for eligible accounts"),
+        ("diamond", "Withdrawal review queue updated for pending requests"),
+        ("trending", "Campaign task list refreshed with new proof requirements"),
+        ("check", "Completed task proofs move to balance only after approval"),
+        ("wallet", "Balance summary now shows approved rewards and pending locks separately"),
+        ("crown", "Plan benefits are synced with withdrawal priority and spin access"),
+        ("users", "Team activity summary updated for referral reporting"),
+        ("sparkles", "Reward hub refreshed with check-ins, spins, and task status"),
+        ("diamond", "Withdrawal eligibility uses balance, locks, and pending request checks"),
+        ("trending", "Admin workflow updated for deposits, plans, and commissions"),
+        ("check", "Screenshot proof rules refreshed for clearer approval decisions"),
+        ("wallet", "Approved task rewards are included in the lifetime total"),
     ]
-    last_names = [
-        'Khan', 'Ahmed', 'Malik', 'Iqbal', 'Shah', 'Raza', 'Siddiqui', 'Yousaf', 'Farooq', 'Arif',
-        'Nawaz', 'Butt', 'Mirza', 'Baig', 'Saleem', 'Qureshi', 'Bashir', 'Tariq', 'Mughal', 'Hussain'
-    ]
-    reward_amounts = [2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 18, 20, 24, 30]
-    deposit_amounts = [25, 40, 50, 75, 100, 125, 150, 200, 250, 300, 500]
-    referral_amounts = [2, 3, 5, 6, 8, 10]
-    plan_names = ['Starter', 'Silver', 'Gold', 'Platinum', 'Royal VIP']
-    icons = {
-        'task_reward': 'check',
-        'deposit': 'wallet',
-        'referral': 'users',
-        'plan': 'crown',
-        'checkin': 'sparkles',
-        'withdrawal': 'diamond',
-    }
     entries = []
     base_time = now_utc()
     for i in range(total):
-        first = first_names[i % len(first_names)]
-        last = last_names[(i * 3) % len(last_names)]
-        user = _masked_name(first, last)
-        variant = i % 6
-        if variant == 0:
-            amount = reward_amounts[i % len(reward_amounts)]
-            message = f"{user} received ${amount:.2f} after task proof approval"
-            icon = icons['task_reward']
-        elif variant == 1:
-            amount = reward_amounts[(i + 4) % len(reward_amounts)]
-            message = f"{user} claimed ${amount:.2f} from daily check-in rewards"
-            icon = icons['checkin']
-        elif variant == 2:
-            amount = deposit_amounts[i % len(deposit_amounts)]
-            bonus = amount * 0.3
-            message = f"{user} deposited ${amount:.2f} and unlocked a ${bonus:.2f} bonus"
-            icon = icons['deposit']
-        elif variant == 3:
-            amount = referral_amounts[i % len(referral_amounts)]
-            message = f"{user} earned ${amount:.2f} from referral commission"
-            icon = icons['referral']
-        elif variant == 4:
-            plan = plan_names[i % len(plan_names)]
-            spins = [2, 5, 12, 25, 60][i % 5]
-            message = f"{user} activated the {plan} plan and received {spins} spins"
-            icon = icons['plan']
-        else:
-            amount = reward_amounts[(i + 7) % len(reward_amounts)] * 2
-            message = f"{user} completed a withdrawal request of ${amount:.2f}"
-            icon = icons['withdrawal']
+        icon, message = templates[i % len(templates)]
         entries.append({
-            'id': str(uuid.uuid4()),
-            'message': message,
-            'icon': icon,
-            'source': 'seed',
-            'created_at': (base_time - timedelta(minutes=i * 7)).isoformat(),
+            "id": str(uuid.uuid4()),
+            "message": message,
+            "icon": icon,
+            "source": "system_seed",
+            "created_at": (base_time - timedelta(minutes=i * 5)).isoformat(),
         })
     return entries
 
@@ -327,7 +295,7 @@ class AdminUpdateUserIn(BaseModel):
 
 class PackageIn(BaseModel):
     name: str
-    tier: str  # Basic | Silver | Gold | Platinum | Royal VIP
+    tier: str  # Basic | Silver | Gold | Platinum | Elite VIP
     investment: float
     daily_profit_pct: float
     commission_boost_pct: float
@@ -1158,14 +1126,14 @@ async def seed():
     await db.registration_codes.create_index("status")
     await db.registration_codes.create_index("created_at")
 
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@royalcrypto.com")
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@royalmarketing.com")
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
             "email": admin_email,
-            "name": "Royal Admin",
+            "name": "RoyalMarketing Admin",
             "password_hash": hash_password(admin_password),
             "role": "admin",
             "referral_code": "ADMIN001",
@@ -1197,13 +1165,13 @@ async def seed():
     elif not verify_password(admin_password, existing["password_hash"]):
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
 
-    # Seed demo user
-    demo_email = "user@royalcrypto.com"
-    if not await db.users.find_one({"email": demo_email}):
+    # Seed default member account
+    member_email = "member@royalmarketing.com"
+    if not await db.users.find_one({"email": member_email}):
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
-            "email": demo_email,
-            "name": "Demo Royal User",
+            "email": member_email,
+            "name": "RoyalMarketing Member",
             "password_hash": hash_password("User@123"),
             "role": "user",
             "referral_code": "ROYAL01",
@@ -1239,7 +1207,7 @@ async def seed():
             {"name": "Silver", "tier": "Silver", "investment": 500, "daily_profit_pct": 1.2, "commission_boost_pct": 5, "task_boost_pct": 10, "duration_days": 60, "badge_color": "slate", "perks": ["Silver badge", "Priority support", "+5% referral commission"], "priority_withdrawal_hours": 36},
             {"name": "Gold", "tier": "Gold", "investment": 2000, "daily_profit_pct": 1.8, "commission_boost_pct": 10, "task_boost_pct": 25, "duration_days": 90, "badge_color": "amber", "perks": ["Gold badge", "VIP support", "+10% referral commission", "Exclusive tasks"], "priority_withdrawal_hours": 24},
             {"name": "Platinum", "tier": "Platinum", "investment": 5000, "daily_profit_pct": 2.4, "commission_boost_pct": 15, "task_boost_pct": 50, "duration_days": 120, "badge_color": "purple", "perks": ["Platinum badge", "Dedicated manager", "+15% referral", "Priority withdrawals"], "priority_withdrawal_hours": 12},
-            {"name": "Royal VIP", "tier": "Royal VIP", "investment": 15000, "daily_profit_pct": 3.5, "commission_boost_pct": 25, "task_boost_pct": 100, "duration_days": 180, "badge_color": "gold", "perks": ["Royal crown badge", "Concierge support", "+25% referral", "Instant withdrawals", "Royal events access"], "priority_withdrawal_hours": 2},
+            {"name": "Elite VIP", "tier": "Elite VIP", "investment": 15000, "daily_profit_pct": 3.5, "commission_boost_pct": 25, "task_boost_pct": 100, "duration_days": 180, "badge_color": "gold", "perks": ["Elite crown badge", "Concierge support", "+25% referral", "Instant withdrawals", "Elite events access"], "priority_withdrawal_hours": 2},
         ]
         for d in defaults:
             await db.packages.insert_one({"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **d})
@@ -1258,8 +1226,8 @@ async def seed():
     if await db.announcements.count_documents({}) == 0:
         await db.announcements.insert_one({
             "id": str(uuid.uuid4()),
-            "title": "Welcome to Royal Crypto Rewards",
-            "body": "Earn premium daily rewards, unlock VIP tiers, and grow your crown holdings with our luxury rewards ecosystem.",
+            "title": "Welcome to RoyalMarketing",
+            "body": "Earn premium daily rewards, unlock VIP tiers, and grow your approved reward balance with our task-based marketing rewards platform.",
             "pinned": True,
             "created_at": now_utc().isoformat(),
         })
@@ -1267,7 +1235,7 @@ async def seed():
     # Seed live feed with a realistic activity pool
     if await db.live_feed.count_documents({}) < 50:
         await db.live_feed.delete_many({})
-        await db.live_feed.insert_many(_build_live_feed_seed(60))
+        await db.live_feed.insert_many(_build_live_feed_seed(80))
 
     # Ensure admin_role on admin users
     await db.users.update_many({"role": "admin", "admin_role": {"$exists": False}}, {"$set": {"admin_role": "super_admin"}})
@@ -1288,7 +1256,7 @@ async def seed():
 @app.on_event("startup")
 async def on_start():
     await seed()
-    logger.info("Royal Crypto API ready")
+    logger.info("RoyalMarketing API ready")
 
 @app.on_event("shutdown")
 async def on_shutdown():
@@ -1296,7 +1264,7 @@ async def on_shutdown():
 
 @api.get("/")
 async def health():
-    return {"status": "ok", "service": "Royal Crypto Rewards"}
+    return {"status": "ok", "service": "RoyalMarketing"}
 
 # ====================================================================
 # PHASE 1 ENTERPRISE EXTENSIONS
@@ -1583,7 +1551,7 @@ class BulkBonusIn(BaseModel):
     tier: Optional[str] = None
     user_ids: Optional[List[str]] = None
     amount: float
-    note: Optional[str] = "Bulk bonus from Royal Admin"
+    note: Optional[str] = "Bulk bonus from RoyalMarketing Admin"
 
 class BulkCommissionIn(BaseModel):
     target: Literal["all", "tier", "ids"]
@@ -1660,7 +1628,7 @@ app.include_router(_phase2_router, prefix="/api")
 @app.on_event("startup")
 async def _phase2_start():
     await _seed_phase2()
-    logger.info("Royal Crypto Phase 2 ready (tasks, spin, checkin, ws)")
+    logger.info("RoyalMarketing Phase 2 ready (tasks, spin, checkin, ws)")
 
 # ====================================================================
 # ENTERPRISE SAFE GROWTH EXTENSIONS — transparent rules, real social proof,
@@ -1681,4 +1649,4 @@ app.include_router(_enterprise_router, prefix="/api")
 @app.on_event("startup")
 async def _enterprise_start():
     await _seed_enterprise()
-    logger.info("Royal Crypto Enterprise safe growth controls ready")
+    logger.info("RoyalMarketing Enterprise safe growth controls ready")
