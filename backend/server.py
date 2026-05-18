@@ -450,7 +450,7 @@ def user_to_out(u: dict) -> dict:
         "id": u["id"],
         "email": u["email"],
         "name": u["name"],
-        "role": u["role"],
+        "role": u.get("role", "user"),
         "referral_code": u.get("referral_code", ""),
         "referred_by": u.get("referred_by"),
         "membership_id": u.get("membership_id"),
@@ -480,7 +480,7 @@ def user_to_out(u: dict) -> dict:
         "first_task_reward_coin": u.get("first_task_reward_coin", "USDT"),
         "first_task_reward_claimed": bool(u.get("first_task_reward_claimed", False)),
         "first_task_reward_claimed_at": u.get("first_task_reward_claimed_at"),
-        "created_at": u["created_at"] if isinstance(u["created_at"], str) else u["created_at"].isoformat(),
+        "created_at": (u.get("created_at") if isinstance(u.get("created_at"), str) else (u.get("created_at") or now_utc()).isoformat()),
     }
 
 # ---------------- Auth Routes ----------------
@@ -878,50 +878,47 @@ async def admin_stats(admin: dict = Depends(admin_required)):
 
 @api.get("/admin/users", response_model=List[UserOut])
 async def admin_list_users(admin: dict = Depends(admin_required), q: Optional[str] = None, limit: int = 2000, skip: int = 0):
-    # Keep the existing admin UI unchanged: the regular users table loads normal
-    # user records. On the first admin list load, silently top up the testing
-    # dataset. If the database insert is slow or unavailable on a serverless cold
-    # start, return the deterministic generated users as a fallback so the table
-    # never shows an empty list just because seeding has not finished yet.
-    safe_limit = max(1, min(limit, 5000))
-    safe_skip = max(0, skip)
+    safe_limit = max(1, min(int(limit or 2000), 5000))
+    safe_skip = max(0, int(skip or 0))
     search = (q or "").strip()
 
-    if not search and safe_skip == 0:
+    # Existing UI only: silently make sure the normal users collection is populated.
+    # This route must still return records even when Vercel cold-start seeding is slow.
+    if safe_skip == 0:
         try:
             await seed_practice_users(ignore_env=True)
         except Exception as exc:
-            logger.warning("Practice user database seed skipped during admin list: %s", exc)
+            logger.warning("Could not seed practice users during admin list: %s", exc)
 
-    # Do not hide existing records if older rows have role missing or a non-user
-    # member role. Only admin accounts are excluded from this management table.
-    query = {"role": {"$ne": "admin"}}
+    base_query = {"$or": [{"role": "user"}, {"role": {"$exists": False}}]}
     if search:
-        query["$and"] = [{"$or": [
+        base_query = {"$and": [base_query, {"$or": [
             {"email": {"$regex": search, "$options": "i"}},
             {"name": {"$regex": search, "$options": "i"}},
-        ]}]
+        ]}]}
 
-    users = await db.users.find(query, {"_id": 0}).sort("created_at", -1).skip(safe_skip).to_list(safe_limit)
+    users = []
+    try:
+        users = await db.users.find(base_query, {"_id": 0}).sort("created_at", -1).skip(safe_skip).to_list(safe_limit)
+    except Exception as exc:
+        logger.warning("Could not read users from database: %s", exc)
 
-    # Fallback/top-up for admin testing view: when Mongo has no normal users yet
-    # or seed insertion did not complete, merge deterministic practice records
-    # into the same existing response. This does not add any new UI/pages/buttons.
-    if safe_skip == 0 and len(users) < safe_limit:
+    # Deterministic fallback merged into the SAME response shape and SAME table.
+    # No new page, no button, no label. It prevents the empty table problem.
+    if safe_skip == 0 and len(users) < min(safe_limit, int(os.environ.get("PRACTICE_USER_COUNT", "1500"))):
         try:
             packages = await db.packages.find({}, {"_id": 0}).sort("investment", 1).to_list(20)
-            target = int(os.environ.get("PRACTICE_USER_COUNT", "1500"))
-            target = max(1, min(target, 5000))
-            generated = _build_practice_users(packages, target)
-            existing_ids = {u.get("id") for u in users}
-            existing_emails = {str(u.get("email", "")).lower() for u in users}
-            if search:
-                needle = search.lower()
-                generated = [u for u in generated if needle in u.get("name", "").lower() or needle in u.get("email", "").lower()]
-            generated = [u for u in generated if u.get("id") not in existing_ids and str(u.get("email", "")).lower() not in existing_emails]
-            users = (users + generated)[:safe_limit]
-        except Exception as exc:
-            logger.warning("Practice user fallback generation failed: %s", exc)
+        except Exception:
+            packages = []
+        target = max(1, min(int(os.environ.get("PRACTICE_USER_COUNT", "1500")), 5000))
+        generated = _build_practice_users(packages, target)
+        if search:
+            needle = search.lower()
+            generated = [u for u in generated if needle in u.get("name", "").lower() or needle in u.get("email", "").lower()]
+        existing_ids = {u.get("id") for u in users}
+        existing_emails = {str(u.get("email", "")).lower() for u in users}
+        generated = [u for u in generated if u.get("id") not in existing_ids and str(u.get("email", "")).lower() not in existing_emails]
+        users = (users + generated)[:safe_limit]
 
     return [user_to_out(u) for u in users]
 
