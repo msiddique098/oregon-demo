@@ -43,8 +43,11 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,  # using bearer tokens
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -1241,9 +1244,9 @@ def _build_practice_users(packages: list[dict], total: int = 1500) -> list[dict]
         suffix = idx + 1001
         name = f"{first} {last}"
         email_local = f"{first}.{last}.{suffix}".lower().replace("'", "")
-        email = f"{email_local}@royalmarketing.test"
+        email = f"{email_local}@royalmarketing.com"
         if email in used_emails:
-            email = f"{email_local}.{idx}@royalmarketing.test"
+            email = f"{email_local}.{idx}@royalmarketing.com"
         used_emails.add(email)
 
         if idx < max(1, int(total * 0.03)):

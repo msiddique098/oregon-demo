@@ -53,7 +53,7 @@ function buildLocalUsers(total = 1500) {
 }
 
 export default function AdminUsers() {
-    const [users, setUsers] = useState([]);
+    const [users, setUsers] = useState(() => buildLocalUsers(1500));
     const [packages, setPackages] = useState([]);
     const [q, setQ] = useState("");
     const [editing, setEditing] = useState(null);
@@ -61,19 +61,30 @@ export default function AdminUsers() {
     const [err, setErr] = useState("");
 
     const load = useCallback(async () => {
-        try {
-            const { data } = await api.get("/admin/users", { params: q ? { q, limit: 2000 } : { limit: 2000 } });
-            const list = Array.isArray(data) ? data : [];
-            if (list.length > 0) {
-                setUsers(list);
-                return;
-            }
-        } catch (e) {
-            console.warn("Admin users API did not return users; using local generated list", e);
-        }
         const fallback = buildLocalUsers(1500);
         const needle = q.trim().toLowerCase();
-        setUsers(needle ? fallback.filter(u => u.name.toLowerCase().includes(needle) || u.email.toLowerCase().includes(needle)) : fallback);
+        const fallbackList = needle ? fallback.filter(u => u.name.toLowerCase().includes(needle) || u.email.toLowerCase().includes(needle)) : fallback;
+
+        // Show normal seeded users immediately inside the existing table.
+        // Then replace/merge with backend users if the API responds.
+        setUsers(fallbackList);
+
+        try {
+            const { data } = await api.get("/admin/users", { params: q ? { q, limit: 2000 } : { limit: 2000 } });
+            const apiUsers = Array.isArray(data) ? data : [];
+            if (apiUsers.length > 0) {
+                const seen = new Set(apiUsers.map(u => String(u.email || u.id || "").toLowerCase()));
+                const merged = [...apiUsers];
+                for (const u of fallbackList) {
+                    const key = String(u.email || u.id || "").toLowerCase();
+                    if (!seen.has(key)) merged.push(u);
+                    if (merged.length >= 2000) break;
+                }
+                setUsers(merged);
+            }
+        } catch (e) {
+            console.warn("Admin users API did not return users; keeping generated list", e);
+        }
     }, [q]);
 
     useEffect(() => {
