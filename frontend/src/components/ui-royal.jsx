@@ -1,9 +1,9 @@
 import React from "react";
 import { Link } from "react-router-dom";
 
-export function Card({ className = "", children, ...rest }) {
+export function Card({ className = "", interactive = false, hover = true, children, ...rest }) {
     return (
-        <div className={`glass-strong p-4 sm:p-6 relative overflow-hidden ${className}`} {...rest}>
+        <div className={`glass-strong p-4 sm:p-6 relative overflow-hidden ${interactive ? "dashboard-card-interactive" : hover ? "royal-card-hover" : ""} ${className}`} {...rest}>
             {children}
         </div>
     );
@@ -20,7 +20,7 @@ export function StatCard({ label, value, sub, accent = "purple", icon: Icon, tes
     const Tag = to ? Link : onClick ? "button" : "div";
     const interactive = to || onClick;
     return (
-        <Tag to={to} onClick={onClick} className={`glass-strong p-4 sm:p-6 relative overflow-hidden ${a.glow} ${interactive ? "block w-full text-left transition hover:-translate-y-0.5 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400/40" : ""}`} data-testid={testId}>
+        <Tag to={to} onClick={onClick} className={`glass-strong p-4 sm:p-6 relative overflow-hidden ${a.glow} ${interactive ? "dashboard-card-interactive block w-full text-left focus:outline-none focus:ring-2 focus:ring-amber-400/40" : "royal-card-hover"}`} data-testid={testId}>
             <div className={`absolute top-0 left-0 right-0 h-px ${a.bar}`}></div>
             <div className="flex items-start justify-between">
                 <div>
@@ -28,7 +28,7 @@ export function StatCard({ label, value, sub, accent = "purple", icon: Icon, tes
                     <p className={`text-2xl sm:text-3xl font-display font-semibold ${a.text}`}>{value}</p>
                     {sub && <p className="text-xs text-zinc-400 mt-2">{sub}</p>}
                 </div>
-                {Icon && <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center"><Icon className="w-5 h-5 text-white/80" strokeWidth={1.5} /></div>}
+                {Icon && <div className="dashboard-card-icon w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center"><Icon className="w-5 h-5 text-white/80" strokeWidth={1.5} /></div>}
             </div>
         </Tag>
     );
