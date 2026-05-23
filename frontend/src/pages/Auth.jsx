@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Crown, Mail, Lock, User, ArrowRight, TicketCheck } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Mail, Lock, User, ArrowRight, TicketCheck } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { formatApiError, api } from "../lib/api";
 
@@ -45,8 +45,6 @@ export function Register() {
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [searchParams] = useSearchParams();
-    const [referral, setReferral] = useState(searchParams.get("ref") || "");
     const [registrationCode, setRegistrationCode] = useState("");
     const [err, setErr] = useState("");
     const [loading, setLoading] = useState(false);
@@ -61,7 +59,6 @@ export function Register() {
                 name,
                 email,
                 password,
-                referral_code: referral || undefined,
                 registration_code: registrationCode.trim().toUpperCase(),
             });
             nav("/dashboard");
@@ -77,7 +74,6 @@ export function Register() {
                 <Field icon={Lock} type="password" placeholder="Password (min 6 chars)" value={password} onChange={setPassword} testId="register-password" />
                 <Field icon={TicketCheck} placeholder="Registration code (required)" value={registrationCode} onChange={(v) => setRegistrationCode(v.toUpperCase())} testId="register-code" />
                 <p className="-mt-2 text-[11px] text-amber-300/80">Ask admin for your unique Royal registration code. Your first-task reward is linked to this code.</p>
-                <Field icon={Crown} placeholder="Referral code (optional)" value={referral} onChange={setReferral} testId="register-referral" />
                 {err && <p className="text-sm text-rose-400" data-testid="register-error">{err}</p>}
                 <button type="submit" disabled={loading} className="btn-gold w-full" data-testid="register-submit">
                     {loading ? "Creating..." : "Open Royal Account"} <ArrowRight className="w-4 h-4" />

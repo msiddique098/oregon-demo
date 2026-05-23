@@ -63,7 +63,7 @@ export default function AdminUsers() {
     const load = useCallback(async () => {
         const fallback = buildLocalUsers(1500);
         const needle = q.trim().toLowerCase();
-        const fallbackList = needle ? fallback.filter(u => u.name.toLowerCase().includes(needle) || u.email.toLowerCase().includes(needle)) : fallback;
+        const fallbackList = needle ? fallback.filter(u => u.name.toLowerCase().includes(needle) || u.email.toLowerCase().includes(needle) || String(u.id || "").toLowerCase().includes(needle)) : fallback;
 
         // Show normal seeded users immediately inside the existing table.
         // Then replace/merge with backend users if the API responds.
@@ -130,7 +130,7 @@ export default function AdminUsers() {
                 </div>
                 <div className="relative">
                     <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input className="input-royal pl-9 w-72" placeholder="Search by name or email" value={q} onChange={e => setQ(e.target.value)} data-testid="admin-user-search" />
+                    <input className="input-royal pl-9 w-72" placeholder="Search by name, email, or user ID" value={q} onChange={e => setQ(e.target.value)} data-testid="admin-user-search" />
                 </div>
             </div>
 
@@ -145,7 +145,7 @@ export default function AdminUsers() {
                         <tbody>
                             {users.map(u => (
                                 <tr key={u.id} className="border-t border-white/5 hover:bg-white/[0.02]">
-                                    <td className="px-5 py-3"><div><p className="font-medium">{u.name}</p><p className="text-xs text-zinc-500">{u.email}</p></div></td>
+                                    <td className="px-5 py-3"><div><p className="font-medium">{u.name}</p><p className="text-xs text-zinc-500">{u.email}</p><p className="text-[10px] text-amber-300/80 break-all">ID: {u.id}</p></div></td>
                                     <td>{u.coin_symbol}</td>
                                     <td className="gradient-text-gold font-semibold">{Number(u.balance || 0).toLocaleString()}</td>
                                     <td className="text-emerald-300">{Number(u.daily_profit || 0).toLocaleString()}</td>

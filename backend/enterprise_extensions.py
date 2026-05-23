@@ -345,6 +345,7 @@ def build_enterprise_router(db, get_current_user, admin_required, record_tx, ws_
                 "cooldown_hours": int(task.get("cooldown_hours") or 24),
                 "thumbnail": task.get("thumbnail"),
                 "active": bool(task.get("active", True)),
+                "target_user_ids": task.get("target_user_ids") or None,
                 "created_by": admin["id"],
                 "created_at": now_utc().isoformat(),
             })

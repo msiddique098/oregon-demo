@@ -96,6 +96,7 @@ class TaskIn(BaseModel):
     cooldown_hours: int = 24
     thumbnail: Optional[str] = None
     active: bool = True
+    target_user_ids: Optional[List[str]] = None
 
     # YouTube task platform fields
     youtube_url: Optional[str] = None
@@ -472,16 +473,30 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
 
     @router.get("/tasks-v2")
     async def list_tasks_v2(user: dict = Depends(get_current_user), type_filter: Optional[str] = None):
-        q: dict = {"active": True}
+        q: dict = {
+            "active": True,
+            "$or": [
+                {"target_user_ids": {"$exists": False}},
+                {"target_user_ids": None},
+                {"target_user_ids": []},
+                {"target_user_ids": user["id"]},
+            ],
+        }
         if type_filter:
             q["type"] = type_filter
         raw = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
-        return [await _task_status_for_user(t, user) for t in raw]
+        submitted = await db.task_submissions.distinct("task_id", {"user_id": user["id"], "status": {"$in": ["pending", "approved"]}})
+        completed = await db.task_completions.distinct("task_id", {"user_id": user["id"]})
+        hidden_task_ids = set(submitted) | set(completed)
+        return [await _task_status_for_user(t, user) for t in raw if t.get("id") not in hidden_task_ids]
 
     async def _create_task_submission(task_id: str, proof: str, note: Optional[str], user: dict):
         task = await db.tasks.find_one({"id": task_id, "active": True}, {"_id": 0})
         if not task:
             raise HTTPException(status_code=404, detail="Task not found")
+        target_user_ids = task.get("target_user_ids") or []
+        if target_user_ids and user["id"] not in target_user_ids:
+            raise HTTPException(status_code=403, detail="Task is not assigned to this user")
         if _vip_rank(task.get("vip_level")) > _vip_rank(user.get("membership_name")):
             raise HTTPException(status_code=403, detail="VIP level required")
         if task.get("proof_required", True) and not proof:

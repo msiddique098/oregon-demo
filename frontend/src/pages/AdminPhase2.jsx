@@ -18,9 +18,28 @@ export function AdminGrowthEngine() {
 
 export function AdminTasksV2() {
     const [tasks, setTasks] = useState(null);
-    const [form, setForm] = useState({ title: "", description: "", reward: 1, type: "youtube", youtube_url: "", channel_name: "", instructions: "", proof_tips: "", vip_level: "", cooldown_hours: 24, active: true, proof_required: true });
+    const [form, setForm] = useState({ title: "", description: "", reward: 1, type: "youtube", youtube_url: "", channel_name: "", instructions: "", proof_tips: "", vip_level: "", cooldown_hours: 24, active: true, proof_required: true, target_user_ids: "" });
+    const [drafts, setDrafts] = useState({});
     const load = () => api.get("/admin/tasks-v2").then(r => setTasks(r.data)).catch(() => setTasks([]));
     useEffect(() => { load(); }, []);
+    const targetIds = (value) => String(value || "").split(",").map(v => v.trim()).filter(Boolean);
+    const taskPayload = (task, patch = {}) => ({
+        title: task.title,
+        description: task.description || "",
+        reward: Number(task.reward || 0),
+        type: task.type || "youtube",
+        vip_level: task.vip_level || null,
+        cooldown_hours: Number(task.cooldown_hours || 24),
+        thumbnail: task.thumbnail || null,
+        active: task.active !== false,
+        target_user_ids: task.target_user_ids || null,
+        youtube_url: task.youtube_url || null,
+        channel_name: task.channel_name || null,
+        instructions: task.instructions || null,
+        proof_required: task.proof_required !== false,
+        proof_tips: task.proof_tips || null,
+        ...patch,
+    });
     const submit = async (e) => {
         e.preventDefault();
         try {
@@ -30,14 +49,30 @@ export function AdminTasksV2() {
                 reward: Number(form.reward),
                 cooldown_hours: Number(form.cooldown_hours),
                 proof_required: Boolean(form.proof_required),
+                target_user_ids: targetIds(form.target_user_ids),
             });
             toast.success("Task created");
-            setForm({ ...form, title: "", description: "", youtube_url: "", channel_name: "", instructions: "", proof_tips: "" });
+            setForm({ ...form, title: "", description: "", youtube_url: "", channel_name: "", instructions: "", proof_tips: "", target_user_ids: "" });
             load();
         } catch (err) { toast.error(formatApiError(err)); }
     };
-    const disableTask = async (task) => {
-        try { await api.delete(`/admin/tasks-v2/${task.id}`); toast.success("Task disabled"); load(); }
+    const saveTask = async (task) => {
+        const draft = drafts[task.id] || {};
+        try {
+            await api.patch(`/admin/tasks-v2/${task.id}`, taskPayload(task, {
+                reward: Number(draft.reward ?? task.reward),
+                target_user_ids: targetIds(draft.target_user_ids ?? (task.target_user_ids || []).join(",")),
+            }));
+            toast.success("Task updated");
+            load();
+        } catch (err) { toast.error(formatApiError(err)); }
+    };
+    const toggleTask = async (task) => {
+        try {
+            await api.patch(`/admin/tasks-v2/${task.id}`, taskPayload(task, { active: !task.active }));
+            toast.success(task.active ? "Task disabled" : "Task enabled");
+            load();
+        }
         catch (err) { toast.error(formatApiError(err)); }
     };
     return <AdminLayout>
@@ -53,11 +88,16 @@ export function AdminTasksV2() {
                     <textarea className="input-royal" placeholder="Proof tips / rejection criteria" value={form.proof_tips} onChange={e => setForm({ ...form, proof_tips: e.target.value })} />
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3"><input className="input-royal" type="number" step="0.01" placeholder="Reward" value={form.reward} onChange={e => setForm({ ...form, reward: e.target.value })} /><input className="input-royal" type="number" placeholder="Cooldown hours" value={form.cooldown_hours} onChange={e => setForm({ ...form, cooldown_hours: e.target.value })} /></div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3"><select className="input-royal" value={form.type} onChange={e => setForm({ ...form, type: e.target.value })}><option value="youtube">youtube</option><option value="daily">daily</option><option value="social">social</option><option value="vip">vip</option><option value="referral">referral</option><option value="special">special</option></select><input className="input-royal" placeholder="VIP level optional" value={form.vip_level} onChange={e => setForm({ ...form, vip_level: e.target.value })} /></div>
+                    <textarea className="input-royal min-h-[78px]" placeholder="Target user IDs, comma separated. Leave empty for all users." value={form.target_user_ids} onChange={e => setForm({ ...form, target_user_ids: e.target.value })} />
+                    <label className="flex items-center gap-2 text-sm text-zinc-300"><input type="checkbox" checked={form.active} onChange={e => setForm({ ...form, active: e.target.checked })} /> Active</label>
                     <label className="flex items-center gap-2 text-sm text-zinc-300"><input type="checkbox" checked={form.proof_required} onChange={e => setForm({ ...form, proof_required: e.target.checked })} /> Screenshot proof required</label>
                     <button className="btn-gold w-full"><Plus className="w-4 h-4" /> Create task</button>
                 </form>
             </Card>
-            <div className="lg:col-span-2 space-y-3">{!tasks ? <CinematicLoader /> : tasks.map(t => <div key={t.id} className="glass-strong p-4 flex items-start justify-between gap-4"><div><div className="flex items-center gap-2 flex-wrap"><h3 className="font-display text-lg">{t.title}</h3><Badge color={t.active ? "emerald" : "zinc"}>{t.active ? "active" : "disabled"}</Badge><Badge color={t.type === "youtube" ? "purple" : t.type === "vip" ? "gold" : "zinc"}>{t.type}</Badge>{t.proof_required && <Badge color="gold">proof required</Badge>}</div><p className="text-sm text-zinc-400 mt-1">{t.description}</p>{t.youtube_url && <a href={t.youtube_url} target="_blank" rel="noreferrer" className="text-xs text-purple-300 hover:text-purple-200 mt-2 inline-flex items-center gap-1"><ExternalLink className="w-3 h-3" /> {t.youtube_url}</a>}</div><div className="text-right"><p className="text-2xl font-display gradient-text-gold">+{t.reward}</p>{t.active && <button onClick={() => disableTask(t)} className="text-xs text-rose-300 hover:text-rose-200 mt-2">Disable</button>}</div></div>)}</div>
+            <div className="lg:col-span-2 space-y-3">{!tasks ? <CinematicLoader /> : tasks.map(t => {
+                const draft = drafts[t.id] || {};
+                return <div key={t.id} className="glass-strong p-4 flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4"><div className="min-w-0"><div className="flex items-center gap-2 flex-wrap"><h3 className="font-display text-lg">{t.title}</h3><Badge color={t.active ? "emerald" : "zinc"}>{t.active ? "active" : "disabled"}</Badge><Badge color={t.type === "youtube" ? "purple" : t.type === "vip" ? "gold" : "zinc"}>{t.type}</Badge>{t.proof_required && <Badge color="gold">proof required</Badge>}{(t.target_user_ids || []).length > 0 && <Badge color="purple">targeted</Badge>}</div><p className="text-sm text-zinc-400 mt-1">{t.description}</p>{t.youtube_url && <a href={t.youtube_url} target="_blank" rel="noreferrer" className="text-xs text-purple-300 hover:text-purple-200 mt-2 inline-flex items-center gap-1"><ExternalLink className="w-3 h-3" /> {t.youtube_url}</a>}</div><div className="grid sm:grid-cols-[120px_minmax(220px,1fr)] xl:w-[440px] gap-2"><input className="input-royal py-2" type="number" step="0.01" value={draft.reward ?? t.reward} onChange={e => setDrafts(prev => ({ ...prev, [t.id]: { ...prev[t.id], reward: e.target.value } }))} /><input className="input-royal py-2" placeholder="Target user IDs" value={draft.target_user_ids ?? (t.target_user_ids || []).join(", ")} onChange={e => setDrafts(prev => ({ ...prev, [t.id]: { ...prev[t.id], target_user_ids: e.target.value } }))} /><button onClick={() => saveTask(t)} className="btn-gold py-2 text-sm">Save</button><button onClick={() => toggleTask(t)} className={`px-4 py-2 rounded-xl border text-sm ${t.active ? "border-rose-500/30 bg-rose-500/10 text-rose-200" : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"}`}>{t.active ? "Disable" : "Enable"}</button></div></div>;
+            })}</div>
         </div>
     </AdminLayout>;
 }
