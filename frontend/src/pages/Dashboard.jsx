@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { Wallet, TrendingUp, Crown, CheckSquare, Users, Bell, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import { StatCard, Badge } from "../components/ui-royal";
@@ -45,7 +46,7 @@ export default function Dashboard() {
 
             {/* Top stat cards */}
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-                <div className="glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(251,191,36,0.20)]" data-testid="stat-balance">
+                <Link to="/dashboard/transactions" className="glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(251,191,36,0.20)] transition hover:-translate-y-0.5 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400/40" data-testid="stat-balance">
                     <div className="absolute top-0 left-0 right-0 h-px bg-amber-500/40"></div>
                     <div className="flex items-start justify-between">
                         <div>
@@ -57,25 +58,26 @@ export default function Dashboard() {
                         </div>
                         <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center"><Wallet className="w-5 h-5 text-white/80" /></div>
                     </div>
-                </div>
-                <div className="glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.20)]" data-testid="stat-daily">
+                </Link>
+                <Link to="/dashboard/transactions" className="glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.20)] transition hover:-translate-y-0.5 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-emerald-400/40" data-testid="stat-daily">
                     <div className="absolute top-0 left-0 right-0 h-px bg-emerald-500/40"></div>
                     <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Daily Profit</p>
                     <p className="text-2xl sm:text-3xl font-display font-semibold text-emerald-300">
                         <AnimatedCounter value={u.daily_profit} decimals={2} prefix={sym} />
                     </p>
                     <p className="text-xs text-zinc-400 mt-2">Curated by RoyalMarketing Admin</p>
-                </div>
+                </Link>
                 <StatCard testId="stat-tasks" label="Tasks Done" accent="purple" icon={CheckSquare}
+                    to="/dashboard/tasks"
                     value={`${u.tasks_completed}/${u.tasks_completed + u.tasks_pending}`} sub={`${u.task_progress}% royal progress`} />
-                <div className="glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(147,51,234,0.20)]" data-testid="stat-referral">
+                <Link to="/dashboard/referral" className="glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(147,51,234,0.20)] transition hover:-translate-y-0.5 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-purple-400/40" data-testid="stat-referral">
                     <div className="absolute top-0 left-0 right-0 h-px bg-purple-500/40"></div>
                     <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Referral Earnings</p>
                     <p className="text-2xl sm:text-3xl font-display font-semibold gradient-text-purple">
                         <AnimatedCounter value={u.referral_earnings} decimals={2} prefix={sym} />
                     </p>
                     <p className="text-xs text-zinc-400 mt-2">Commission rate {u.commission_rate}%</p>
-                </div>
+                </Link>
             </div>
 
             <EnterpriseWidgets />

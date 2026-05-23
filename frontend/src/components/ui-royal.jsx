@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 
 export function Card({ className = "", children, ...rest }) {
     return (
@@ -8,7 +9,7 @@ export function Card({ className = "", children, ...rest }) {
     );
 }
 
-export function StatCard({ label, value, sub, accent = "purple", icon: Icon, testId }) {
+export function StatCard({ label, value, sub, accent = "purple", icon: Icon, testId, to, onClick }) {
     const accentMap = {
         purple: { bar: "bg-purple-500/40", glow: "shadow-[0_0_30px_rgba(147,51,234,0.25)]", text: "gradient-text-purple" },
         gold: { bar: "bg-amber-500/40", glow: "shadow-[0_0_30px_rgba(251,191,36,0.20)]", text: "gradient-text-gold" },
@@ -16,8 +17,10 @@ export function StatCard({ label, value, sub, accent = "purple", icon: Icon, tes
         rose: { bar: "bg-rose-500/40", glow: "shadow-[0_0_30px_rgba(244,63,94,0.20)]", text: "text-rose-300" },
     };
     const a = accentMap[accent] || accentMap.purple;
+    const Tag = to ? Link : onClick ? "button" : "div";
+    const interactive = to || onClick;
     return (
-        <div className={`glass-strong p-4 sm:p-6 relative overflow-hidden ${a.glow}`} data-testid={testId}>
+        <Tag to={to} onClick={onClick} className={`glass-strong p-4 sm:p-6 relative overflow-hidden ${a.glow} ${interactive ? "block w-full text-left transition hover:-translate-y-0.5 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-amber-400/40" : ""}`} data-testid={testId}>
             <div className={`absolute top-0 left-0 right-0 h-px ${a.bar}`}></div>
             <div className="flex items-start justify-between">
                 <div>
@@ -27,7 +30,7 @@ export function StatCard({ label, value, sub, accent = "purple", icon: Icon, tes
                 </div>
                 {Icon && <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center"><Icon className="w-5 h-5 text-white/80" strokeWidth={1.5} /></div>}
             </div>
-        </div>
+        </Tag>
     );
 }
 

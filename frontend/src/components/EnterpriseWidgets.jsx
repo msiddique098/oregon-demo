@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Clock, ShieldCheck, TrendingUp, Users, Zap } from "lucide-react";
 import { api } from "../lib/api";
@@ -37,7 +38,8 @@ export default function EnterpriseWidgets() {
 
     return (
         <div className="grid lg:grid-cols-3 gap-5 mt-6">
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="glass-strong p-5 border-amber-500/20 overflow-hidden relative">
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="glass-strong border-amber-500/20 overflow-hidden relative transition hover:-translate-y-0.5 hover:border-amber-400/30">
+                <Link to="/dashboard/withdraw" className="block p-5 focus:outline-none focus:ring-2 focus:ring-amber-400/40">
                 <div className="absolute -right-12 -top-12 w-32 h-32 rounded-full bg-amber-400/10 blur-2xl" />
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 gap-3">
                     <div>
@@ -55,9 +57,11 @@ export default function EnterpriseWidgets() {
                 </div>
                 <p className="text-xs text-zinc-500 mt-3">{Number(progress.percent || 0).toFixed(0)}% complete. Rules are transparent and admin-configured.</p>
                 {failedRules.length > 0 && <div className="mt-4 space-y-2">{failedRules.slice(0, 2).map((r) => <div key={r.id} className="text-xs bg-rose-500/10 border border-rose-400/20 rounded-xl p-2 text-rose-100">{r.message}</div>)}</div>}
+                </Link>
             </motion.div>
 
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="glass-strong p-5 border-purple-500/20 overflow-hidden relative">
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="glass-strong border-purple-500/20 overflow-hidden relative transition hover:-translate-y-0.5 hover:border-purple-400/30">
+                <Link to="/dashboard/rewards" className="block p-5 focus:outline-none focus:ring-2 focus:ring-purple-400/40">
                 <div className="absolute -right-12 -top-12 w-32 h-32 rounded-full bg-purple-500/10 blur-2xl" />
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 gap-3">
                     <div>
@@ -70,9 +74,11 @@ export default function EnterpriseWidgets() {
                     <p className="text-2xl font-display text-purple-200">{timeLeftLabel(activeCampaign?.ends_at)}</p>
                     <p className="text-sm text-zinc-400 mt-2">{activeCampaign?.content?.message || "Admin can create countdowns, deposit incentives, referral boosts, and announcements."}</p>
                 </div>
+                </Link>
             </motion.div>
 
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-strong p-5 border-emerald-500/20 overflow-hidden relative">
+            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="glass-strong border-emerald-500/20 overflow-hidden relative transition hover:-translate-y-0.5 hover:border-emerald-400/30">
+                <Link to="/dashboard/transactions" className="block p-5 focus:outline-none focus:ring-2 focus:ring-emerald-400/40">
                 <div className="absolute -right-12 -top-12 w-32 h-32 rounded-full bg-emerald-500/10 blur-2xl" />
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 gap-3">
                     <div>
@@ -89,6 +95,7 @@ export default function EnterpriseWidgets() {
                         </div>
                     ))}
                 </div>
+                </Link>
             </motion.div>
         </div>
     );

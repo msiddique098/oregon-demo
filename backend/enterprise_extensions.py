@@ -242,7 +242,12 @@ def build_enterprise_router(db, get_current_user, admin_required, record_tx, ws_
         progress = min(100, round((balance / min_withdrawal) * 100, 2)) if min_withdrawal > 0 else 100
         rules = await evaluate_withdrawal_rules(user)
         campaigns = await db.campaigns.find({"active": True}, {"_id": 0}).sort("created_at", -1).to_list(10)
-        recent = await db.transactions.find({"type": {"$in": ["withdrawal_debit", "deposit_credit", "task_reward", "daily_checkin", "spin_reward", "first_task_reward", "bulk_bonus"]}}, {"_id": 0}).sort("created_at", -1).to_list(12)
+        activity_types = ["withdrawal_debit", "withdrawal_refund", "deposit_credit", "task_reward", "daily_checkin", "spin_reward", "first_task_reward", "bulk_bonus", "referral_commission"]
+        recent = await db.transactions.find({"user_id": user["id"], "type": {"$in": activity_types}}, {"_id": 0}).sort("created_at", -1).to_list(12)
+        if len(recent) < 4:
+            global_recent = await db.transactions.find({"type": {"$in": activity_types}}, {"_id": 0}).sort("created_at", -1).to_list(12)
+            seen = {t.get("id") for t in recent}
+            recent.extend([t for t in global_recent if t.get("id") not in seen][:12 - len(recent)])
         activities = []
         for t in recent:
             u = await db.users.find_one({"id": t.get("user_id")}, {"_id": 0, "name": 1})
@@ -250,6 +255,17 @@ def build_enterprise_router(db, get_current_user, admin_required, record_tx, ws_
                 "id": t.get("id"), "type": t.get("type"), "amount": t.get("amount"), "coin": t.get("coin", "USDT"),
                 "user_label": anon_user(u), "created_at": t.get("created_at"),
             })
+        submissions = await db.task_submissions.find({"user_id": user["id"]}, {"_id": 0, "id": 1, "status": 1, "reward": 1, "created_at": 1}).sort("created_at", -1).to_list(6)
+        for sub in submissions:
+            activities.append({
+                "id": f"submission-{sub.get('id')}",
+                "type": f"task_{sub.get('status', 'submitted')}",
+                "amount": sub.get("reward", 0),
+                "coin": user.get("coin_symbol", "USDT"),
+                "user_label": "You",
+                "created_at": sub.get("created_at"),
+            })
+        activities = sorted(activities, key=lambda item: item.get("created_at") or "", reverse=True)[:12]
         return {"withdrawal_progress": {"current": balance, "target": min_withdrawal, "percent": progress}, "withdrawal_rules": rules, "campaigns": campaigns, "real_activity": activities}
 
     @router.post("/analytics/events")
