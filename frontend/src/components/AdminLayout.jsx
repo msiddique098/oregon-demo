@@ -102,7 +102,7 @@ export default function AdminLayout({ children }) {
                 <ShieldCheck className={`${mobile ? "w-4 h-4" : "w-5 h-5"} text-black`} strokeWidth={1.8} />
             </span>
             <span className="font-display text-base sm:text-lg font-semibold truncate">
-                Royal<span className="gradient-text-gold">Admin</span>
+                Eregon<span className="gradient-text-gold">Admin</span>
             </span>
         </Link>
     );
@@ -127,7 +127,7 @@ export default function AdminLayout({ children }) {
 
     return (
         <div className="min-h-screen bg-[#050505] text-white overflow-x-hidden" data-admin-layout="drawer-v2">
-            <div className="fixed inset-0 royal-radial pointer-events-none" />
+            <div className="fixed inset-0 eregon-radial pointer-events-none" />
 
             <aside
                 className="hidden lg:flex fixed left-0 top-0 bottom-0 z-30 flex-col w-64 border-r border-amber-500/10 bg-black/45 backdrop-blur-xl"

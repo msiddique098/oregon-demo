@@ -62,7 +62,7 @@ export default function NotificationBell() {
             {open && (
                 <div className="absolute right-0 mt-2 w-[340px] max-w-[90vw] glass-strong p-4 z-50 animate-fade-up" data-testid="notification-dropdown">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                        <p className="text-xs uppercase tracking-widest text-zinc-500">Royal Inbox</p>
+                        <p className="text-xs uppercase tracking-widest text-zinc-500">Eregon Inbox</p>
                         <div className="flex items-center gap-2">
                             <button onClick={markAll} className="text-[11px] text-amber-300 hover:underline">Mark all read</button>
                             <button onClick={() => setOpen(false)}><X className="w-4 h-4 text-zinc-500" /></button>

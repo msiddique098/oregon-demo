@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import AdminLayout from "../components/AdminLayout";
-import { Badge } from "../components/ui-royal";
+import { Badge } from "../components/ui-eregon";
 import { api, formatApiError } from "../lib/api";
 import { Search, Edit3, Trash2, X, Save } from "lucide-react";
 
@@ -27,7 +27,7 @@ function buildLocalUsers(total = 1500) {
         return {
             id: `rm-local-${i + 1001}`,
             name: `${first} ${last}`,
-            email: `${first}.${last}.${i + 1001}`.toLowerCase() + "@royalmarketing.test",
+            email: `${first}.${last}.${i + 1001}`.toLowerCase() + "@eregon.test",
             role: "user",
             coin_symbol: "USDT",
             balance: Number(balance.toFixed(2)),
@@ -126,11 +126,11 @@ export default function AdminUsers() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">User Management</p>
-                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Subjects</h1>
+                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Eregon Members</h1>
                 </div>
                 <div className="relative">
                     <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input className="input-royal pl-9 w-72" placeholder="Search by name, email, or user ID" value={q} onChange={e => setQ(e.target.value)} data-testid="admin-user-search" />
+                    <input className="input-eregon pl-9 w-72" placeholder="Search by name, email, or user ID" value={q} onChange={e => setQ(e.target.value)} data-testid="admin-user-search" />
                 </div>
             </div>
 
@@ -187,14 +187,14 @@ export default function AdminUsers() {
                             <Field label="Withdrawal Hours" type="number" value={form.withdrawal_processing_hours} onChange={v => setForm({...form, withdrawal_processing_hours: v})} />
                             <div>
                                 <label className="text-xs text-zinc-500 uppercase tracking-widest">Membership</label>
-                                <select className="input-royal mt-1" value={form.membership_id || ""} onChange={e => setForm({...form, membership_id: e.target.value})}>
+                                <select className="input-eregon mt-1" value={form.membership_id || ""} onChange={e => setForm({...form, membership_id: e.target.value})}>
                                     <option value="">None / Free</option>
                                     {packages.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                                 </select>
                             </div>
                             <div>
                                 <label className="text-xs text-zinc-500 uppercase tracking-widest">Status</label>
-                                <select className="input-royal mt-1" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
+                                <select className="input-eregon mt-1" value={form.status} onChange={e => setForm({...form, status: e.target.value})}>
                                     <option value="active">Active</option><option value="suspended">Suspended</option>
                                 </select>
                             </div>
@@ -202,7 +202,7 @@ export default function AdminUsers() {
                         {err && <p className="text-sm text-rose-400 mt-3">{err}</p>}
                         <div className="flex justify-end gap-2 mt-5">
                             <button onClick={() => setEditing(null)} className="btn-ghost"><X className="w-4 h-4" /> Cancel</button>
-                            <button onClick={save} className="btn-royal"><Save className="w-4 h-4" /> Save</button>
+                            <button onClick={save} className="btn-eregon"><Save className="w-4 h-4" /> Save</button>
                         </div>
                     </div>
                 </div>
@@ -212,5 +212,5 @@ export default function AdminUsers() {
 }
 
 function Field({ label, value, onChange, type = "text" }) {
-    return <div><label className="text-xs text-zinc-500 uppercase tracking-widest">{label}</label><input className="input-royal mt-1" type={type} value={value ?? ""} onChange={e => onChange(e.target.value)} /></div>;
+    return <div><label className="text-xs text-zinc-500 uppercase tracking-widest">{label}</label><input className="input-eregon mt-1" type={type} value={value ?? ""} onChange={e => onChange(e.target.value)} /></div>;
 }

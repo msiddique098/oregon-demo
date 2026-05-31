@@ -16,7 +16,7 @@ export default function WithdrawalTimeline({ status, processingHours, adminNote 
     return (
         <div className="bg-black/40 border border-white/5 rounded-xl p-4" data-testid="withdrawal-timeline">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                <p className="text-xs uppercase tracking-widest text-zinc-500">Royal Processing Queue</p>
+                <p className="text-xs uppercase tracking-widest text-zinc-500">Eregon Processing Queue</p>
                 {processingHours != null && (
                     <p className="text-xs text-amber-300">ETA ~{processingHours}h</p>
                 )}
@@ -27,7 +27,7 @@ export default function WithdrawalTimeline({ status, processingHours, adminNote 
                     <XCircle className="w-5 h-5 text-rose-300" />
                     <div>
                         <p className="text-sm font-semibold text-rose-200">Rejected</p>
-                        <p className="text-xs text-zinc-400">{adminNote || "Funds refunded to your royal vault."}</p>
+                        <p className="text-xs text-zinc-400">{adminNote || "Funds refunded to your Eregon wallet."}</p>
                     </div>
                 </div>
             ) : (

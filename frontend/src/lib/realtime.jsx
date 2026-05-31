@@ -17,7 +17,7 @@ export function RealtimeProvider({ children }) {
     const wsRef = useRef(null);
 
     useEffect(() => {
-        const token = localStorage.getItem("royal_token");
+        const token = localStorage.getItem("eregon_token");
         if (!token || !user) return undefined;
 
         let closed = false;

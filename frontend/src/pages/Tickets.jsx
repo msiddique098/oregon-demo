@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import DashboardLayout from "../components/DashboardLayout";
-import { Badge } from "../components/ui-royal";
+import { Badge } from "../components/ui-eregon";
 import { api, formatApiError } from "../lib/api";
 import { Plus, Send, Paperclip, X, AlertCircle, MessageSquare, ChevronLeft } from "lucide-react";
 
@@ -27,7 +27,7 @@ export default function Tickets() {
         <DashboardLayout>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
-                    <p className="text-xs uppercase tracking-widest text-amber-400/80">RoyalMarketing Support</p>
+                    <p className="text-xs uppercase tracking-widest text-amber-400/80">Eregon Marketing Support</p>
                     <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Support Tickets</h1>
                 </div>
                 <button onClick={() => setCreating(true)} className="btn-gold" data-testid="new-ticket-btn"><Plus className="w-4 h-4" /> New Ticket</button>
@@ -127,7 +127,7 @@ export function TicketThread({ role, ticket, messages, setMessages, onBack, onUp
                     return (
                         <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
                             <div className={`max-w-[80%] p-3 rounded-2xl ${mine ? "bg-purple-500/15 border border-purple-500/30 rounded-tr-sm" : "bg-white/5 border border-white/10 rounded-tl-sm"}`}>
-                                <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{m.author_role === "admin" ? "RoyalMarketing Support" : "You"}</p>
+                                <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-1">{m.author_role === "admin" ? "Eregon Marketing Support" : "You"}</p>
                                 <p className="text-sm whitespace-pre-wrap">{m.body}</p>
                                 {m.attachment_data_url && <img src={m.attachment_data_url} alt="attachment" className="mt-2 rounded-lg max-h-40" />}
                                 <p className="text-[10px] text-zinc-600 mt-1">{new Date(m.created_at).toLocaleString()}</p>
@@ -141,8 +141,8 @@ export function TicketThread({ role, ticket, messages, setMessages, onBack, onUp
                 {file && <div className="text-xs text-emerald-300 flex items-center gap-2"><Paperclip className="w-3.5 h-3.5" /> Attachment ready <button onClick={() => setFile("")}><X className="w-3 h-3" /></button></div>}
                 <div className="flex flex-wrap gap-2">
                     <label className="btn-ghost py-2 px-3 cursor-pointer"><Paperclip className="w-4 h-4" /><input type="file" accept="image/*" className="hidden" onChange={onFile} /></label>
-                    <input className="input-royal flex-1" placeholder="Type your message..." value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} data-testid={`${role}-ticket-input`} />
-                    <button onClick={send} className="btn-royal" data-testid={`${role}-ticket-send`}><Send className="w-4 h-4" /></button>
+                    <input className="input-eregon flex-1" placeholder="Type your message..." value={text} onChange={e => setText(e.target.value)} onKeyDown={e => e.key === "Enter" && send()} data-testid={`${role}-ticket-input`} />
+                    <button onClick={send} className="btn-eregon" data-testid={`${role}-ticket-send`}><Send className="w-4 h-4" /></button>
                 </div>
             </div>
         </div>
@@ -173,12 +173,12 @@ function NewTicketModal({ onClose, onCreated }) {
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
             <form onSubmit={submit} className="glass-strong max-w-lg w-full p-6 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <h3 className="font-display text-xl">New Royal Ticket</h3>
+                    <h3 className="font-display text-xl">New Support Ticket</h3>
                     <button type="button" onClick={onClose}><X className="w-5 h-5 text-zinc-400" /></button>
                 </div>
-                <input className="input-royal" placeholder="Subject" value={subject} onChange={e => setSubject(e.target.value)} required minLength={2} />
-                <textarea className="input-royal min-h-[120px]" placeholder="Describe your request..." value={body} onChange={e => setBody(e.target.value)} required minLength={2} />
-                <select className="input-royal" value={priority} onChange={e => setPriority(e.target.value)}>
+                <input className="input-eregon" placeholder="Subject" value={subject} onChange={e => setSubject(e.target.value)} required minLength={2} />
+                <textarea className="input-eregon min-h-[120px]" placeholder="Describe your request..." value={body} onChange={e => setBody(e.target.value)} required minLength={2} />
+                <select className="input-eregon" value={priority} onChange={e => setPriority(e.target.value)}>
                     <option value="low">Low priority</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option>
                 </select>
                 <label className="flex items-center gap-2 text-sm text-zinc-400 cursor-pointer">
@@ -187,7 +187,7 @@ function NewTicketModal({ onClose, onCreated }) {
                 </label>
                 {file && <img src={file} alt="proof" className="rounded-lg max-h-32" />}
                 {err && <p className="text-sm text-rose-400">{err}</p>}
-                <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="btn-ghost">Cancel</button><button className="btn-royal" data-testid="submit-ticket">Submit</button></div>
+                <div className="flex justify-end gap-2"><button type="button" onClick={onClose} className="btn-ghost">Cancel</button><button className="btn-eregon" data-testid="submit-ticket">Submit</button></div>
             </form>
         </div>
     );

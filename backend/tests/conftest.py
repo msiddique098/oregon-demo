@@ -2,11 +2,11 @@ import os
 import pytest
 import requests
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://crown-crypto.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://eregon.online").rstrip("/")
 
-ADMIN_EMAIL = "admin@royalcrypto.com"
+ADMIN_EMAIL = "admin@eregon.online"
 ADMIN_PASSWORD = "Admin@123"
-USER_EMAIL = "user@royalcrypto.com"
+USER_EMAIL = "member@eregon.online"
 USER_PASSWORD = "User@123"
 
 

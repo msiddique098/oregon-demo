@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Crown, Medal, Trophy } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import CinematicLoader from "../components/CinematicLoader";
-import { Badge, Card } from "../components/ui-royal";
+import { Badge, Card } from "../components/ui-eregon";
 import { api } from "../lib/api";
 
 const tabs = ["balance"];
@@ -13,7 +13,7 @@ export default function Leaderboard() {
     useEffect(() => { setRows(null); api.get(`/leaderboard?metric=${metric}`).then(r => setRows(r.data)).catch(() => setRows([])); }, [metric]);
     return <DashboardLayout>
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3 mb-8">
-            <div><p className="text-xs uppercase tracking-widest text-amber-400/80">Community summary</p><h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">RoyalMarketing Total Rewards</h1></div>
+            <div><p className="text-xs uppercase tracking-widest text-amber-400/80">Community summary</p><h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Eregon Marketing Total Rewards</h1></div>
             <div className="flex flex-wrap gap-2">{tabs.map(t => <button key={t} onClick={() => setMetric(t)} className={`px-4 py-2 rounded-xl text-sm border capitalize ${metric === t ? "bg-amber-500/10 border-amber-500/30 text-amber-200" : "bg-white/5 border-white/10 text-zinc-400"}`}>{t}</button>)}</div>
         </div>
         {!rows ? <CinematicLoader /> : <div className="grid lg:grid-cols-3 gap-5">

@@ -63,7 +63,7 @@ export default function LiveFeed({ variant = "default" }) {
                         <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping"></span>
                         <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-400"></span>
                     </span>
-                    <p className="text-xs uppercase tracking-widest text-zinc-500">RoyalMarketing Updates</p>
+                    <p className="text-xs uppercase tracking-widest text-zinc-500">Eregon Marketing Updates</p>
                 </div>
                 <span className="text-[10px] text-zinc-600 uppercase">50+ recent</span>
             </div>

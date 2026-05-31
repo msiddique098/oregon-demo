@@ -149,10 +149,10 @@ def build_enterprise_router(db, get_current_user, admin_required, record_tx, ws_
 
     def anon_user(u: Optional[dict]) -> str:
         if not u:
-            return "Royal Member"
-        name = (u.get("name") or "Royal Member").strip()
+            return "Eregon Member"
+        name = (u.get("name") or "Eregon Member").strip()
         if not name:
-            return "Royal Member"
+            return "Eregon Member"
         return name[0].upper() + "***"
 
     async def evaluate_withdrawal_rules(user: dict) -> dict:

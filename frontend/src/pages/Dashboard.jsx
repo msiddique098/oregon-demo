@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Wallet, TrendingUp, Crown, CheckSquare, Users, Bell, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
-import { StatCard, Badge } from "../components/ui-royal";
+import { StatCard, Badge } from "../components/ui-eregon";
 import AnimatedCounter from "../components/AnimatedCounter";
 import CinematicLoader from "../components/CinematicLoader";
 import LiveFeed from "../components/LiveFeed";
@@ -36,7 +36,7 @@ export default function Dashboard() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3 mb-8" data-testid="dashboard-header">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Welcome back, {u.name}</p>
-                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Overview</h1>
+                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Eregon Overview</h1>
                 </div>
                 <div className="flex items-center gap-3">
                     <Badge color="gold">{u.membership_name || "Free"}</Badge>
@@ -65,11 +65,11 @@ export default function Dashboard() {
                     <p className="text-2xl sm:text-3xl font-display font-semibold text-emerald-300">
                         <AnimatedCounter value={u.daily_profit} decimals={2} prefix={sym} />
                     </p>
-                    <p className="text-xs text-zinc-400 mt-2">Curated by RoyalMarketing Admin</p>
+                    <p className="text-xs text-zinc-400 mt-2">Curated by Eregon Admin</p>
                 </Link>
                 <StatCard testId="stat-tasks" label="Tasks Done" accent="purple" icon={CheckSquare}
                     to="/dashboard/tasks"
-                    value={`${u.tasks_completed}/${u.tasks_completed + u.tasks_pending}`} sub={`${u.task_progress}% royal progress`} />
+                    value={`${u.tasks_completed}/${u.tasks_completed + u.tasks_pending}`} sub={`${u.task_progress}% Eregon progress`} />
                 <Link to="/dashboard/referral" className="dashboard-card-interactive glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(147,51,234,0.20)] focus:outline-none focus:ring-2 focus:ring-purple-400/40" data-testid="stat-referral">
                     <div className="absolute top-0 left-0 right-0 h-px bg-purple-500/40"></div>
                     <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Referral Earnings</p>
@@ -127,11 +127,11 @@ export default function Dashboard() {
                             <li className="flex justify-between"><span>Withdrawal SLA</span><span>{data.membership.priority_withdrawal_hours}h</span></li>
                         </ul>
                     ) : (
-                        <p className="text-sm text-zinc-400 mt-4">No active membership yet. Visit the Royal Plans to unlock elite perks.</p>
+                        <p className="text-sm text-zinc-400 mt-4">No active membership yet. Visit the Eregon Plans to unlock elite perks.</p>
                     )}
                     <div className="mt-5 bg-black/40 border border-white/5 rounded-xl p-3">
                         <div className="flex justify-between text-xs text-zinc-400 mb-2">
-                            <span>Royal Task Progress</span><span className="text-amber-300">{u.task_progress}%</span>
+                            <span>Eregon Task Progress</span><span className="text-amber-300">{u.task_progress}%</span>
                         </div>
                         <div className="h-2 bg-white/5 rounded-full overflow-hidden">
                             <div className="h-full gradient-gold" style={{ width: `${u.task_progress}%` }}></div>

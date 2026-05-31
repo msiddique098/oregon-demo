@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import DashboardLayout from "../components/DashboardLayout";
-import { Badge } from "../components/ui-royal";
+import { Badge } from "../components/ui-eregon";
 import { api } from "../lib/api";
 import { Filter, ArrowUpRight, ArrowDownRight, History, Search } from "lucide-react";
 
@@ -85,7 +85,7 @@ export default function Transactions() {
 
     return (
         <DashboardLayout>
-            <p className="text-xs uppercase tracking-widest text-amber-400/80">Royal Wallet Ledger</p>
+            <p className="text-xs uppercase tracking-widest text-amber-400/80">Eregon Wallet Ledger</p>
             <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Transaction History</h1>
 
             <div className="grid sm:grid-cols-3 gap-4 mt-6">
@@ -96,16 +96,16 @@ export default function Transactions() {
 
             <div className="glass-strong p-4 mt-6 flex flex-wrap items-center gap-3">
                 <Filter className="w-4 h-4 text-zinc-500" />
-                <select className="input-royal w-auto py-2 px-3 text-xs" value={typeFilter} onChange={e => setTypeFilter(e.target.value)} data-testid="tx-type-filter">
+                <select className="input-eregon w-auto py-2 px-3 text-xs" value={typeFilter} onChange={e => setTypeFilter(e.target.value)} data-testid="tx-type-filter">
                     <option value="">All types</option>
                     {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                 </select>
-                <select className="input-royal w-auto py-2 px-3 text-xs" value={coinFilter} onChange={e => setCoinFilter(e.target.value)}>
+                <select className="input-eregon w-auto py-2 px-3 text-xs" value={coinFilter} onChange={e => setCoinFilter(e.target.value)}>
                     <option value="">All coins</option><option>USDT</option><option>BTC</option><option>ETH</option><option>BNB</option>
                 </select>
                 <div className="relative flex-1 min-w-[200px]">
                     <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input className="input-royal pl-9 py-2 text-xs" placeholder="Search notes or reference id..." value={search} onChange={e => setSearch(e.target.value)} />
+                    <input className="input-eregon pl-9 py-2 text-xs" placeholder="Search notes or reference id..." value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
             </div>
 

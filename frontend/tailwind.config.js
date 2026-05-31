@@ -26,7 +26,7 @@ module.exports = {
                 border: 'hsl(var(--border))',
                 input: 'hsl(var(--input))',
                 ring: 'hsl(var(--ring))',
-                royal: {
+                eregon: {
                     void: '#050505',
                     purple: '#9333EA',
                     'purple-deep': '#6B21A8',

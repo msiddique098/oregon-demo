@@ -44,14 +44,14 @@ export default function DashboardLayout({ children }) {
 
     return (
         <div className="min-h-screen bg-[#050505] text-white overflow-x-hidden">
-            <div className="fixed inset-0 royal-radial pointer-events-none"></div>
+            <div className="fixed inset-0 eregon-radial pointer-events-none"></div>
 
             <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 z-30 flex-col w-64 border-r border-white/5 bg-black/40 backdrop-blur-xl" data-testid="dashboard-sidebar">
                 <Link to="/" className="flex items-center gap-2 px-6 py-6 border-b border-white/5">
                     <span className="w-9 h-9 rounded-xl gradient-purple flex items-center justify-center neon-purple">
                         <Crown className="w-5 h-5 text-white" strokeWidth={1.6} />
                     </span>
-                    <span className="font-display text-lg font-semibold">Royal<span className="gradient-text-gold">Marketing</span></span>
+                    <span className="font-display text-lg font-semibold">Eregon<span className="gradient-text-gold">Marketing</span></span>
                 </Link>
 
                 <nav className="flex-1 px-3 py-4 space-y-1">
@@ -92,7 +92,7 @@ export default function DashboardLayout({ children }) {
                             <span className="w-7 h-7 rounded-lg gradient-purple flex items-center justify-center shrink-0">
                                 <Crown className="w-3.5 h-3.5 text-white" />
                             </span>
-                            <span className="font-display font-semibold truncate">Royal<span className="gradient-text-gold">Marketing</span></span>
+                            <span className="font-display font-semibold truncate">Eregon<span className="gradient-text-gold">Marketing</span></span>
                         </Link>
                         <p className="text-[11px] uppercase tracking-widest text-zinc-500 truncate">{currentTitle(location.pathname)}</p>
                     </div>
@@ -115,7 +115,7 @@ export default function DashboardLayout({ children }) {
                                     <Crown className="w-5 h-5 text-white" strokeWidth={1.6} />
                                 </span>
                                 <div className="min-w-0">
-                                    <p className="font-display font-semibold truncate">RoyalMarketing</p>
+                                    <p className="font-display font-semibold truncate">Eregon Marketing</p>
                                     <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
                                 </div>
                             </div>

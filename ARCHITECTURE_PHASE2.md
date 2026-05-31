@@ -1,4 +1,4 @@
-# Royal Crypto Phase 2 Enterprise Upgrade
+# Eregon Marketing Phase 2 Enterprise Upgrade
 
 This upgrade preserves the existing React/CRACO/Tailwind/Radix frontend and FastAPI/Motor/Mongo backend while adding a scalable retention layer: categorized balances, Task Engine v2, daily check-in, spin wheel, achievements, VIP analytics, realtime notifications, WebSocket sync, and admin growth controls.
 
@@ -168,9 +168,9 @@ Recommended next hardening before production:
 
 ```bash
 MONGO_URL=mongodb://mongo:27017
-DB_NAME=royal_crypto
+DB_NAME=eregon_marketing
 JWT_SECRET=change-me
-ADMIN_EMAIL=admin@royalcrypto.com
+ADMIN_EMAIL=admin@eregon.online
 ADMIN_PASSWORD=Admin@123
 ```
 

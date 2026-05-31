@@ -9,7 +9,7 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-    const token = localStorage.getItem("royal_token");
+    const token = localStorage.getItem("eregon_token");
     if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
 });

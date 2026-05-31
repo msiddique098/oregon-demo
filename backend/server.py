@@ -33,11 +33,11 @@ client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ["DB_NAME"]]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger("royalmarketing")
+logger = logging.getLogger("eregon")
 
 limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="RoyalMarketing API")
+app = FastAPI(title="Eregon Marketing API")
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -147,7 +147,7 @@ def gen_referral_code() -> str:
     return secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8].upper()
 
 def gen_registration_code() -> str:
-    return "ROYAL-" + secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8].upper()
+    return "EREGON-" + secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8].upper()
 
 # ---------------- Ledger ----------------
 # Transaction types: admin_credit, admin_debit, withdrawal_debit, withdrawal_refund,
@@ -1244,9 +1244,9 @@ def _build_practice_users(packages: list[dict], total: int = 1500) -> list[dict]
         suffix = idx + 1001
         name = f"{first} {last}"
         email_local = f"{first}.{last}.{suffix}".lower().replace("'", "")
-        email = f"{email_local}@royalmarketing.com"
+        email = f"{email_local}@eregon.online"
         if email in used_emails:
-            email = f"{email_local}.{idx}@royalmarketing.test"
+            email = f"{email_local}.{idx}@eregon.test"
         used_emails.add(email)
 
         if idx < max(1, int(total * 0.03)):
@@ -1266,7 +1266,7 @@ def _build_practice_users(packages: list[dict], total: int = 1500) -> list[dict]
         pkg = package_choices[min(len(package_choices)-1, rng.choices(range(len(tiers)), weights=[42, 30, 18, 8, 2][:len(tiers)], k=1)[0])] if package_choices else None
         membership_name = (pkg or {}).get("name") or rng.choice(tiers)
         status = rng.choices(["active", "suspended"], weights=[98, 2], k=1)[0]
-        user_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"royalmarketing-practice-user-{idx}"))
+        user_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"eregon-marketing-practice-user-{idx}"))
 
         users.append({
             "id": user_id,
@@ -1332,7 +1332,7 @@ async def seed_practice_users(target_override: Optional[int] = None, password_ov
     to_insert = [u for u in users if u["email"] not in existing_emails]
     if to_insert:
         await db.users.insert_many(to_insert, ordered=False)
-        logger.info("Seeded %s RoyalMarketing synthetic practice users", len(to_insert))
+        logger.info("Seeded %s Eregon Marketing synthetic practice users", len(to_insert))
     final_count = await db.users.count_documents({"practice_seed": True})
     return {"ok": True, "inserted": len(to_insert), "existing_practice_users": final_count, "target": target}
 
@@ -1347,14 +1347,14 @@ async def seed():
     await db.registration_codes.create_index("status")
     await db.registration_codes.create_index("created_at")
 
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@royalmarketing.com")
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@eregon.online")
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
             "email": admin_email,
-            "name": "RoyalMarketing Admin",
+            "name": "Eregon Admin",
             "password_hash": hash_password(admin_password),
             "role": "admin",
             "referral_code": "ADMIN001",
@@ -1389,15 +1389,15 @@ async def seed():
         await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
 
     # Seed default member account
-    member_email = "member@royalmarketing.com"
+    member_email = "member@eregon.online"
     if not await db.users.find_one({"email": member_email}):
         await db.users.insert_one({
             "id": str(uuid.uuid4()),
             "email": member_email,
-            "name": "RoyalMarketing Member",
+            "name": "Eregon Marketing Member",
             "password_hash": hash_password("User@123"),
             "role": "user",
-            "referral_code": "ROYAL01",
+            "referral_code": "EREGON01",
             "referred_by": None,
             "coin_symbol": "USDT",
             "balance": 12450.75,
@@ -1432,7 +1432,7 @@ async def seed():
             {"name": "Silver", "tier": "Silver", "investment": 500, "daily_profit_pct": 1.2, "commission_boost_pct": 5, "task_boost_pct": 10, "duration_days": 60, "badge_color": "slate", "perks": ["Silver badge", "Priority support", "+5% referral commission"], "priority_withdrawal_hours": 36},
             {"name": "Gold", "tier": "Gold", "investment": 2000, "daily_profit_pct": 1.8, "commission_boost_pct": 10, "task_boost_pct": 25, "duration_days": 90, "badge_color": "amber", "perks": ["Gold badge", "VIP support", "+10% referral commission", "Exclusive tasks"], "priority_withdrawal_hours": 24},
             {"name": "Platinum", "tier": "Platinum", "investment": 5000, "daily_profit_pct": 2.4, "commission_boost_pct": 15, "task_boost_pct": 50, "duration_days": 120, "badge_color": "purple", "perks": ["Platinum badge", "Dedicated manager", "+15% referral", "Priority withdrawals"], "priority_withdrawal_hours": 12},
-            {"name": "Elite VIP", "tier": "Elite VIP", "investment": 15000, "daily_profit_pct": 3.5, "commission_boost_pct": 25, "task_boost_pct": 100, "duration_days": 180, "badge_color": "gold", "perks": ["Elite crown badge", "Concierge support", "+25% referral", "Instant withdrawals", "Elite events access"], "priority_withdrawal_hours": 2},
+            {"name": "Elite VIP", "tier": "Elite VIP", "investment": 15000, "daily_profit_pct": 3.5, "commission_boost_pct": 25, "task_boost_pct": 100, "duration_days": 180, "badge_color": "gold", "perks": ["Elite growth badge", "Concierge support", "+25% referral", "Instant withdrawals", "Elite events access"], "priority_withdrawal_hours": 2},
         ]
         for d in defaults:
             await db.packages.insert_one({"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **d})
@@ -1443,10 +1443,10 @@ async def seed():
     # Seed wallets
     if await db.wallets.count_documents({}) == 0:
         wallets = [
-            {"id": str(uuid.uuid4()), "coin": "USDT", "network": "TRC20", "address": "TYourRoyalUSDTAddressHere000000000", "note": "Minimum 10 USDT"},
-            {"id": str(uuid.uuid4()), "coin": "USDT", "network": "ERC20", "address": "0xYourRoyalUSDTErc20AddressHere0000", "note": "Higher network fees"},
-            {"id": str(uuid.uuid4()), "coin": "BTC", "network": "Bitcoin", "address": "bc1qroyalbtcaddressplaceholder0000000", "note": "Min 0.0005 BTC"},
-            {"id": str(uuid.uuid4()), "coin": "ETH", "network": "ERC20", "address": "0xRoyalEthAddressPlaceholder0000000", "note": "Min 0.01 ETH"},
+            {"id": str(uuid.uuid4()), "coin": "USDT", "network": "TRC20", "address": "TEregonUSDTAddressHere000000000", "note": "Minimum 10 USDT"},
+            {"id": str(uuid.uuid4()), "coin": "USDT", "network": "ERC20", "address": "0xEregonUSDTErc20AddressHere0000", "note": "Higher network fees"},
+            {"id": str(uuid.uuid4()), "coin": "BTC", "network": "Bitcoin", "address": "bc1qeregonbtcaddressplaceholder0000000", "note": "Min 0.0005 BTC"},
+            {"id": str(uuid.uuid4()), "coin": "ETH", "network": "ERC20", "address": "0xEregonEthAddressPlaceholder0000000", "note": "Min 0.01 ETH"},
         ]
         await db.wallets.insert_many(wallets)
 
@@ -1454,7 +1454,7 @@ async def seed():
     if await db.announcements.count_documents({}) == 0:
         await db.announcements.insert_one({
             "id": str(uuid.uuid4()),
-            "title": "Welcome to RoyalMarketing",
+            "title": "Welcome to Eregon Marketing",
             "body": "Earn premium daily rewards, unlock VIP tiers, and grow your approved reward balance with our task-based marketing rewards platform.",
             "pinned": True,
             "created_at": now_utc().isoformat(),
@@ -1484,7 +1484,7 @@ async def seed():
 @app.on_event("startup")
 async def on_start():
     await seed()
-    logger.info("RoyalMarketing API ready")
+    logger.info("Eregon Marketing API ready")
 
 @app.on_event("shutdown")
 async def on_shutdown():
@@ -1492,7 +1492,7 @@ async def on_shutdown():
 
 @api.get("/")
 async def health():
-    return {"status": "ok", "service": "RoyalMarketing"}
+    return {"status": "ok", "service": "Eregon Marketing"}
 
 # ====================================================================
 # PHASE 1 ENTERPRISE EXTENSIONS
@@ -1779,7 +1779,7 @@ class BulkBonusIn(BaseModel):
     tier: Optional[str] = None
     user_ids: Optional[List[str]] = None
     amount: float
-    note: Optional[str] = "Bulk bonus from RoyalMarketing Admin"
+    note: Optional[str] = "Bulk bonus from Eregon Admin"
 
 class BulkCommissionIn(BaseModel):
     target: Literal["all", "tier", "ids"]
@@ -1856,7 +1856,7 @@ app.include_router(_phase2_router, prefix="/api")
 @app.on_event("startup")
 async def _phase2_start():
     await _seed_phase2()
-    logger.info("RoyalMarketing Phase 2 ready (tasks, spin, checkin, ws)")
+    logger.info("Eregon Marketing Phase 2 ready (tasks, spin, checkin, ws)")
 
 # ====================================================================
 # ENTERPRISE SAFE GROWTH EXTENSIONS — transparent rules, real social proof,
@@ -1877,4 +1877,4 @@ app.include_router(_enterprise_router, prefix="/api")
 @app.on_event("startup")
 async def _enterprise_start():
     await _seed_enterprise()
-    logger.info("RoyalMarketing Enterprise safe growth controls ready")
+    logger.info("Eregon Marketing Enterprise safe growth controls ready")

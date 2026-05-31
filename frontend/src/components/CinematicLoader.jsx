@@ -1,7 +1,7 @@
 import React from "react";
 import { Crown } from "lucide-react";
 
-export default function CinematicLoader({ label = "Summoning royal vault..." }) {
+export default function CinematicLoader({ label = "Summoning Eregon wallet..." }) {
     return (
         <div className="min-h-[40vh] flex flex-col items-center justify-center gap-5" data-testid="cinematic-loader">
             <div className="relative w-20 h-20">

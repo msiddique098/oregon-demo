@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
-import { Badge } from "../components/ui-royal";
+import { Badge } from "../components/ui-eregon";
 import { api } from "../lib/api";
 import { TicketThread } from "./Tickets";
 import { Filter, MessageSquare } from "lucide-react";
@@ -38,15 +38,15 @@ export function AdminTickets() {
         <AdminLayout>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
-                    <p className="text-xs uppercase tracking-widest text-amber-400/80">RoyalMarketing Support</p>
+                    <p className="text-xs uppercase tracking-widest text-amber-400/80">Eregon Marketing Support</p>
                     <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Support Inbox</h1>
                 </div>
                 <div className="flex flex-wrap gap-2 items-center">
                     <Filter className="w-4 h-4 text-zinc-500" />
-                    <select className="input-royal w-auto py-2 px-3 text-xs" value={f.status} onChange={e => setF({...f, status: e.target.value})}>
+                    <select className="input-eregon w-auto py-2 px-3 text-xs" value={f.status} onChange={e => setF({...f, status: e.target.value})}>
                         <option value="">All status</option><option>open</option><option>pending</option><option>resolved</option><option>closed</option>
                     </select>
-                    <select className="input-royal w-auto py-2 px-3 text-xs" value={f.priority} onChange={e => setF({...f, priority: e.target.value})}>
+                    <select className="input-eregon w-auto py-2 px-3 text-xs" value={f.priority} onChange={e => setF({...f, priority: e.target.value})}>
                         <option value="">All priorities</option><option>low</option><option>normal</option><option>high</option><option>urgent</option>
                     </select>
                 </div>
@@ -83,10 +83,10 @@ export function AdminTickets() {
                         <div>
                             <div className="glass-strong p-3 mb-3 flex items-center gap-2 flex-wrap">
                                 <span className="text-xs text-zinc-500 uppercase tracking-widest mr-2">Manage:</span>
-                                <select className="input-royal w-auto py-1.5 px-3 text-xs" value={active.status} onChange={e => updateTicket({ status: e.target.value })}>
+                                <select className="input-eregon w-auto py-1.5 px-3 text-xs" value={active.status} onChange={e => updateTicket({ status: e.target.value })}>
                                     <option>open</option><option>pending</option><option>resolved</option><option>closed</option>
                                 </select>
-                                <select className="input-royal w-auto py-1.5 px-3 text-xs" value={active.priority} onChange={e => updateTicket({ priority: e.target.value })}>
+                                <select className="input-eregon w-auto py-1.5 px-3 text-xs" value={active.priority} onChange={e => updateTicket({ priority: e.target.value })}>
                                     <option>low</option><option>normal</option><option>high</option><option>urgent</option>
                                 </select>
                             </div>
@@ -118,7 +118,7 @@ export function AdminLiveFeed() {
     return (
         <AdminLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Live Activity Feed</p>
-            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Feed Curator</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Eregon Feed Curator</h1>
 
             <div className="grid lg:grid-cols-3 gap-5 mt-6">
                 <div className="glass-strong p-6">
@@ -129,19 +129,19 @@ export function AdminLiveFeed() {
                     </label>
                     <label className="block mt-3">
                         <span className="text-xs text-zinc-500 uppercase tracking-widest">Rotation interval (sec)</span>
-                        <input type="number" min="3" max="120" className="input-royal mt-1" value={settings.interval_sec} onChange={e => setSettings({...settings, interval_sec: parseInt(e.target.value || "8")})} />
+                        <input type="number" min="3" max="120" className="input-eregon mt-1" value={settings.interval_sec} onChange={e => setSettings({...settings, interval_sec: parseInt(e.target.value || "8")})} />
                     </label>
                     <button onClick={saveSettings} className="btn-gold w-full mt-4">Save Settings</button>
                 </div>
 
                 <form className="glass-strong p-6 lg:col-span-2 space-y-3" onSubmit={add}>
                     <h3 className="font-display text-lg">Add feed entry</h3>
-                    <input className="input-royal" placeholder="Feed message" value={form.message} onChange={e => setForm({...form, message: e.target.value})} required />
-                    <select className="input-royal" value={form.icon} onChange={e => setForm({...form, icon: e.target.value})}>
+                    <input className="input-eregon" placeholder="Feed message" value={form.message} onChange={e => setForm({...form, message: e.target.value})} required />
+                    <select className="input-eregon" value={form.icon} onChange={e => setForm({...form, icon: e.target.value})}>
                         <option value="sparkles">Sparkles</option><option value="trending">Trending</option><option value="crown">Crown</option>
                         <option value="wallet">Wallet</option><option value="users">Users</option><option value="check">Check</option><option value="diamond">Diamond</option>
                     </select>
-                    <button className="btn-royal">Publish Entry</button>
+                    <button className="btn-eregon">Publish Entry</button>
                 </form>
             </div>
 
@@ -164,7 +164,7 @@ export function AdminLiveFeed() {
 }
 
 export function AdminBulk() {
-    const [form, setForm] = useState({ target: "all", tier: "Gold", amount: 5, note: "Weekly royal bonus" });
+    const [form, setForm] = useState({ target: "all", tier: "Gold", amount: 5, note: "Weekly Eregon bonus" });
     const [cform, setCform] = useState({ target: "tier", tier: "Platinum", delta_percent: 2 });
     const [msg, setMsg] = useState("");
 
@@ -188,7 +188,7 @@ export function AdminBulk() {
         <AdminLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Bulk Reward Tools</p>
             <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Mass Operations</h1>
-            <p className="text-zinc-400 mt-2 max-w-2xl text-sm">Distribute bonuses, adjust commission rates, and run promotional campaigns across thousands of users in seconds. Every action is auto-logged in the Royal Ledger.</p>
+            <p className="text-zinc-400 mt-2 max-w-2xl text-sm">Distribute bonuses, adjust commission rates, and run promotional campaigns across thousands of users in seconds. Every action is auto-logged in the Eregon Ledger.</p>
 
             {msg && <div className="glass p-4 mt-6 border-emerald-500/30 text-emerald-300 text-sm">{msg}</div>}
 
@@ -196,32 +196,32 @@ export function AdminBulk() {
                 <form className="glass-strong p-6 space-y-3" onSubmit={bonus}>
                     <h3 className="font-display text-lg">Bulk Bonus Distribution</h3>
                     <p className="text-xs text-zinc-500">Credit a fixed amount to a group of users. Auto-ledgered.</p>
-                    <select className="input-royal" value={form.target} onChange={e => setForm({...form, target: e.target.value})} data-testid="bulk-bonus-target">
+                    <select className="input-eregon" value={form.target} onChange={e => setForm({...form, target: e.target.value})} data-testid="bulk-bonus-target">
                         <option value="all">All Users</option><option value="tier">By Membership Tier</option>
                     </select>
                     {form.target === "tier" && (
-                        <select className="input-royal" value={form.tier} onChange={e => setForm({...form, tier: e.target.value})}>
+                        <select className="input-eregon" value={form.tier} onChange={e => setForm({...form, tier: e.target.value})}>
                             <option>Basic</option><option>Silver</option><option>Gold</option><option>Platinum</option><option>Elite VIP</option>
                         </select>
                     )}
-                    <input type="number" step="any" min="0" className="input-royal" placeholder="Bonus amount" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} required />
-                    <input className="input-royal" placeholder="Note for ledger" value={form.note} onChange={e => setForm({...form, note: e.target.value})} />
+                    <input type="number" step="any" min="0" className="input-eregon" placeholder="Bonus amount" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} required />
+                    <input className="input-eregon" placeholder="Note for ledger" value={form.note} onChange={e => setForm({...form, note: e.target.value})} />
                     <button className="btn-gold w-full" data-testid="bulk-bonus-submit">Distribute Bonus</button>
                 </form>
 
                 <form className="glass-strong p-6 space-y-3" onSubmit={commission}>
                     <h3 className="font-display text-lg">Commission Adjustment</h3>
                     <p className="text-xs text-zinc-500">Increase or decrease commission % for a group.</p>
-                    <select className="input-royal" value={cform.target} onChange={e => setCform({...cform, target: e.target.value})}>
+                    <select className="input-eregon" value={cform.target} onChange={e => setCform({...cform, target: e.target.value})}>
                         <option value="all">All Users</option><option value="tier">By Membership Tier</option>
                     </select>
                     {cform.target === "tier" && (
-                        <select className="input-royal" value={cform.tier} onChange={e => setCform({...cform, tier: e.target.value})}>
+                        <select className="input-eregon" value={cform.tier} onChange={e => setCform({...cform, tier: e.target.value})}>
                             <option>Basic</option><option>Silver</option><option>Gold</option><option>Platinum</option><option>Elite VIP</option>
                         </select>
                     )}
-                    <input type="number" step="any" className="input-royal" placeholder="Δ percentage (e.g. +2 or -1)" value={cform.delta_percent} onChange={e => setCform({...cform, delta_percent: e.target.value})} required />
-                    <button className="btn-royal w-full">Apply Commission Δ</button>
+                    <input type="number" step="any" className="input-eregon" placeholder="Δ percentage (e.g. +2 or -1)" value={cform.delta_percent} onChange={e => setCform({...cform, delta_percent: e.target.value})} required />
+                    <button className="btn-eregon w-full">Apply Commission Δ</button>
                 </form>
             </div>
         </AdminLayout>

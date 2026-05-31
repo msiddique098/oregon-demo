@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
-import { Badge } from "../components/ui-royal";
+import { Badge } from "../components/ui-eregon";
 import { api, formatApiError } from "../lib/api";
 import { Copy, Check, Users, TrendingUp, Crown, Bell, Gift } from "lucide-react";
 import { toast } from "sonner";
@@ -100,7 +100,7 @@ export function Notifications() {
     return (
         <DashboardLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Notifications</p>
-            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Inbox</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Eregon Inbox</h1>
             <div className="glass-strong p-6 mt-8">
                 {list.length === 0 ? (
                     <p className="text-sm text-zinc-500">No notifications yet.</p>

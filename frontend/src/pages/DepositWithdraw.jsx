@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
-import { Badge } from "../components/ui-royal";
+import { Badge } from "../components/ui-eregon";
 import WithdrawalTimeline from "../components/WithdrawalTimeline";
 import { api, formatApiError } from "../lib/api";
 import { Copy, Check, Wallet as WalletIcon, UploadCloud, Eye } from "lucide-react";
@@ -40,7 +40,7 @@ export function Deposit() {
         setMsg(""); setErr("");
         try {
             await api.post("/user/deposits", { amount: parseFloat(amount), coin: selected.coin, tx_hash: tx, proof_data_url: proof });
-            setMsg("Deposit submitted — pending royal approval.");
+            setMsg("Deposit submitted — pending Eregon approval.");
             setAmount(""); setTx(""); setProof("");
             api.get("/user/deposits").then(r => setDeposits(r.data));
         } catch (e) { setErr(formatApiError(e)); }
@@ -48,7 +48,7 @@ export function Deposit() {
 
     return (
         <DashboardLayout>
-            <p className="text-xs uppercase tracking-widest text-amber-400/80">Royal Vault</p>
+            <p className="text-xs uppercase tracking-widest text-amber-400/80">Eregon Wallet</p>
             <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Deposit</h1>
 
             <div className="grid lg:grid-cols-2 gap-5 mt-8">
@@ -88,8 +88,8 @@ export function Deposit() {
 
                 <form className="glass-strong p-6 space-y-4" onSubmit={submit} data-testid="deposit-form">
                     <h3 className="font-display text-lg">Submit deposit proof</h3>
-                    <input className="input-royal" type="number" min="0" step="any" placeholder="Amount" value={amount} onChange={e => setAmount(e.target.value)} required data-testid="deposit-amount" />
-                    <input className="input-royal" placeholder="Transaction hash (optional)" value={tx} onChange={e => setTx(e.target.value)} />
+                    <input className="input-eregon" type="number" min="0" step="any" placeholder="Amount" value={amount} onChange={e => setAmount(e.target.value)} required data-testid="deposit-amount" />
+                    <input className="input-eregon" placeholder="Transaction hash (optional)" value={tx} onChange={e => setTx(e.target.value)} />
                     <label className="block">
                         <span className="text-xs text-zinc-500 uppercase tracking-widest">Proof screenshot</span>
                         <div className="mt-2 p-4 rounded-xl border border-dashed border-white/10 bg-black/40 flex items-center gap-3 cursor-pointer">
@@ -100,7 +100,7 @@ export function Deposit() {
                     </label>
                     {msg && <p className="text-sm text-emerald-300">{msg}</p>}
                     {err && <p className="text-sm text-rose-400">{err}</p>}
-                    <button className="btn-royal w-full" disabled={!selected} data-testid="deposit-submit">Submit Deposit</button>
+                    <button className="btn-eregon w-full" disabled={!selected} data-testid="deposit-submit">Submit Deposit</button>
                 </form>
             </div>
 
@@ -198,17 +198,17 @@ export function Withdraw() {
                             <p className="text-xs text-zinc-500">Minimum withdrawal: {eligibility.minimum_withdrawal} {coin}</p>
                         </div>
                     ) : user && <p className="text-xs text-zinc-400">Available: <span className="gradient-text-gold">{user.balance.toLocaleString()} {user.coin_symbol}</span></p>}
-                    <input className="input-royal" type="number" min="0" step="any" placeholder="Amount" value={amount} onChange={e => setAmount(e.target.value)} required data-testid="withdraw-amount" />
-                    <select className="input-royal" value={coin} onChange={e => setCoin(e.target.value)} data-testid="withdraw-coin">
+                    <input className="input-eregon" type="number" min="0" step="any" placeholder="Amount" value={amount} onChange={e => setAmount(e.target.value)} required data-testid="withdraw-amount" />
+                    <select className="input-eregon" value={coin} onChange={e => setCoin(e.target.value)} data-testid="withdraw-coin">
                         <option value="USDT">USDT</option><option value="BTC">BTC</option><option value="ETH">ETH</option><option value="BNB">BNB</option>
                     </select>
-                    <input className="input-royal" placeholder="Destination wallet address or payment ID" value={address} onChange={e => setAddress(e.target.value)} required data-testid="withdraw-address" />
+                    <input className="input-eregon" placeholder="Destination wallet address or payment ID" value={address} onChange={e => setAddress(e.target.value)} required data-testid="withdraw-address" />
                     {localWarning && <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-100">{localWarning}</div>}
                     {eligibility?.failed?.length > 0 && <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-200 space-y-1">{eligibility.failed.map((f, i) => <p key={i}>• {f.message}</p>)}</div>}
                     {eligibility?.review?.length > 0 && <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-100 space-y-1">{eligibility.review.map((r, i) => <p key={i}>• {r.message}</p>)}</div>}
                     {msg && <p className="text-sm text-emerald-300">{msg}</p>}
                     {err && <p className="text-sm text-rose-400">{err}</p>}
-                    <button className="btn-royal w-full disabled:opacity-50 disabled:cursor-not-allowed" disabled={!canSubmit} data-testid="withdraw-submit">{submitting ? "Submitting..." : "Submit Request"}</button>
+                    <button className="btn-eregon w-full disabled:opacity-50 disabled:cursor-not-allowed" disabled={!canSubmit} data-testid="withdraw-submit">{submitting ? "Submitting..." : "Submit Request"}</button>
                     {address && address.trim().length < 8 && <p className="text-xs text-rose-300">Enter a valid destination address or payment ID.</p>}
                     {user && <p className="text-xs text-zinc-500">Processing time: ~{user.withdrawal_processing_hours}h after approval.</p>}
                 </form>

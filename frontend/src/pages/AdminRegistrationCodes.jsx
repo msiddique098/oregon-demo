@@ -101,9 +101,9 @@ export default function AdminRegistrationCodes() {
                     <form onSubmit={createCode} className="glass-strong p-5 space-y-4 border-amber-500/20">
                         <div>
                             <h2 className="font-display text-xl font-semibold">Create Code</h2>
-                            <p className="text-sm text-zinc-400 mt-1">Leave code empty to auto-generate a unique Royal code.</p>
+                            <p className="text-sm text-zinc-400 mt-1">Leave code empty to auto-generate a unique Eregon code.</p>
                         </div>
-                        <Input label="Code" value={form.code} onChange={(v) => setForm({ ...form, code: v.toUpperCase() })} placeholder="Auto / ROYAL-ABCD1234" />
+                        <Input label="Code" value={form.code} onChange={(v) => setForm({ ...form, code: v.toUpperCase() })} placeholder="Auto / EREGON-ABCD1234" />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                             <Input label="Reward Amount" type="number" value={form.reward_amount} onChange={(v) => setForm({ ...form, reward_amount: v })} />
                             <Input label="Reward Coin" value={form.reward_coin} onChange={(v) => setForm({ ...form, reward_coin: v.toUpperCase() })} />
@@ -203,7 +203,7 @@ function Input({ label, value, onChange, type = "text", placeholder }) {
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 placeholder={placeholder}
-                className="input-royal"
+                className="input-eregon"
                 required={label !== "Code"}
             />
         </label>

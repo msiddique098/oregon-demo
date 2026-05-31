@@ -6,7 +6,7 @@ import { api, formatApiError } from "../lib/api";
 import AnimatedCounter from "../components/AnimatedCounter";
 
 const emptyRule = { name: "Minimum withdrawable balance", rule_type: "minimum_balance", enabled: true, value: { amount: 25 }, message: "Reach 25 USDT withdrawable balance before requesting withdrawal.", priority: 10 };
-const emptyCampaign = { name: "Weekend Royal Boost", campaign_type: "countdown", active: true, starts_at: "", ends_at: "", content: { message: "Complete tasks before the event ends." } };
+const emptyCampaign = { name: "Weekend Eregon Boost", campaign_type: "countdown", active: true, starts_at: "", ends_at: "", content: { message: "Complete tasks before the event ends." } };
 
 export default function AdminEnterprise() {
     const [overview, setOverview] = useState(null);

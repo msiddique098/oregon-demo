@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
-import { StatCard, Badge } from "../components/ui-royal";
+import { StatCard, Badge } from "../components/ui-eregon";
 import { Users, Wallet, ArrowUpFromLine, ArrowDownToLine, TrendingUp, Crown } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
 import { api } from "../lib/api";
@@ -23,7 +23,7 @@ export default function AdminDashboard() {
     return (
         <AdminLayout>
             <div className="mobile-safe">
-                <p className="text-[11px] sm:text-xs uppercase tracking-widest text-amber-400/80">RoyalMarketing Admin</p>
+                <p className="text-[11px] sm:text-xs uppercase tracking-widest text-amber-400/80">Eregon Admin</p>
                 <h1 className="text-2xl sm:text-3xl lg:text-4xl font-display font-semibold mt-1">Console Overview</h1>
             </div>
 

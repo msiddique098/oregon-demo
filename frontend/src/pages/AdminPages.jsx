@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import AdminLayout from "../components/AdminLayout";
-import { Badge } from "../components/ui-royal";
+import { Badge } from "../components/ui-eregon";
 import { api, formatApiError } from "../lib/api";
 import { Trash2, Plus, Save, X, Edit3 } from "lucide-react";
 
@@ -47,7 +47,7 @@ export function AdminPackages() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Membership Packages</p>
-                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Tiers</h1>
+                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Eregon Plans</h1>
                 </div>
                 <button className="btn-gold" onClick={() => { setForm(EMPTY); setEditing("new"); }} data-testid="add-package-btn"><Plus className="w-4 h-4" /> New Package</button>
             </div>
@@ -97,13 +97,13 @@ export function AdminPackages() {
                             <F label="Badge Color" v={form.badge_color} on={v => setForm({...form, badge_color: v})} />
                             <label className="sm:col-span-2 block">
                                 <span className="text-xs text-zinc-500 uppercase tracking-widest">Deterministic spin values for this plan</span>
-                                <textarea className="input-royal mt-1 min-h-[90px]" placeholder="Example: 0.50, 1, 2, 5, 25" value={spinValuesToText(form.spin_reward_queue)} onChange={e => setForm({...form, spin_reward_queue: e.target.value})} />
+                                <textarea className="input-eregon mt-1 min-h-[90px]" placeholder="Example: 0.50, 1, 2, 5, 25" value={spinValuesToText(form.spin_reward_queue)} onChange={e => setForm({...form, spin_reward_queue: e.target.value})} />
                                 <span className="text-[11px] text-zinc-500">Users only see the number of spins, not these outcomes. If values are provided, spin count is set to the number of values.</span>
                             </label>
                         </div>
                         <label className="block mt-3">
                             <span className="text-xs text-zinc-500 uppercase tracking-widest">Perks (one per line)</span>
-                            <textarea className="input-royal mt-1 min-h-[100px]" value={typeof form.perks === "string" ? form.perks : form.perks.join("\n")} onChange={e => setForm({...form, perks: e.target.value})} />
+                            <textarea className="input-eregon mt-1 min-h-[100px]" value={typeof form.perks === "string" ? form.perks : form.perks.join("\n")} onChange={e => setForm({...form, perks: e.target.value})} />
                         </label>
                         {err && <p className="text-sm text-rose-400 mt-2">{err}</p>}
                         <div className="flex justify-end gap-2 mt-5">
@@ -121,7 +121,7 @@ function F({ label, v, on, type = "text" }) {
     return (
         <div>
             <label className="text-xs text-zinc-500 uppercase tracking-widest">{label}</label>
-            <input type={type} step="any" className="input-royal mt-1" value={v ?? ""} onChange={e => on(e.target.value)} />
+            <input type={type} step="any" className="input-eregon mt-1" value={v ?? ""} onChange={e => on(e.target.value)} />
         </div>
     );
 }
@@ -138,10 +138,10 @@ export function AdminWallets() {
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Deposit Wallets</p>
             <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Wallet Vaults</h1>
             <form className="glass-strong p-6 mt-6 grid sm:grid-cols-2 lg:grid-cols-5 gap-3" onSubmit={add}>
-                <input className="input-royal" placeholder="Coin" value={form.coin} onChange={e => setForm({...form, coin: e.target.value})} />
-                <input className="input-royal" placeholder="Network" value={form.network} onChange={e => setForm({...form, network: e.target.value})} />
-                <input className="input-royal lg:col-span-2" placeholder="Address" value={form.address} onChange={e => setForm({...form, address: e.target.value})} required />
-                <input className="input-royal" placeholder="Note" value={form.note} onChange={e => setForm({...form, note: e.target.value})} />
+                <input className="input-eregon" placeholder="Coin" value={form.coin} onChange={e => setForm({...form, coin: e.target.value})} />
+                <input className="input-eregon" placeholder="Network" value={form.network} onChange={e => setForm({...form, network: e.target.value})} />
+                <input className="input-eregon lg:col-span-2" placeholder="Address" value={form.address} onChange={e => setForm({...form, address: e.target.value})} required />
+                <input className="input-eregon" placeholder="Note" value={form.note} onChange={e => setForm({...form, note: e.target.value})} />
                 <button className="btn-gold lg:col-span-5"><Plus className="w-4 h-4" /> Add Wallet</button>
             </form>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
@@ -177,7 +177,7 @@ export function AdminWithdrawals() {
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Withdrawals</p>
                     <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Approval Center</h1>
                 </div>
-                <select className="input-royal w-40" value={filter} onChange={e => setFilter(e.target.value)}>
+                <select className="input-eregon w-40" value={filter} onChange={e => setFilter(e.target.value)}>
                     <option value="">All</option><option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option>
                 </select>
             </div>
@@ -196,7 +196,7 @@ export function AdminWithdrawals() {
                                     <td className="truncate max-w-[180px]">{w.address}</td>
                                     <td><Badge color={w.status === "approved" ? "emerald" : w.status === "rejected" ? "rose" : "gold"}>{w.status}</Badge></td>
                                     <td>
-                                        <input className="input-royal w-16 py-1" defaultValue={w.processing_hours} onBlur={(e) => decide(w.id, w.status, e.target.value)} />
+                                        <input className="input-eregon w-16 py-1" defaultValue={w.processing_hours} onBlur={(e) => decide(w.id, w.status, e.target.value)} />
                                     </td>
                                     <td className="pr-5">
                                         <div className="flex flex-wrap gap-2 justify-end">
@@ -229,7 +229,7 @@ export function AdminDeposits() {
     return (
         <AdminLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Deposits</p>
-            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Vault Inflows</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Eregon Wallet Inflows</h1>
             <div className="glass-strong mt-6 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[720px]">
@@ -246,7 +246,7 @@ export function AdminDeposits() {
                                     <td>{d.proof_data_url ? <a href={d.proof_data_url} target="_blank" rel="noreferrer" className="text-purple-300 underline text-xs">view</a> : "—"}</td>
                                     <td className="min-w-[180px]">
                                         {d.status === "pending" ? (
-                                            <input className="input-royal text-xs py-2" placeholder="0.50,25,5" value={spinInputs[d.id] || ""} onChange={e => setSpinInputs({...spinInputs, [d.id]: e.target.value})} />
+                                            <input className="input-eregon text-xs py-2" placeholder="0.50,25,5" value={spinInputs[d.id] || ""} onChange={e => setSpinInputs({...spinInputs, [d.id]: e.target.value})} />
                                         ) : <span className="text-xs text-zinc-500">locked</span>}
                                     </td>
                                     <td><Badge color={d.status === "approved" ? "emerald" : d.status === "rejected" ? "rose" : "gold"}>{d.status}</Badge></td>
@@ -277,10 +277,10 @@ export function AdminAnnouncements() {
     return (
         <AdminLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">CMS</p>
-            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Announcements</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Eregon Announcements</h1>
             <form className="glass-strong p-6 mt-6 space-y-3" onSubmit={add}>
-                <input className="input-royal" placeholder="Title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} required />
-                <textarea className="input-royal min-h-[100px]" placeholder="Body" value={form.body} onChange={e => setForm({...form, body: e.target.value})} required />
+                <input className="input-eregon" placeholder="Title" value={form.title} onChange={e => setForm({...form, title: e.target.value})} required />
+                <textarea className="input-eregon min-h-[100px]" placeholder="Body" value={form.body} onChange={e => setForm({...form, body: e.target.value})} required />
                 <label className="flex items-center gap-2 text-sm text-zinc-400">
                     <input type="checkbox" checked={form.pinned} onChange={e => setForm({...form, pinned: e.target.checked})} /> Pin announcement
                 </label>

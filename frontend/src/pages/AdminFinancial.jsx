@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from "react";
 import AdminLayout from "../components/AdminLayout";
-import { Badge } from "../components/ui-royal";
+import { Badge } from "../components/ui-eregon";
 import { api } from "../lib/api";
 import { Download, Filter, History, Search } from "lucide-react";
 
@@ -42,7 +42,7 @@ export function AdminFinancialLogs() {
     }, [items, search, userMap]);
 
     const exportCsv = async () => {
-        const token = localStorage.getItem("royal_token");
+        const token = localStorage.getItem("eregon_token");
         const params = new URLSearchParams();
         if (f.user_id) params.set("user_id", f.user_id);
         if (f.type) params.set("type_filter", f.type);
@@ -53,7 +53,7 @@ export function AdminFinancialLogs() {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
-        a.href = url; a.download = `royal-transactions-${Date.now()}.csv`; a.click();
+        a.href = url; a.download = `eregon-transactions-${Date.now()}.csv`; a.click();
         URL.revokeObjectURL(url);
     };
 
@@ -62,29 +62,29 @@ export function AdminFinancialLogs() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Financial Logs</p>
-                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Royal Ledger</h1>
+                    <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Eregon Ledger</h1>
                 </div>
                 <button onClick={exportCsv} className="btn-gold" data-testid="export-csv-btn"><Download className="w-4 h-4" /> Export CSV</button>
             </div>
 
             <div className="glass-strong p-4 mt-6 flex flex-wrap items-center gap-2">
                 <Filter className="w-4 h-4 text-zinc-500 ml-2" />
-                <select className="input-royal w-auto py-2 px-3 text-xs" value={f.user_id} onChange={e => setF({...f, user_id: e.target.value})}>
+                <select className="input-eregon w-auto py-2 px-3 text-xs" value={f.user_id} onChange={e => setF({...f, user_id: e.target.value})}>
                     <option value="">All users</option>
                     {users.map(u => <option key={u.id} value={u.id}>{u.email}</option>)}
                 </select>
-                <select className="input-royal w-auto py-2 px-3 text-xs" value={f.type} onChange={e => setF({...f, type: e.target.value})}>
+                <select className="input-eregon w-auto py-2 px-3 text-xs" value={f.type} onChange={e => setF({...f, type: e.target.value})}>
                     <option value="">All types</option>
                     {TYPE_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
-                <select className="input-royal w-auto py-2 px-3 text-xs" value={f.coin} onChange={e => setF({...f, coin: e.target.value})}>
+                <select className="input-eregon w-auto py-2 px-3 text-xs" value={f.coin} onChange={e => setF({...f, coin: e.target.value})}>
                     <option value="">All coins</option><option>USDT</option><option>BTC</option><option>ETH</option><option>BNB</option>
                 </select>
-                <input type="date" className="input-royal w-auto py-2 px-3 text-xs" value={f.date_from} onChange={e => setF({...f, date_from: e.target.value})} />
-                <input type="date" className="input-royal w-auto py-2 px-3 text-xs" value={f.date_to} onChange={e => setF({...f, date_to: e.target.value})} />
+                <input type="date" className="input-eregon w-auto py-2 px-3 text-xs" value={f.date_from} onChange={e => setF({...f, date_from: e.target.value})} />
+                <input type="date" className="input-eregon w-auto py-2 px-3 text-xs" value={f.date_to} onChange={e => setF({...f, date_to: e.target.value})} />
                 <div className="relative flex-1 min-w-[180px]">
                     <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input className="input-royal pl-9 py-2 text-xs" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
+                    <input className="input-eregon pl-9 py-2 text-xs" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} />
                 </div>
             </div>
 
@@ -140,7 +140,7 @@ export function AdminActivity() {
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Activity Logs</p>
                     <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">User Activity</h1>
                 </div>
-                <select className="input-royal w-auto py-2 px-3 text-xs" value={userId} onChange={e => setUserId(e.target.value)}>
+                <select className="input-eregon w-auto py-2 px-3 text-xs" value={userId} onChange={e => setUserId(e.target.value)}>
                     <option value="">All users</option>
                     {users.map(u => <option key={u.id} value={u.id}>{u.email}</option>)}
                 </select>

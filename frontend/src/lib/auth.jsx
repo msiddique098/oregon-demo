@@ -8,7 +8,7 @@ export function AuthProvider({ children }) {
     const [loading, setLoading] = useState(true);
 
     const refresh = useCallback(async () => {
-        const token = localStorage.getItem("royal_token");
+        const token = localStorage.getItem("eregon_token");
         if (!token) {
             setUser(null);
             setLoading(false);
@@ -18,7 +18,7 @@ export function AuthProvider({ children }) {
             const { data } = await api.get("/auth/me");
             setUser(data);
         } catch {
-            localStorage.removeItem("royal_token");
+            localStorage.removeItem("eregon_token");
             setUser(null);
         } finally {
             setLoading(false);
@@ -29,21 +29,21 @@ export function AuthProvider({ children }) {
 
     const login = async (email, password) => {
         const { data } = await api.post("/auth/login", { email, password });
-        localStorage.setItem("royal_token", data.access_token);
+        localStorage.setItem("eregon_token", data.access_token);
         setUser(data.user);
         return data.user;
     };
 
     const register = async (payload) => {
         const { data } = await api.post("/auth/register", payload);
-        localStorage.setItem("royal_token", data.access_token);
+        localStorage.setItem("eregon_token", data.access_token);
         setUser(data.user);
         return data.user;
     };
 
     const logout = async () => {
         try { await api.post("/auth/logout"); } catch (e) { void e; }
-        localStorage.removeItem("royal_token");
+        localStorage.removeItem("eregon_token");
         setUser(null);
     };
 

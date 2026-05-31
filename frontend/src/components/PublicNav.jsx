@@ -25,7 +25,7 @@ export default function PublicNav() {
                         <Crown className="w-5 h-5 text-white" strokeWidth={1.6} />
                     </span>
                     <span className="font-display text-lg font-semibold">
-                        Royal<span className="gradient-text-gold">Marketing</span>
+                        Eregon<span className="gradient-text-gold">Marketing</span>
                     </span>
                 </Link>
 
@@ -55,7 +55,7 @@ export default function PublicNav() {
                     ) : (
                         <>
                             <Link to="/login" className="btn-ghost text-sm py-2 px-4" data-testid="nav-login-btn">Login</Link>
-                            <Link to="/register" className="btn-royal text-sm py-2 px-4" data-testid="nav-register-btn">Get Started</Link>
+                            <Link to="/register" className="btn-eregon text-sm py-2 px-4" data-testid="nav-register-btn">Get Started</Link>
                         </>
                     )}
                 </div>
@@ -81,7 +81,7 @@ export default function PublicNav() {
                         ) : (
                             <>
                                 <Link to="/login" className="btn-ghost text-sm">Login</Link>
-                                <Link to="/register" className="btn-royal text-sm">Get Started</Link>
+                                <Link to="/register" className="btn-eregon text-sm">Get Started</Link>
                             </>
                         )}
                     </div>

@@ -5,7 +5,7 @@ import { Gift, Sparkles, Trophy, RotateCcw, CheckCircle2, Lock, Timer, Crown, Za
 import DashboardLayout from "../components/DashboardLayout";
 import CinematicLoader from "../components/CinematicLoader";
 import AnimatedCounter from "../components/AnimatedCounter";
-import { Badge, Card } from "../components/ui-royal";
+import { Badge, Card } from "../components/ui-eregon";
 import { api, formatApiError } from "../lib/api";
 import { toast } from "sonner";
 
@@ -190,7 +190,7 @@ export default function Rewards() {
                     <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6 text-amber-300" />
                 </div>
                 <SpinWheel prizes={prizes} spinning={spinning} result={spinResult} />
-                <button disabled={spinning || Number(overview?.spin_tokens || 0) <= 0} onClick={spin} className={`btn-royal w-full mt-10 sm:mt-14 ${spinning || Number(overview?.spin_tokens || 0) <= 0 ? "opacity-60 cursor-not-allowed" : ""}`}><Zap className="w-4 h-4" /> {spinning ? "Spinning..." : "Spin now"}</button>
+                <button disabled={spinning || Number(overview?.spin_tokens || 0) <= 0} onClick={spin} className={`btn-eregon w-full mt-10 sm:mt-14 ${spinning || Number(overview?.spin_tokens || 0) <= 0 ? "opacity-60 cursor-not-allowed" : ""}`}><Zap className="w-4 h-4" /> {spinning ? "Spinning..." : "Spin now"}</button>
             </Card>
 
             <div className="lg:col-span-2 space-y-4">

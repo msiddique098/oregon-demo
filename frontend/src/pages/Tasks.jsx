@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import DashboardLayout from "../components/DashboardLayout";
 import CinematicLoader from "../components/CinematicLoader";
-import { Badge, Card, StatCard } from "../components/ui-royal";
+import { Badge, Card, StatCard } from "../components/ui-eregon";
 import { api, formatApiError } from "../lib/api";
 import { toast } from "sonner";
 import { CheckCircle2, Clock, ExternalLink, ImageUp, PlayCircle, RefreshCcw, Send, XCircle } from "lucide-react";
@@ -135,8 +135,8 @@ export default function Tasks() {
                                     {proofs[task.id] && <img src={proofs[task.id]} alt="proof preview" className="mt-3 max-h-44 rounded-lg border border-white/10" />}
                                 </label>
                                 <div className="space-y-3">
-                                    <textarea disabled={task.status !== "available"} className="input-royal min-h-[110px]" placeholder="Optional note for reviewer" value={notes[task.id] || ""} onChange={e => setNotes(prev => ({ ...prev, [task.id]: e.target.value }))} />
-                                    <button disabled={task.status !== "available" || submitting === task.id} onClick={() => submitProof(task)} className={task.status === "available" ? "btn-royal w-full" : "w-full px-4 py-2 rounded-xl bg-white/5 text-zinc-500 border border-white/10"}>
+                                    <textarea disabled={task.status !== "available"} className="input-eregon min-h-[110px]" placeholder="Optional note for reviewer" value={notes[task.id] || ""} onChange={e => setNotes(prev => ({ ...prev, [task.id]: e.target.value }))} />
+                                    <button disabled={task.status !== "available" || submitting === task.id} onClick={() => submitProof(task)} className={task.status === "available" ? "btn-eregon w-full" : "w-full px-4 py-2 rounded-xl bg-white/5 text-zinc-500 border border-white/10"}>
                                         <Send className="w-4 h-4" /> {task.status === "available" ? "Submit proof for review" : task.status}
                                     </button>
                                 </div>

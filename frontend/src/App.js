@@ -32,7 +32,7 @@ import AdminEnterprise from "@/pages/AdminEnterprise";
 
 function Protected({ children, role }) {
     const { user, loading } = useAuth();
-    if (loading) return <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">Loading royal vault...</div>;
+    if (loading) return <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">Loading Eregon wallet...</div>;
     if (!user) return <Navigate to="/login" replace />;
     if (role === "admin" && user.role !== "admin") return <Navigate to="/dashboard" replace />;
     return children;

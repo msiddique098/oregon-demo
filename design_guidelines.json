@@ -15,7 +15,7 @@
     "success": "#10B981",
     "danger": "#EF4444",
     "gradients": {
-      "royal_purple": "linear-gradient(135deg, #6B21A8 0%, #9333EA 100%)",
+      "eregon_purple": "linear-gradient(135deg, #6B21A8 0%, #9333EA 100%)",
       "elite_gold": "linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)",
       "glass": "linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%)"
     }

@@ -229,7 +229,7 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
                 {"name": "Silver", "level": 1, "required_balance": 500, "required_deposit": 500, "reward_multiplier": 1.1, "commission_boost_pct": 5, "badge_color": "slate", "benefits": ["+10% task rewards", "Priority support"]},
                 {"name": "Gold", "level": 2, "required_balance": 2000, "required_deposit": 2000, "reward_multiplier": 1.25, "commission_boost_pct": 10, "badge_color": "gold", "benefits": ["Gold badge", "VIP tasks", "Faster withdrawals"]},
                 {"name": "Platinum", "level": 3, "required_balance": 5000, "required_deposit": 5000, "reward_multiplier": 1.5, "commission_boost_pct": 15, "badge_color": "purple", "benefits": ["Dedicated manager", "Premium boosts", "Priority queue"]},
-                {"name": "Elite VIP", "level": 4, "required_balance": 15000, "required_deposit": 15000, "reward_multiplier": 2, "commission_boost_pct": 25, "badge_color": "gold", "benefits": ["Royal crown", "Concierge support", "Highest multipliers"]},
+                {"name": "Elite VIP", "level": 4, "required_balance": 15000, "required_deposit": 15000, "reward_multiplier": 2, "commission_boost_pct": 25, "badge_color": "gold", "benefits": ["Elite growth badge", "Concierge support", "Highest multipliers"]},
             ]
             for lvl in levels:
                 await db.vip_levels.insert_one({"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **lvl})
@@ -237,7 +237,7 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
         if await db.payment_methods.count_documents({}) == 0:
             await db.payment_methods.insert_one({
                 "id": str(uuid.uuid4()), "name": "USDT TRC20", "type": "crypto", "coin": "USDT", "network": "TRC20",
-                "address": "TYourRoyalUSDTAddressHere000000000", "instructions": "Send USDT on TRC20 and upload proof.",
+                "address": "TEregonUSDTAddressHere000000000", "instructions": "Send USDT on TRC20 and upload proof.",
                 "active": True, "created_at": now_utc().isoformat(),
             })
 
@@ -681,7 +681,7 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
         items = [
             {"id": "first_task", "title": "First Approved Task", "unlocked": tasks_done >= 1, "progress": min(tasks_done, 1), "goal": 1},
             {"id": "task_master_10", "title": "Approved Task Master", "unlocked": tasks_done >= 10, "progress": min(tasks_done, 10), "goal": 10},
-            {"id": "streak_7", "title": "7-Day Crown Streak", "unlocked": streak >= 7, "progress": min(streak, 7), "goal": 7},
+            {"id": "streak_7", "title": "7-Day Growth Streak", "unlocked": streak >= 7, "progress": min(streak, 7), "goal": 7},
             {"id": "referral_3", "title": "Network Builder", "unlocked": refs >= 3, "progress": min(refs, 3), "goal": 3},
         ]
         await db.users.update_one({"id": user["id"]}, {"$set": {"achievement_count": sum(1 for i in items if i["unlocked"])}})

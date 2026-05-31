@@ -1,5 +1,5 @@
 """
-Royal Crypto Rewards - Comprehensive backend regression suite.
+Eregon Marketing Rewards - Comprehensive backend regression suite.
 Covers: Auth, Transaction Ledger, Withdrawal lifecycle, Deposit approval,
 Activity tracking, Support tickets, Live feed, Bulk tools, Notifications.
 """
@@ -9,7 +9,7 @@ import uuid
 import requests
 import pytest
 
-BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://crown-crypto.preview.emergentagent.com").rstrip("/")
+BASE_URL = os.environ.get("REACT_APP_BACKEND_URL", "https://eregon.online").rstrip("/")
 API = f"{BASE_URL}/api"
 
 
@@ -17,37 +17,46 @@ API = f"{BASE_URL}/api"
 class TestAuth:
     def test_admin_login(self):
         r = requests.post(f"{API}/auth/login",
-                          json={"email": "admin@royalcrypto.com", "password": "Admin@123"})
+                          json={"email": "admin@eregon.online", "password": "Admin@123"})
         assert r.status_code == 200, r.text
         data = r.json()
         assert "access_token" in data and data["access_token"]
         assert data["user"]["role"] == "admin"
-        assert data["user"]["email"] == "admin@royalcrypto.com"
+        assert data["user"]["email"] == "admin@eregon.online"
 
     def test_user_login(self):
         r = requests.post(f"{API}/auth/login",
-                          json={"email": "user@royalcrypto.com", "password": "User@123"})
+                          json={"email": "member@eregon.online", "password": "User@123"})
         assert r.status_code == 200, r.text
         assert r.json()["user"]["role"] == "user"
 
     def test_login_bad_password(self):
         r = requests.post(f"{API}/auth/login",
-                          json={"email": "user@royalcrypto.com", "password": "wrong"})
+                          json={"email": "member@eregon.online", "password": "wrong"})
         assert r.status_code == 401
 
     def test_me_endpoint(self, user_token):
         r = requests.get(f"{API}/auth/me", headers={"Authorization": f"Bearer {user_token}"})
         assert r.status_code == 200
-        assert r.json()["email"] == "user@royalcrypto.com"
+        assert r.json()["email"] == "member@eregon.online"
 
     def test_me_no_token(self):
         r = requests.get(f"{API}/auth/me")
         assert r.status_code == 401
 
     def test_register_and_logout(self):
-        email = f"test_{uuid.uuid4().hex[:8]}@royal.com"
+        email = f"test_{uuid.uuid4().hex[:8]}@eregon.test"
+        admin_login = requests.post(f"{API}/auth/login",
+                                    json={"email": "admin@eregon.online", "password": "Admin@123"})
+        assert admin_login.status_code == 200, admin_login.text
+        admin_headers = {"Authorization": f"Bearer {admin_login.json()['access_token']}"}
+        code = f"TEST-{uuid.uuid4().hex[:8]}".upper()
+        code_res = requests.post(f"{API}/admin/registration-codes",
+                                 headers=admin_headers,
+                                 json={"code": code, "reward_amount": 0, "max_uses": 1})
+        assert code_res.status_code == 200, code_res.text
         r = requests.post(f"{API}/auth/register",
-                          json={"email": email, "password": "Pass1234!", "name": "TEST User"})
+                          json={"email": email, "password": "Pass1234!", "name": "TEST User", "registration_code": code})
         assert r.status_code == 200, r.text
         body = r.json()
         assert body["user"]["email"] == email
@@ -59,7 +68,7 @@ class TestAuth:
 
     def test_forgot_password(self):
         r = requests.post(f"{API}/auth/forgot-password",
-                          json={"email": "user@royalcrypto.com"})
+                          json={"email": "member@eregon.online"})
         assert r.status_code == 200
         # debug_token only present if email found
         assert "ok" in r.json()
@@ -207,7 +216,7 @@ class TestActivity:
     def test_login_creates_activity(self, admin_headers, user_id):
         # Trigger login
         requests.post(f"{API}/auth/login",
-                      json={"email": "user@royalcrypto.com", "password": "User@123"})
+                      json={"email": "member@eregon.online", "password": "User@123"})
         r = requests.get(f"{API}/admin/activity", headers=admin_headers,
                          params={"user_id": user_id})
         assert r.status_code == 200

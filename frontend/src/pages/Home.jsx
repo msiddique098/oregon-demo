@@ -24,8 +24,8 @@ export default function Home() {
             <PublicNav />
 
             <section className="relative overflow-hidden">
-                <div className="absolute inset-0 royal-grid opacity-40 pointer-events-none"></div>
-                <div className="absolute inset-0 royal-radial pointer-events-none"></div>
+                <div className="absolute inset-0 eregon-grid opacity-40 pointer-events-none"></div>
+                <div className="absolute inset-0 eregon-radial pointer-events-none"></div>
                 <div className="relative max-w-7xl mx-auto px-6 lg:px-12 pt-20 lg:pt-28 pb-24">
                     <div className="grid lg:grid-cols-12 gap-12 items-center">
                         <div className="lg:col-span-7 animate-fade-up">
@@ -39,10 +39,10 @@ export default function Home() {
                                 Earn approved rewards.
                             </h1>
                             <p className="text-zinc-400 text-base md:text-lg leading-relaxed max-w-2xl mt-6">
-                                RoyalMarketing is a task-based reward platform where users complete promotional assignments, submit screenshot proof, and receive wallet rewards after admin approval.
+                                Eregon Marketing is a task-based reward platform where users complete promotional assignments, submit screenshot proof, and receive wallet rewards after admin approval.
                             </p>
                             <div className="flex flex-wrap gap-3 mt-8">
-                                <Link to={primaryPath} className="btn-royal">{primaryLabel} <ArrowRight className="w-4 h-4" /></Link>
+                                <Link to={primaryPath} className="btn-eregon">{primaryLabel} <ArrowRight className="w-4 h-4" /></Link>
                                 <Link to={secondaryPath} className="btn-ghost">{secondaryLabel}</Link>
                             </div>
                             <div className="grid sm:grid-cols-3 gap-3 mt-10 max-w-2xl text-xs text-zinc-400">
@@ -93,7 +93,7 @@ export default function Home() {
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">Important transparency note</p>
                     <h2 className="text-2xl sm:text-3xl font-display mt-3">Rewards are not guaranteed until proof is approved.</h2>
                     <p className="text-zinc-400 mt-4">Task availability, reward amounts, approval decisions, account levels, and withdrawal eligibility are controlled by platform rules. Always read task instructions before submitting proof.</p>
-                    <Link to={primaryPath} className="btn-royal mt-6 inline-flex">{user ? primaryLabel : "Create account"} <ArrowRight className="w-4 h-4" /></Link>
+                    <Link to={primaryPath} className="btn-eregon mt-6 inline-flex">{user ? primaryLabel : "Create account"} <ArrowRight className="w-4 h-4" /></Link>
                 </div>
             </section>
 
