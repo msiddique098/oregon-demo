@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, User, ArrowRight, TicketCheck } from "lucide-react";
+import { Mail, Lock, User, ArrowRight, TicketCheck, Crown } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { formatApiError, api } from "../lib/api";
 
