@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import AdminLayout from "../components/AdminLayout";
 import { Badge } from "../components/ui-eregon";
-import { api } from "../lib/api";
+import { API, api } from "../lib/api";
 import { Download, Filter, History, Search } from "lucide-react";
 
 const TYPE_OPTIONS = [
@@ -47,7 +47,7 @@ export function AdminFinancialLogs() {
         if (f.user_id) params.set("user_id", f.user_id);
         if (f.type) params.set("type_filter", f.type);
         if (f.coin) params.set("coin", f.coin);
-        const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/admin/transactions.csv?${params}`, {
+        const res = await fetch(`${API}/admin/transactions.csv?${params}`, {
             headers: { Authorization: `Bearer ${token}` }
         });
         const blob = await res.blob();

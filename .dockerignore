@@ -1,0 +1,9 @@
+.git
+.gitignore
+**/__pycache__
+**/*.pyc
+frontend/build
+frontend/node_modules
+node_modules
+test_reports
+tests

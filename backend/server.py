@@ -16,6 +16,7 @@ import bcrypt
 import jwt
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -1878,3 +1879,19 @@ app.include_router(_enterprise_router, prefix="/api")
 async def _enterprise_start():
     await _seed_enterprise()
     logger.info("Eregon Marketing Enterprise safe growth controls ready")
+
+
+STATIC_DIR = ROOT_DIR / "static"
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_spa(full_path: str):
+    if not STATIC_DIR.exists():
+        raise HTTPException(status_code=404, detail="Frontend build not found")
+
+    requested = (STATIC_DIR / full_path).resolve()
+    static_root = STATIC_DIR.resolve()
+    if full_path and requested.is_file() and requested.is_relative_to(static_root):
+        return FileResponse(requested)
+
+    return FileResponse(STATIC_DIR / "index.html")
