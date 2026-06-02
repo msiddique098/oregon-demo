@@ -8,7 +8,7 @@ const TYPE_OPTIONS = [
     "admin_credit", "admin_debit", "admin_adjust_daily_profit", "admin_adjust_total_earnings",
     "admin_adjust_referral", "withdrawal_debit", "withdrawal_refund", "deposit_credit",
     "bulk_bonus", "referral_commission", "task_reward", "membership_bonus",
-    "daily_checkin", "spin_reward", "achievement_reward", "first_task_reward",
+    "spin_reward", "achievement_reward", "first_task_reward",
 ];
 
 export function AdminFinancialLogs() {

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Gift, Sparkles, Trophy, RotateCcw, CheckCircle2, Lock, Timer, Crown, Zap, Target, Wallet, ArrowRight } from "lucide-react";
+import { Trophy, RotateCcw, CheckCircle2, Lock, Timer, Crown, Zap, Wallet, ArrowRight } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import CinematicLoader from "../components/CinematicLoader";
 import AnimatedCounter from "../components/AnimatedCounter";
@@ -83,13 +83,6 @@ export default function Rewards() {
     useEffect(() => { load().catch(() => setLoading(false)); }, []);
 
     const celebrate = () => { setBurst(true); setTimeout(() => setBurst(false), 1800); };
-    const checkin = async () => {
-        try {
-            const { data } = await api.post("/rewards/checkin");
-            toast.success(`Daily check-in claimed: +$${Number(data.reward).toFixed(2)}. Next: $${Number(data.next_reward).toFixed(2)}`);
-            celebrate(); await load();
-        } catch (e) { toast.error(formatApiError(e)); }
-    };
     const spin = async () => {
         if (spinning) return;
         setSpinning(true); setSpinResult(null);
@@ -122,15 +115,17 @@ export default function Rewards() {
     const balance = Number(overview?.wallet?.total_balance || 0);
     const targetPct = Math.min(100, Math.round((balance / Math.max(1, target)) * 100));
     const prizes = overview?.reward_wheel_prizes || FALLBACK_WHEEL;
-    const nextCheckin = Number(overview?.streak?.next_reward || 2);
+    const planSpinTotal = Number(overview?.plan_spin_rewards?.total_reward || 0);
+    const planSpinPct = Number(overview?.plan_spin_rewards?.reward_pct || 1);
+    const remainingPlanSpins = Number(overview?.plan_spin_rewards?.remaining_queue || overview?.spin_tokens || 0);
 
     return <DashboardLayout>
         <ConfettiBurst active={burst} />
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4 sm:mb-8">
             <div>
-                <p className="text-xs uppercase tracking-widest text-amber-400/80">Daily retention engine</p>
+                <p className="text-xs uppercase tracking-widest text-amber-400/80">Deterministic plan rewards</p>
                 <h1 className="text-2xl sm:text-4xl font-display font-semibold mt-1">Reward Hub</h1>
-                <p className="text-xs sm:text-sm text-zinc-400 mt-2 max-w-2xl">Claim daily check-ins, spin tokens, and approved YouTube tasks to grow your reward balance.</p>
+                <p className="text-xs sm:text-sm text-zinc-400 mt-2 max-w-2xl">Use plan spin tokens and approved YouTube tasks to grow your reward balance. Daily check-in rewards have been removed.</p>
             </div>
             <Badge color="gold">{overview?.spin_tokens || 0} spin tokens</Badge>
         </div>
@@ -139,13 +134,13 @@ export default function Rewards() {
             <Card className="shadow-[0_0_35px_rgba(251,191,36,.15)]">
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <p className="text-xs uppercase tracking-widest text-zinc-500">Daily Check-in</p>
-                        <h2 className="text-xl sm:text-2xl font-display mt-2"><span className="block text-sm text-zinc-400 font-body mb-1">Today</span><span className="gradient-text-gold">${nextCheckin.toFixed(2)}</span></h2>
-                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">One claim per day. Sequence: $2, $4, ... $20, then $18, $16 ... back to $2.</p>
+                        <p className="text-xs uppercase tracking-widest text-zinc-500">Plan Spin Pool</p>
+                        <h2 className="text-xl sm:text-2xl font-display mt-2"><span className="block text-sm text-zinc-400 font-body mb-1">Total plan reward</span><span className="gradient-text-gold">${planSpinTotal.toFixed(2)}</span></h2>
+                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">Every active plan receives deterministic spin outcomes totaling {planSpinPct.toFixed(0)}% of the plan value. Rewards are credited only when you spin.</p>
                     </div>
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl gradient-gold flex items-center justify-center neon-gold"><Gift className="w-5 h-5 sm:w-6 sm:h-6 text-black" /></div>
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl gradient-gold flex items-center justify-center neon-gold"><Zap className="w-5 h-5 sm:w-6 sm:h-6 text-black" /></div>
                 </div>
-                <button onClick={checkin} className="btn-gold w-full mt-4 md:mt-5"><Sparkles className="w-4 h-4" /> Claim check-in</button>
+                <div className="mt-4 rounded-xl bg-black/35 border border-white/5 p-3 text-xs text-zinc-400">Remaining queued plan spins: <span className="text-amber-200 font-semibold">{remainingPlanSpins}</span></div>
             </Card>
 
             <Card>
@@ -153,7 +148,7 @@ export default function Rewards() {
                     <div>
                         <p className="text-xs uppercase tracking-widest text-zinc-500">Current Reward Balance</p>
                         <h2 className="text-2xl sm:text-3xl font-display mt-2 gradient-text-gold">$<AnimatedCounter value={balance} decimals={2} /></h2>
-                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">This is your real updated balance after approved tasks, daily check-ins, spins, referral rewards, and deposit bonuses.</p>
+                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">This is your real updated balance after approved tasks, plan spins, referral rewards, and deposit bonuses.</p>
                     </div>
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl gradient-purple flex items-center justify-center neon-purple"><Wallet className="w-5 h-5 sm:w-6 sm:h-6" /></div>
                 </div>
@@ -171,7 +166,7 @@ export default function Rewards() {
                     <div>
                         <p className="text-xs uppercase tracking-widest text-zinc-500">Limited Deposit Boost</p>
                         <h2 className="text-xl sm:text-2xl font-display mt-2">Get <span className="gradient-text-gold">30% extra bonus</span></h2>
-                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">Approved deposits add to your balance and target progress with an additional 30% platform bonus. Admin can also unlock extra spin access with approved plans or deposits.</p>
+                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">Approved deposits add to your balance and target progress. Plan rewards are now issued through deterministic spins totaling 1% of the plan value.</p>
                     </div>
                     <Zap className="w-8 h-8 text-amber-300" />
                 </div>
@@ -185,7 +180,7 @@ export default function Rewards() {
                     <div>
                         <p className="text-xs uppercase tracking-widest text-zinc-500">Lucky Event</p>
                         <h2 className="text-xl sm:text-2xl font-display mt-2">Reward Spin Wheel</h2>
-                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">Available spins: {overview?.spin_tokens || 0}. Plans and approved deposits can unlock additional spin access.</p>
+                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">Available spins: {overview?.spin_tokens || 0}. Plan spin outcomes are queued server-side and total 1% of the active plan value.</p>
                     </div>
                     <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6 text-amber-300" />
                 </div>

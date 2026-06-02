@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Wallet, TrendingUp, Crown, CheckSquare, Users, Bell, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Wallet, Crown, CheckSquare, Bell, ArrowUpRight } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import { StatCard, Badge } from "../components/ui-eregon";
 import AnimatedCounter from "../components/AnimatedCounter";
@@ -25,10 +25,11 @@ export default function Dashboard() {
     const coin = u.coin_symbol;
     const sym = COIN_SYMBOLS[coin] || "";
 
-    // Simulated 14-day visual chart based on daily_profit (admin-controlled)
+    // Simulated 14-day visual chart based on approved task/referral activity.
+    const activityBase = Math.max(1, Number(u.tasks_completed || 0) + Number(u.referral_earnings || 0) / 10);
     const chartData = Array.from({ length: 14 }, (_, i) => ({
         d: `D${i + 1}`,
-        profit: Number((u.daily_profit * (0.7 + 0.6 * Math.sin(i * 0.7))).toFixed(2)),
+        activity: Number((activityBase * (0.7 + 0.6 * Math.sin(i * 0.7))).toFixed(2)),
     }));
 
     return (
@@ -59,13 +60,13 @@ export default function Dashboard() {
                         <div className="dashboard-card-icon w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center"><Wallet className="w-5 h-5 text-white/80" /></div>
                     </div>
                 </Link>
-                <Link to="/dashboard/transactions" className="dashboard-card-interactive glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.20)] focus:outline-none focus:ring-2 focus:ring-emerald-400/40" data-testid="stat-daily">
+                <Link to="/dashboard/rewards" className="dashboard-card-interactive glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.20)] focus:outline-none focus:ring-2 focus:ring-emerald-400/40" data-testid="stat-spins">
                     <div className="absolute top-0 left-0 right-0 h-px bg-emerald-500/40"></div>
-                    <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Daily Profit</p>
+                    <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Plan Spins</p>
                     <p className="text-2xl sm:text-3xl font-display font-semibold text-emerald-300">
-                        <AnimatedCounter value={u.daily_profit} decimals={2} prefix={sym} />
+                        <AnimatedCounter value={u.spin_tokens || 0} decimals={0} />
                     </p>
-                    <p className="text-xs text-zinc-400 mt-2">Curated by Eregon Admin</p>
+                    <p className="text-xs text-zinc-400 mt-2">Deterministic rewards from your plan</p>
                 </Link>
                 <StatCard testId="stat-tasks" label="Tasks Done" accent="purple" icon={CheckSquare}
                     to="/dashboard/tasks"
@@ -88,7 +89,7 @@ export default function Dashboard() {
                 <div className="lg:col-span-2 glass-strong p-6">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                         <div>
-                            <p className="text-xs uppercase tracking-widest text-zinc-500">Profit Analytics</p>
+                            <p className="text-xs uppercase tracking-widest text-zinc-500">Reward Activity</p>
                             <h3 className="font-display text-lg">Last 14 days</h3>
                         </div>
                         <Badge color="purple">visual</Badge>
@@ -106,7 +107,7 @@ export default function Dashboard() {
                                 <XAxis dataKey="d" stroke="#71717a" fontSize={11} />
                                 <YAxis stroke="#71717a" fontSize={11} />
                                 <Tooltip contentStyle={{ background: "rgba(15,15,19,0.9)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, backdropFilter: "blur(12px)" }} />
-                                <Area type="monotone" dataKey="profit" stroke="#9333EA" fill="url(#gpurple)" strokeWidth={2} />
+                                <Area type="monotone" dataKey="activity" stroke="#9333EA" fill="url(#gpurple)" strokeWidth={2} />
                             </AreaChart>
                         </ResponsiveContainer>
                     </div>
@@ -121,7 +122,8 @@ export default function Dashboard() {
                     </div>
                     {data.membership ? (
                         <ul className="mt-4 space-y-2 text-sm text-zinc-300">
-                            <li className="flex justify-between"><span>Daily rate</span><span className="text-amber-300">{data.membership.daily_profit_pct}%</span></li>
+                            <li className="flex justify-between"><span>Plan spin rewards</span><span className="text-amber-300">${Number(data.membership.plan_spin_reward_total || Number(data.membership.investment || 0) * 0.01).toFixed(2)}</span></li>
+                            <li className="flex justify-between"><span>Included spins</span><span>{data.membership.spin_tokens || 0}</span></li>
                             <li className="flex justify-between"><span>Commission boost</span><span>+{data.membership.commission_boost_pct}%</span></li>
                             <li className="flex justify-between"><span>Task boost</span><span>+{data.membership.task_boost_pct}%</span></li>
                             <li className="flex justify-between"><span>Withdrawal SLA</span><span>{data.membership.priority_withdrawal_hours}h</span></li>

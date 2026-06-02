@@ -7,7 +7,7 @@ import { Filter, ArrowUpRight, ArrowDownRight, History, Search } from "lucide-re
 const TYPE_LABELS = {
     admin_credit: { label: "Admin Credit", color: "emerald", up: true },
     admin_debit:  { label: "Admin Debit",  color: "rose", up: false },
-    admin_adjust_daily_profit: { label: "Daily Profit Adjust", color: "purple", up: true },
+    admin_adjust_daily_profit: { label: "Legacy Daily Adjust", color: "purple", up: true },
     admin_adjust_total_earnings: { label: "Earnings Adjust", color: "purple", up: true },
     admin_adjust_referral: { label: "Referral Adjust", color: "purple", up: true },
     withdrawal_debit: { label: "Withdrawal", color: "rose", up: false },
@@ -18,7 +18,7 @@ const TYPE_LABELS = {
     referral_commission: { label: "Referral Bonus", color: "gold", up: true },
     task_reward: { label: "Task Reward", color: "gold", up: true },
     membership_bonus: { label: "Membership Bonus", color: "gold", up: true },
-    daily_checkin: { label: "Daily Check-in", color: "gold", up: true },
+    daily_checkin: { label: "Disabled Daily Check-in", color: "gold", up: true },
     spin_reward: { label: "Spin Reward", color: "gold", up: true },
     achievement_reward: { label: "Achievement Reward", color: "gold", up: true },
     first_task_reward: { label: "First Task Reward", color: "gold", up: true },

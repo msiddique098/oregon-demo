@@ -12,6 +12,8 @@ import random
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
+from reward_math import normalize_plan_spin_fields
+
 import bcrypt
 import jwt
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response
@@ -94,14 +96,14 @@ def _build_live_feed_seed(total: int = 80) -> list[dict]:
         ("wallet", "Wallet workflow refreshed: approved rewards are reflected after review"),
         ("crown", "Membership plan workflow updated with current task and spin rules"),
         ("users", "Referral dashboard refreshed with eligible commission status"),
-        ("sparkles", "Daily check-in workflow is available for eligible accounts"),
+        ("sparkles", "Plan spin rewards are issued through deterministic queued spins"),
         ("diamond", "Withdrawal review queue updated for pending requests"),
         ("trending", "Campaign task list refreshed with new proof requirements"),
         ("check", "Completed task proofs move to balance only after approval"),
         ("wallet", "Balance summary now shows approved rewards and pending locks separately"),
         ("crown", "Plan benefits are synced with withdrawal priority and spin access"),
         ("users", "Team activity summary updated for referral reporting"),
-        ("sparkles", "Reward hub refreshed with check-ins, spins, and task status"),
+        ("sparkles", "Reward hub refreshed with plan spins and task status"),
         ("diamond", "Withdrawal eligibility uses balance, locks, and pending request checks"),
         ("trending", "Admin workflow updated for deposits, plans, and commissions"),
         ("check", "Screenshot proof rules refreshed for clearer approval decisions"),
@@ -152,7 +154,7 @@ def gen_registration_code() -> str:
 
 # ---------------- Ledger ----------------
 # Transaction types: admin_credit, admin_debit, withdrawal_debit, withdrawal_refund,
-# deposit_credit, referral_commission, task_reward, membership_bonus, bulk_bonus
+# deposit_credit, referral_commission, task_reward, membership_bonus, bulk_bonus, spin_reward
 async def record_tx(user_id: str, type_: str, amount: float, coin: str,
                     before_balance: float, after_balance: float,
                     admin_id: Optional[str] = None, reference_id: Optional[str] = None,
@@ -295,16 +297,22 @@ class AdminUpdateUserIn(BaseModel):
     longest_streak: Optional[int] = None
 
 class PackageIn(BaseModel):
-    name: str
-    tier: str  # Basic | Silver | Gold | Platinum | Elite VIP
-    investment: float
-    daily_profit_pct: float
-    commission_boost_pct: float
-    task_boost_pct: float
-    duration_days: int
+    name: str = Field(min_length=1, max_length=80)
+    tier: str = Field(min_length=1, max_length=40)  # Basic | Silver | Gold | Platinum | Elite VIP
+    investment: float = Field(gt=0)
+    # Daily rewards are disabled. Kept for backwards-compatible reads only;
+    # package create/update normalizes this value to 0.0.
+    daily_profit_pct: float = 0.0
+    commission_boost_pct: float = Field(default=0.0, ge=0)
+    task_boost_pct: float = Field(default=0.0, ge=0)
+    duration_days: int = Field(gt=0)
     badge_color: str = "purple"
     perks: List[str] = []
-    priority_withdrawal_hours: int = 24
+    priority_withdrawal_hours: int = Field(default=24, ge=0)
+    spin_tokens: Optional[int] = Field(default=None, ge=0, le=100)
+    spin_reward_queue: Optional[List[float]] = None
+    plan_spin_reward_total: float = 0.0
+    plan_spin_reward_pct: float = 1.0
 
 class PackageOut(PackageIn):
     id: str
@@ -484,6 +492,94 @@ def user_to_out(u: dict) -> dict:
         "created_at": u["created_at"] if isinstance(u["created_at"], str) else u["created_at"].isoformat(),
     }
 
+
+def _normalize_package_document(data: dict) -> dict:
+    """Normalize package fields so every plan spin pool totals exactly 1%."""
+    payload = dict(data)
+    payload.update(normalize_plan_spin_fields(payload))
+    payload["daily_profit_pct"] = 0.0
+    perks = payload.get("perks") or []
+    cleaned_perks = []
+    for perk in perks:
+        text = str(perk)
+        if "daily" in text.lower() and "reward" in text.lower():
+            text = "Deterministic plan spin rewards"
+        cleaned_perks.append(text)
+    if cleaned_perks:
+        payload["perks"] = cleaned_perks
+    return payload
+
+
+async def _grant_plan_spin_rewards(user_id: str, package: dict, admin_id: Optional[str] = None) -> dict:
+    """Queue deterministic plan spin rewards for a user once per assigned plan.
+
+    Actual money is credited only when each spin is consumed, preserving the
+    existing ledger and wallet flow while preventing random or duplicate payouts.
+    """
+    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    package_doc = _normalize_package_document(package)
+    queue = list(package_doc.get("spin_reward_queue") or [])
+    if not queue:
+        return {"granted": False, "reason": "Plan has no deterministic spin rewards"}
+
+    if user_doc.get("plan_spin_reward_source_id") == package_doc.get("id"):
+        return {"granted": False, "reason": "Plan spin rewards already queued for this plan"}
+
+    now = now_utc().isoformat()
+    existing_queue = list(user_doc.get("spin_reward_queue") or [])
+    existing_tokens = max(0, int(user_doc.get("spin_tokens", 0)))
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {
+                "spin_tokens": existing_tokens + len(queue),
+                "spin_reward_queue": existing_queue + queue,
+                "plan_spin_reward_source_id": package_doc.get("id"),
+                "plan_spin_reward_total": package_doc.get("plan_spin_reward_total", round(sum(queue), 2)),
+                "plan_spin_reward_pct": package_doc.get("plan_spin_reward_pct", 1.0),
+                "plan_spin_reward_granted_at": now,
+            }
+        },
+    )
+    await db.notifications.insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "title": "Plan Spins Added",
+        "body": f"{len(queue)} deterministic spins were added for {package_doc.get('name', 'your plan')}. Total queued reward value is {package_doc.get('plan_spin_reward_total', round(sum(queue), 2)):g} USDT (1% of plan value).",
+        "category": "rewards",
+        "read": False,
+        "created_at": now,
+    })
+    await _phase2_emit_user(user_id, "plan.spins_granted", {
+        "package_id": package_doc.get("id"),
+        "package_name": package_doc.get("name"),
+        "spin_tokens": len(queue),
+        "plan_spin_reward_total": package_doc.get("plan_spin_reward_total", round(sum(queue), 2)),
+    })
+    return {"granted": True, "spin_tokens": len(queue), "total_reward": package_doc.get("plan_spin_reward_total", round(sum(queue), 2))}
+
+
+async def _migrate_packages_to_plan_spins() -> None:
+    """Startup migration for legacy packages that had daily-profit rewards."""
+    async for package in db.packages.find({}):
+        normalized = _normalize_package_document(package)
+        await db.packages.update_one(
+            {"id": package["id"]},
+            {"$set": {
+                "daily_profit_pct": 0.0,
+                "spin_tokens": normalized["spin_tokens"],
+                "spin_reward_queue": normalized["spin_reward_queue"],
+                "plan_spin_reward_total": normalized["plan_spin_reward_total"],
+                "plan_spin_reward_pct": normalized["plan_spin_reward_pct"],
+                "perks": normalized.get("perks", package.get("perks", [])),
+                "updated_at": now_utc().isoformat(),
+                "migration": "plan_spin_rewards_v1",
+            }}
+        )
+
 # ---------------- Auth Routes ----------------
 @api.post("/auth/register", response_model=AuthOut)
 async def register(body: RegisterIn, response: Response):
@@ -544,9 +640,9 @@ async def register(body: RegisterIn, response: Response):
         "current_streak": 0,
         "longest_streak": 0,
         "last_checkin_at": None,
-        "spin_tokens": 2,
+        "spin_tokens": 0,
         "spin_count": 0,
-        "spin_reward_queue": [0.20, 19.00],
+        "spin_reward_queue": [],
         "last_spin_at": None,
         "achievement_count": 0,
         "membership_id": None,
@@ -862,9 +958,9 @@ async def admin_stats(admin: dict = Depends(admin_required)):
     # Sum balances
     agg = await db.users.aggregate([
         {"$match": {"role": "user"}},
-        {"$group": {"_id": None, "total": {"$sum": "$balance"}, "profit": {"$sum": "$daily_profit"}}}
+        {"$group": {"_id": None, "total": {"$sum": "$balance"}, "profit": {"$sum": "$daily_profit"}, "spin_tokens": {"$sum": "$spin_tokens"}}}
     ]).to_list(1)
-    totals = agg[0] if agg else {"total": 0, "profit": 0}
+    totals = agg[0] if agg else {"total": 0, "profit": 0, "spin_tokens": 0}
 
     # Last 7 days deposit/withdrawal chart
     chart = []
@@ -884,6 +980,7 @@ async def admin_stats(admin: dict = Depends(admin_required)):
         "total_packages": total_packages,
         "total_balance": totals.get("total", 0),
         "total_daily_profit": totals.get("profit", 0),
+        "total_spin_tokens": totals.get("spin_tokens", 0),
         "chart": chart,
     }
 
@@ -943,13 +1040,18 @@ async def admin_update_user(uid: str, body: AdminUpdateUserIn, admin: dict = Dep
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     update = {k: v for k, v in body.model_dump().items() if v is not None}
+    assigned_pkg = None
+    membership_changed = False
     if "membership_id" in update:
         pkg = await db.packages.find_one({"id": update["membership_id"]}, {"_id": 0})
         if pkg:
-            update["membership_name"] = pkg["name"]
+            assigned_pkg = _normalize_package_document(pkg)
+            update["membership_name"] = assigned_pkg["name"]
+            membership_changed = user.get("membership_id") != assigned_pkg.get("id")
         else:
             update["membership_name"] = None
             update["membership_id"] = None
+            membership_changed = user.get("membership_id") is not None
     # Record ledger entries for any balance/earning fields that changed
     coin = user.get("coin_symbol", "USDT")
     ledger_fields = {
@@ -973,6 +1075,8 @@ async def admin_update_user(uid: str, body: AdminUpdateUserIn, admin: dict = Dep
                 )
     if update:
         await db.users.update_one({"id": uid}, {"$set": update})
+        if assigned_pkg and membership_changed:
+            await _grant_plan_spin_rewards(uid, assigned_pkg, admin_id=admin["id"])
         await _phase2_emit_user(uid, "user.updated", {"fields": list(update.keys())})
     updated = await db.users.find_one({"id": uid}, {"_id": 0})
     return user_to_out(updated)
@@ -990,14 +1094,15 @@ async def admin_list_packages(admin: dict = Depends(admin_required)):
 
 @api.post("/admin/packages", response_model=PackageOut)
 async def admin_create_package(body: PackageIn, admin: dict = Depends(admin_required)):
-    rec = {"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **body.model_dump()}
+    rec = _normalize_package_document({"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **body.model_dump()})
     await db.packages.insert_one(rec)
     rec.pop("_id", None)
     return rec
 
 @api.patch("/admin/packages/{pid}", response_model=PackageOut)
 async def admin_update_package(pid: str, body: PackageIn, admin: dict = Depends(admin_required)):
-    await db.packages.update_one({"id": pid}, {"$set": body.model_dump()})
+    payload = _normalize_package_document({**body.model_dump(), "updated_at": now_utc().isoformat()})
+    await db.packages.update_one({"id": pid}, {"$set": payload})
     pkg = await db.packages.find_one({"id": pid}, {"_id": 0})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
@@ -1268,7 +1373,7 @@ def _build_practice_users(packages: list[dict], total: int = 1500) -> list[dict]
         referral_earnings = round(balance * rng.uniform(0.06, 0.22), 2)
         bonus_balance = round(balance * rng.uniform(0.015, 0.08), 2)
         locked_balance = round(balance * rng.uniform(0.0, 0.08), 2)
-        daily_profit = round(balance * rng.uniform(0.003, 0.012), 2)
+        daily_profit = 0.0
         total_earnings = round(balance + referral_earnings + bonus_balance + rng.uniform(100, 1800), 2)
         tasks_completed = rng.randint(8, 180)
         tasks_pending = rng.randint(0, 8)
@@ -1278,6 +1383,7 @@ def _build_practice_users(packages: list[dict], total: int = 1500) -> list[dict]
         membership_name = (pkg or {}).get("name") or rng.choice(tiers)
         status = rng.choices(["active", "suspended"], weights=[98, 2], k=1)[0]
         user_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"eregon-marketing-practice-user-{idx}"))
+        spin_fields = normalize_plan_spin_fields(pkg) if pkg else {"spin_tokens": 0, "spin_reward_queue": [], "plan_spin_reward_total": 0.0, "plan_spin_reward_pct": 1.0}
 
         users.append({
             "id": user_id,
@@ -1300,16 +1406,19 @@ def _build_practice_users(packages: list[dict], total: int = 1500) -> list[dict]
             "withdrawal_processing_hours": rng.choice([2, 12, 24, 36, 48]),
             "locked_balance": locked_balance,
             "bonus_balance": bonus_balance,
-            "current_streak": rng.randint(0, 18),
-            "longest_streak": rng.randint(3, 45),
-            "last_checkin_at": (now - timedelta(days=rng.randint(0, 10))).isoformat(),
-            "spin_tokens": rng.randint(0, 5),
+            "current_streak": 0,
+            "longest_streak": 0,
+            "last_checkin_at": None,
+            "spin_tokens": spin_fields.get("spin_tokens", 0),
             "spin_count": 0,
-            "spin_reward_queue": [0.20, 19.00],
-            "last_spin_at": (now - timedelta(days=rng.randint(0, 20))).isoformat(),
+            "spin_reward_queue": spin_fields.get("spin_reward_queue", []),
+            "last_spin_at": None,
             "achievement_count": rng.randint(0, 12),
             "membership_id": (pkg or {}).get("id"),
             "membership_name": membership_name,
+            "plan_spin_reward_total": spin_fields.get("plan_spin_reward_total", 0.0),
+            "plan_spin_reward_pct": spin_fields.get("plan_spin_reward_pct", 1.0),
+            "plan_spin_reward_source_id": (pkg or {}).get("id"),
             "practice_seed": True,
             "created_at": created_at,
             "last_active": (now - timedelta(days=rng.randint(0, 30))).isoformat(),
@@ -1412,7 +1521,7 @@ async def seed():
             "referred_by": None,
             "coin_symbol": "USDT",
             "balance": 12450.75,
-            "daily_profit": 182.33,
+            "daily_profit": 0.0,
             "total_earnings": 9821.40,
             "referral_earnings": 1240.50,
             "task_progress": 68.0,
@@ -1426,9 +1535,9 @@ async def seed():
             "current_streak": 4,
             "longest_streak": 9,
             "last_checkin_at": None,
-            "spin_tokens": 2,
+            "spin_tokens": 0,
             "spin_count": 0,
-            "spin_reward_queue": [0.20, 19.00],
+            "spin_reward_queue": [],
             "last_spin_at": None,
             "achievement_count": 2,
             "membership_id": None,
@@ -1439,14 +1548,16 @@ async def seed():
     # Seed default packages
     if await db.packages.count_documents({}) == 0:
         defaults = [
-            {"name": "Basic", "tier": "Basic", "investment": 100, "daily_profit_pct": 0.8, "commission_boost_pct": 0, "task_boost_pct": 0, "duration_days": 30, "badge_color": "zinc", "perks": ["Daily login rewards", "Standard support"], "priority_withdrawal_hours": 48},
-            {"name": "Silver", "tier": "Silver", "investment": 500, "daily_profit_pct": 1.2, "commission_boost_pct": 5, "task_boost_pct": 10, "duration_days": 60, "badge_color": "slate", "perks": ["Silver badge", "Priority support", "+5% referral commission"], "priority_withdrawal_hours": 36},
-            {"name": "Gold", "tier": "Gold", "investment": 2000, "daily_profit_pct": 1.8, "commission_boost_pct": 10, "task_boost_pct": 25, "duration_days": 90, "badge_color": "amber", "perks": ["Gold badge", "VIP support", "+10% referral commission", "Exclusive tasks"], "priority_withdrawal_hours": 24},
-            {"name": "Platinum", "tier": "Platinum", "investment": 5000, "daily_profit_pct": 2.4, "commission_boost_pct": 15, "task_boost_pct": 50, "duration_days": 120, "badge_color": "purple", "perks": ["Platinum badge", "Dedicated manager", "+15% referral", "Priority withdrawals"], "priority_withdrawal_hours": 12},
-            {"name": "Elite VIP", "tier": "Elite VIP", "investment": 15000, "daily_profit_pct": 3.5, "commission_boost_pct": 25, "task_boost_pct": 100, "duration_days": 180, "badge_color": "gold", "perks": ["Elite growth badge", "Concierge support", "+25% referral", "Instant withdrawals", "Elite events access"], "priority_withdrawal_hours": 2},
+            {"name": "Basic", "tier": "Basic", "investment": 100, "daily_profit_pct": 0.0, "commission_boost_pct": 0, "task_boost_pct": 0, "duration_days": 30, "badge_color": "zinc", "perks": ["Deterministic plan spin rewards", "Standard support"], "priority_withdrawal_hours": 48, "spin_tokens": 2},
+            {"name": "Silver", "tier": "Silver", "investment": 500, "daily_profit_pct": 0.0, "commission_boost_pct": 5, "task_boost_pct": 10, "duration_days": 60, "badge_color": "slate", "perks": ["5 deterministic spins", "Priority support", "+5% referral commission"], "priority_withdrawal_hours": 36, "spin_tokens": 5},
+            {"name": "Gold", "tier": "Gold", "investment": 2000, "daily_profit_pct": 0.0, "commission_boost_pct": 10, "task_boost_pct": 25, "duration_days": 90, "badge_color": "amber", "perks": ["10 deterministic spins", "VIP support", "+10% referral commission", "Exclusive tasks"], "priority_withdrawal_hours": 24, "spin_tokens": 10},
+            {"name": "Platinum", "tier": "Platinum", "investment": 5000, "daily_profit_pct": 0.0, "commission_boost_pct": 15, "task_boost_pct": 50, "duration_days": 120, "badge_color": "purple", "perks": ["20 deterministic spins", "Dedicated manager", "+15% referral", "Priority withdrawals"], "priority_withdrawal_hours": 12, "spin_tokens": 20},
+            {"name": "Elite VIP", "tier": "Elite VIP", "investment": 15000, "daily_profit_pct": 0.0, "commission_boost_pct": 25, "task_boost_pct": 100, "duration_days": 180, "badge_color": "gold", "perks": ["30 deterministic spins", "Concierge support", "+25% referral", "Instant withdrawals", "Elite events access"], "priority_withdrawal_hours": 2, "spin_tokens": 30},
         ]
         for d in defaults:
-            await db.packages.insert_one({"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **d})
+            await db.packages.insert_one(_normalize_package_document({"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **d}))
+
+    await _migrate_packages_to_plan_spins()
 
     # Seed synthetic practice users for admin/testing workflows. Public pages remain aggregate-only.
     await seed_practice_users()
@@ -1466,7 +1577,7 @@ async def seed():
         await db.announcements.insert_one({
             "id": str(uuid.uuid4()),
             "title": "Welcome to Eregon Marketing",
-            "body": "Earn premium daily rewards, unlock VIP tiers, and grow your approved reward balance with our task-based marketing rewards platform.",
+            "body": "Unlock VIP tiers, deterministic plan spins, and approved task rewards through a clean reward workflow.",
             "pinned": True,
             "created_at": now_utc().isoformat(),
         })
@@ -1848,7 +1959,7 @@ app.include_router(api)
 
 # ====================================================================
 # PHASE 2 EXTENSIONS — Categorized balances, Task Engine v2,
-# Daily Check-in, Spin Wheel, Achievements, Leaderboard, WebSocket
+# Plan Spin Wheel, Achievements, Leaderboard, WebSocket
 # ====================================================================
 from extensions import build_router as _build_phase2  # noqa: E402
 
@@ -1867,7 +1978,7 @@ app.include_router(_phase2_router, prefix="/api")
 @app.on_event("startup")
 async def _phase2_start():
     await _seed_phase2()
-    logger.info("Eregon Marketing Phase 2 ready (tasks, spin, checkin, ws)")
+    logger.info("Eregon Marketing Phase 2 ready (tasks, deterministic plan spins, ws)")
 
 # ====================================================================
 # ENTERPRISE SAFE GROWTH EXTENSIONS — transparent rules, real social proof,

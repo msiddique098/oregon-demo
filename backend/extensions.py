@@ -8,6 +8,8 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
+from reward_math import normalize_plan_spin_fields
+
 
 
 REWARD_WHEEL_PRIZES = [
@@ -173,13 +175,17 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
     async def seed_phase2():
         await db.users.update_many(
             {"locked_balance": {"$exists": False}},
-            {"$set": {"locked_balance": 0.0, "bonus_balance": 0.0, "current_streak": 0, "longest_streak": 0, "spin_tokens": 2, "spin_count": 0, "spin_reward_queue": [0.20, 19.00], "daily_checkin_next_reward": DAILY_CHECKIN_MIN, "daily_checkin_direction": 1, "achievement_count": 0}},
+            {"$set": {"locked_balance": 0.0, "bonus_balance": 0.0, "current_streak": 0, "longest_streak": 0, "spin_tokens": 0, "spin_count": 0, "spin_reward_queue": [], "daily_checkin_next_reward": 0.0, "daily_checkin_direction": 0, "achievement_count": 0}},
         )
-        await db.users.update_many({"spin_tokens": {"$exists": False}, "role": "user"}, {"$set": {"spin_tokens": 2}})
+        await db.users.update_many({"spin_tokens": {"$exists": False}, "role": "user"}, {"$set": {"spin_tokens": 0}})
         await db.users.update_many({"spin_count": {"$exists": False}}, {"$set": {"spin_count": 0}})
-        await db.users.update_many({"spin_reward_queue": {"$exists": False}, "role": "user"}, {"$set": {"spin_reward_queue": [0.20, 19.00]}})
-        await db.users.update_many({"daily_checkin_next_reward": {"$exists": False}}, {"$set": {"daily_checkin_next_reward": DAILY_CHECKIN_MIN}})
-        await db.users.update_many({"daily_checkin_direction": {"$exists": False}}, {"$set": {"daily_checkin_direction": 1}})
+        await db.users.update_many({"spin_reward_queue": {"$exists": False}, "role": "user"}, {"$set": {"spin_reward_queue": []}})
+        await db.users.update_many({"daily_checkin_next_reward": {"$exists": False}}, {"$set": {"daily_checkin_next_reward": 0.0}})
+        await db.users.update_many({"daily_checkin_direction": {"$exists": False}}, {"$set": {"daily_checkin_direction": 0}})
+        await db.users.update_many(
+            {"role": "user", "membership_id": None, "spin_reward_queue": [0.20, 19.00]},
+            {"$set": {"spin_tokens": 0, "spin_reward_queue": [], "migration": "daily_rewards_removed_v1"}},
+        )
         await db.tasks.create_index([("active", 1), ("type", 1), ("vip_level", 1)])
         await db.tasks.create_index([("youtube_url", 1)])
         await db.task_submissions.create_index([("user_id", 1), ("task_id", 1), ("created_at", -1)])
@@ -422,13 +428,14 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
                 "deposit_balance": float(user.get("deposit_balance", 0)),
             },
             "streak": {
-                "current": int(user.get("current_streak", 0)),
-                "longest": int(user.get("longest_streak", 0)),
-                "last_checkin_at": user.get("last_checkin_at"),
-                "next_reward": float(user.get("daily_checkin_next_reward", DAILY_CHECKIN_MIN)),
-                "direction": int(user.get("daily_checkin_direction", 1)),
-                "min_reward": DAILY_CHECKIN_MIN,
-                "max_reward": DAILY_CHECKIN_MAX,
+                "enabled": False,
+                "current": 0,
+                "longest": 0,
+                "last_checkin_at": None,
+                "next_reward": 0.0,
+                "direction": 0,
+                "min_reward": 0.0,
+                "max_reward": 0.0,
             },
             "minimum_target": 100.0,
             "spin_count": int(user.get("spin_count", 0)),
@@ -437,7 +444,14 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
             "task_summary": {"approved": approved_tasks, "pending_review": pending_tasks, "rejected": rejected_tasks},
             "recent_transactions": recent,
             "recent_bonuses": bonuses,
-            "spin_tokens": int(user.get("spin_tokens", 2)),
+            "spin_tokens": int(user.get("spin_tokens", 0)),
+            "plan_spin_rewards": {
+                "total_reward": float(user.get("plan_spin_reward_total", 0.0)),
+                "reward_pct": float(user.get("plan_spin_reward_pct", 1.0)),
+                "source_id": user.get("plan_spin_reward_source_id"),
+                "granted_at": user.get("plan_spin_reward_granted_at"),
+                "remaining_queue": len(user.get("spin_reward_queue", []) or []),
+            },
             "first_task_reward": {
                 "amount": float(user.get("first_task_reward_amount", 10.0)),
                 "claimed": bool(user.get("first_task_reward_claimed", False)),
@@ -580,80 +594,29 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
         await ws_manager.emit_user(sub["user_id"], "task_submission.reviewed", updated)
         return updated
 
-    def _next_checkin_state(current_reward: float, direction: int) -> tuple[float, int]:
-        direction = 1 if int(direction or 1) >= 0 else -1
-        current_reward = float(current_reward or DAILY_CHECKIN_MIN)
-        if current_reward >= DAILY_CHECKIN_MAX:
-            return DAILY_CHECKIN_MAX - DAILY_CHECKIN_STEP, -1
-        if current_reward <= DAILY_CHECKIN_MIN and direction < 0:
-            return DAILY_CHECKIN_MIN + DAILY_CHECKIN_STEP, 1
-        candidate = current_reward + (DAILY_CHECKIN_STEP * direction)
-        if candidate >= DAILY_CHECKIN_MAX:
-            return DAILY_CHECKIN_MAX, 1
-        if candidate <= DAILY_CHECKIN_MIN:
-            return DAILY_CHECKIN_MIN, -1
-        return candidate, direction
-
     @router.post("/rewards/checkin")
     async def daily_checkin(user: dict = Depends(get_current_user)):
-        today = now_utc().date()
-        last = user.get("last_checkin_at")
-        if last and datetime.fromisoformat(last).date() == today:
-            raise HTTPException(status_code=429, detail="Daily check-in already claimed")
-
-        current = int(user.get("current_streak", 0))
-        if last and datetime.fromisoformat(last).date() == today - timedelta(days=1):
-            current += 1
-        else:
-            current = 1
-
-        longest = max(int(user.get("longest_streak", 0)), current)
-        reward = float(user.get("daily_checkin_next_reward", DAILY_CHECKIN_MIN) or DAILY_CHECKIN_MIN)
-        direction = int(user.get("daily_checkin_direction", 1) or 1)
-        next_reward, next_direction = _next_checkin_state(reward, direction)
-
-        await db.users.update_one(
-            {"id": user["id"]},
-            {
-                "$set": {
-                    "current_streak": current,
-                    "longest_streak": longest,
-                    "last_checkin_at": now_utc().isoformat(),
-                    "daily_checkin_next_reward": next_reward,
-                    "daily_checkin_direction": next_direction,
-                }
-            },
+        raise HTTPException(
+            status_code=410,
+            detail="Daily check-in rewards are disabled. Rewards now come from deterministic plan spins and approved tasks.",
         )
-        await _grant_bonus({**user, "current_streak": current}, reward, "daily_checkin", f"Daily check-in reward day {current}")
-        await ws_manager.emit_user(user["id"], "reward.checkin", {"streak": current, "reward": reward, "next_reward": next_reward})
-        return {"ok": True, "streak": current, "longest_streak": longest, "reward": reward, "next_reward": next_reward, "direction": next_direction}
 
     @router.post("/rewards/spin")
     async def spin_wheel(user: dict = Depends(get_current_user)):
         tokens = int(user.get("spin_tokens", 0))
+        queue = user.get("spin_reward_queue", []) or []
         if tokens <= 0:
             raise HTTPException(status_code=429, detail="No spin tokens available")
+        if not queue:
+            raise HTTPException(status_code=409, detail="No deterministic spin rewards are queued for this account")
 
         spin_count = int(user.get("spin_count", 0))
-        queue = user.get("spin_reward_queue", []) or []
-        deterministic_defaults = [0.20, 19.00]
-
-        # Use the configured queue first. If older accounts have a spin token but
-        # no queue, fall back to the deterministic signup sequence instead of
-        # throwing an error while the UI still shows an available spin.
-        if queue:
-            raw_reward = queue[0]
-            update_ops = {
-                "$inc": {"spin_tokens": -1, "spin_count": 1},
-                "$pop": {"spin_reward_queue": -1},
-                "$set": {"last_spin_at": now_utc().isoformat()},
-            }
-        else:
-            raw_reward = deterministic_defaults[spin_count] if spin_count < len(deterministic_defaults) else 0.0
-            update_ops = {
-                "$inc": {"spin_tokens": -1, "spin_count": 1},
-                "$set": {"last_spin_at": now_utc().isoformat()},
-            }
+        raw_reward = queue[0]
+        update_ops = {
+            "$inc": {"spin_tokens": -1, "spin_count": 1},
+            "$pop": {"spin_reward_queue": -1},
+            "$set": {"last_spin_at": now_utc().isoformat()},
+        }
 
         try:
             reward = round(float(raw_reward), 2)
@@ -677,11 +640,12 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
     async def achievements(user: dict = Depends(get_current_user)):
         tasks_done = await db.task_submissions.count_documents({"user_id": user["id"], "status": "approved"})
         refs = await db.users.count_documents({"referred_by": user["id"]})
-        streak = int(user.get("longest_streak", 0))
+        spin_count = int(user.get("spin_count", 0))
+        plan_spin_goal = max(1, spin_count + int(user.get("spin_tokens", 0)))
         items = [
             {"id": "first_task", "title": "First Approved Task", "unlocked": tasks_done >= 1, "progress": min(tasks_done, 1), "goal": 1},
             {"id": "task_master_10", "title": "Approved Task Master", "unlocked": tasks_done >= 10, "progress": min(tasks_done, 10), "goal": 10},
-            {"id": "streak_7", "title": "7-Day Growth Streak", "unlocked": streak >= 7, "progress": min(streak, 7), "goal": 7},
+            {"id": "plan_spin_started", "title": "Plan Spin Started", "unlocked": spin_count >= 1, "progress": min(spin_count, plan_spin_goal), "goal": plan_spin_goal},
             {"id": "referral_3", "title": "Network Builder", "unlocked": refs >= 3, "progress": min(refs, 3), "goal": 3},
         ]
         await db.users.update_one({"id": user["id"]}, {"$set": {"achievement_count": sum(1 for i in items if i["unlocked"])}})

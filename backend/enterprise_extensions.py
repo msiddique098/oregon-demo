@@ -242,7 +242,7 @@ def build_enterprise_router(db, get_current_user, admin_required, record_tx, ws_
         progress = min(100, round((balance / min_withdrawal) * 100, 2)) if min_withdrawal > 0 else 100
         rules = await evaluate_withdrawal_rules(user)
         campaigns = await db.campaigns.find({"active": True}, {"_id": 0}).sort("created_at", -1).to_list(10)
-        activity_types = ["withdrawal_debit", "withdrawal_refund", "deposit_credit", "task_reward", "daily_checkin", "spin_reward", "first_task_reward", "bulk_bonus", "referral_commission"]
+        activity_types = ["withdrawal_debit", "withdrawal_refund", "deposit_credit", "task_reward", "spin_reward", "first_task_reward", "bulk_bonus", "referral_commission"]
         recent = await db.transactions.find({"user_id": user["id"], "type": {"$in": activity_types}}, {"_id": 0}).sort("created_at", -1).to_list(12)
         if len(recent) < 4:
             global_recent = await db.transactions.find({"type": {"$in": activity_types}}, {"_id": 0}).sort("created_at", -1).to_list(12)
