@@ -1,0 +1,27 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: >
+          railway up --detach
+          --project c2c7e14f-a57d-47c2-8a44-9024be25bea8
+          --environment f832a157-e0c2-48e4-af90-646ce930425e
+          --service b330fac1-1a18-46ca-a1f5-890896975dc4
+          --message "GitHub Actions deploy ${{ github.sha }}"
