@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Wallet, Crown, CheckSquare, Bell, ArrowUpRight } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
@@ -8,6 +8,7 @@ import CinematicLoader from "../components/CinematicLoader";
 import LiveFeed from "../components/LiveFeed";
 import { ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, AreaChart, Area } from "recharts";
 import { api } from "../lib/api";
+import { useRealtime } from "../lib/realtime";
 import EnterpriseWidgets, { StickyMobileCTA } from "../components/EnterpriseWidgets";
 
 const COIN_SYMBOLS = { USDT: "$", BTC: "₿", ETH: "Ξ", BNB: "BNB " };
@@ -21,10 +22,32 @@ function formatMoney(value, prefix = "") {
 
 export default function Dashboard() {
     const [data, setData] = useState(null);
+    const { lastEvent } = useRealtime();
 
-    useEffect(() => {
+    const load = useCallback(() => {
         api.get("/user/dashboard").then(r => setData(r.data)).catch(() => {});
     }, []);
+
+    useEffect(() => {
+        load();
+        const refreshVisible = () => {
+            if (!document.hidden) load();
+        };
+        window.addEventListener("focus", load);
+        document.addEventListener("visibilitychange", refreshVisible);
+        const timer = setInterval(load, 15000);
+        return () => {
+            window.removeEventListener("focus", load);
+            document.removeEventListener("visibilitychange", refreshVisible);
+            clearInterval(timer);
+        };
+    }, [load]);
+
+    useEffect(() => {
+        if (["balance.updated", "user.updated", "task.completed"].includes(lastEvent?.event)) {
+            load();
+        }
+    }, [lastEvent, load]);
 
     if (!data) return <DashboardLayout><CinematicLoader /></DashboardLayout>;
 

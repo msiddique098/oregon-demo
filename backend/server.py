@@ -492,6 +492,43 @@ def user_to_out(u: dict) -> dict:
         "created_at": u["created_at"] if isinstance(u["created_at"], str) else u["created_at"].isoformat(),
     }
 
+WALLET_BALANCE_TX_TYPES = {
+    "admin_credit",
+    "admin_debit",
+    "withdrawal_debit",
+    "withdrawal_refund",
+    "deposit_credit",
+    "deposit_bonus_30",
+    "bulk_bonus",
+    "referral_commission",
+    "task_reward",
+    "membership_bonus",
+    "daily_checkin",
+    "spin_reward",
+    "achievement_reward",
+    "first_task_reward",
+}
+
+
+async def reconcile_user_wallet_balance(user: dict) -> dict:
+    if not user or user.get("role") == "admin":
+        return user
+    latest = await db.transactions.find(
+        {"user_id": user["id"], "type": {"$in": list(WALLET_BALANCE_TX_TYPES)}},
+        {"_id": 0, "after_balance": 1},
+    ).sort("created_at", -1).to_list(1)
+    if not latest:
+        return user
+    try:
+        ledger_balance = round(float(latest[0].get("after_balance", user.get("balance", 0))), 8)
+        current_balance = round(float(user.get("balance", 0)), 8)
+    except (TypeError, ValueError):
+        return user
+    if ledger_balance != current_balance:
+        await db.users.update_one({"id": user["id"]}, {"$set": {"balance": ledger_balance}})
+        user = {**user, "balance": ledger_balance}
+    return user
+
 
 def _normalize_package_document(data: dict) -> dict:
     """Normalize package fields so every plan spin pool totals exactly 1%."""
@@ -744,6 +781,7 @@ async def logout(response: Response):
 
 @api.get("/auth/me", response_model=UserOut)
 async def me(user: dict = Depends(get_current_user)):
+    user = await reconcile_user_wallet_balance(user)
     return user_to_out(user)
 
 @api.post("/auth/forgot-password")
@@ -773,6 +811,7 @@ async def reset(body: ResetIn):
 # ---------------- User Endpoints ----------------
 @api.get("/user/dashboard")
 async def user_dashboard(user: dict = Depends(get_current_user)):
+    user = await reconcile_user_wallet_balance(user)
     notifications = await db.notifications.find({"user_id": {"$in": [user["id"], "all"]}}, {"_id": 0}).sort("created_at", -1).to_list(20)
     announcements = await db.announcements.find({}, {"_id": 0}).sort("created_at", -1).to_list(5)
     withdrawals = await db.withdrawals.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(20)
