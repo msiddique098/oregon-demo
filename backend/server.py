@@ -1006,8 +1006,11 @@ async def admin_list_users(admin: dict = Depends(admin_required), q: Optional[st
     query = {"role": {"$ne": "admin"}}
     if search:
         query["$and"] = [{"$or": [
+            {"id": {"$regex": search, "$options": "i"}},
             {"email": {"$regex": search, "$options": "i"}},
             {"name": {"$regex": search, "$options": "i"}},
+            {"referral_code": {"$regex": search, "$options": "i"}},
+            {"registration_code": {"$regex": search, "$options": "i"}},
         ]}]
 
     users = await db.users.find(query, {"_id": 0}).sort("created_at", -1).skip(safe_skip).to_list(safe_limit)
@@ -1025,7 +1028,7 @@ async def admin_list_users(admin: dict = Depends(admin_required), q: Optional[st
             existing_emails = {str(u.get("email", "")).lower() for u in users}
             if search:
                 needle = search.lower()
-                generated = [u for u in generated if needle in u.get("name", "").lower() or needle in u.get("email", "").lower()]
+                generated = [u for u in generated if needle in u.get("id", "").lower() or needle in u.get("name", "").lower() or needle in u.get("email", "").lower()]
             generated = [u for u in generated if u.get("id") not in existing_ids and str(u.get("email", "")).lower() not in existing_emails]
             users = (users + generated)[:safe_limit]
         except Exception as exc:

@@ -12,6 +12,13 @@ import EnterpriseWidgets, { StickyMobileCTA } from "../components/EnterpriseWidg
 
 const COIN_SYMBOLS = { USDT: "$", BTC: "₿", ETH: "Ξ", BNB: "BNB " };
 
+function formatMoney(value, prefix = "") {
+    return `${prefix}${Number(value || 0).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    })}`;
+}
+
 export default function Dashboard() {
     const [data, setData] = useState(null);
 
@@ -53,7 +60,7 @@ export default function Dashboard() {
                         <div>
                             <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Total Balance</p>
                             <p className="text-2xl sm:text-3xl font-display font-semibold gradient-text-gold">
-                                <AnimatedCounter value={u.balance} decimals={2} prefix={sym} />
+                                {formatMoney(u.balance, sym)}
                             </p>
                             <p className="text-xs text-zinc-400 mt-2">Display coin: {coin}</p>
                         </div>

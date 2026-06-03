@@ -1,6 +1,7 @@
 import uuid
 import random
 import asyncio
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Literal, Dict, Any
 
@@ -706,9 +707,58 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
     async def admin_tasks(admin: dict = Depends(admin_required)):
         return await db.tasks.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
 
+    async def _resolve_target_user_ids(values: Optional[List[str]]) -> Optional[List[str]]:
+        terms = [str(v).strip() for v in (values or []) if str(v).strip()]
+        if not terms:
+            return None
+
+        resolved: list[str] = []
+        missing: list[str] = []
+        for term in terms:
+            exact = await db.users.find_one(
+                {
+                    "role": {"$ne": "admin"},
+                    "$or": [
+                        {"id": term},
+                        {"email": term.lower()},
+                        {"referral_code": term.upper()},
+                        {"registration_code": term.upper()},
+                    ],
+                },
+                {"_id": 0, "id": 1},
+            )
+            if exact:
+                resolved.append(exact["id"])
+                continue
+
+            escaped = re.escape(term)
+            matches = await db.users.find(
+                {
+                    "role": {"$ne": "admin"},
+                    "$or": [
+                        {"id": {"$regex": escaped, "$options": "i"}},
+                        {"email": {"$regex": escaped, "$options": "i"}},
+                        {"name": {"$regex": escaped, "$options": "i"}},
+                    ],
+                },
+                {"_id": 0, "id": 1},
+            ).limit(20).to_list(20)
+            if len(matches) == 1:
+                resolved.append(matches[0]["id"])
+            elif len(matches) > 1:
+                raise HTTPException(status_code=400, detail=f"Target '{term}' matches multiple users. Use the exact user ID or email.")
+            else:
+                missing.append(term)
+
+        if missing:
+            raise HTTPException(status_code=400, detail=f"Target user not found: {', '.join(missing)}")
+        return list(dict.fromkeys(resolved))
+
     @router.post("/admin/tasks-v2")
     async def admin_create_task(body: TaskIn, admin: dict = Depends(admin_required)):
-        rec = {"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **body.model_dump()}
+        payload = body.model_dump()
+        payload["target_user_ids"] = await _resolve_target_user_ids(payload.get("target_user_ids"))
+        rec = {"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **payload}
         await db.tasks.insert_one(rec)
         await db.admin_logs.insert_one({"id": str(uuid.uuid4()), "admin_id": admin["id"], "action": "task.create", "target_id": rec["id"], "created_at": now_utc().isoformat()})
         await ws_manager.emit_all("task.created", rec)
@@ -716,7 +766,9 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
 
     @router.patch("/admin/tasks-v2/{task_id}")
     async def admin_update_task(task_id: str, body: TaskIn, admin: dict = Depends(admin_required)):
-        await db.tasks.update_one({"id": task_id}, {"$set": body.model_dump()})
+        payload = body.model_dump()
+        payload["target_user_ids"] = await _resolve_target_user_ids(payload.get("target_user_ids"))
+        await db.tasks.update_one({"id": task_id}, {"$set": payload})
         rec = await db.tasks.find_one({"id": task_id}, {"_id": 0})
         if not rec:
             raise HTTPException(status_code=404, detail="Task not found")

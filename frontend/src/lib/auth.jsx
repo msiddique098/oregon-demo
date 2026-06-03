@@ -17,9 +17,12 @@ export function AuthProvider({ children }) {
         try {
             const { data } = await api.get("/auth/me");
             setUser(data);
-        } catch {
-            localStorage.removeItem("eregon_token");
-            setUser(null);
+        } catch (err) {
+            const status = err?.response?.status;
+            if (status === 401 || status === 403) {
+                localStorage.removeItem("eregon_token");
+                setUser(null);
+            }
         } finally {
             setLoading(false);
         }
