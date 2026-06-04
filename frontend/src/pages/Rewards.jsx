@@ -116,16 +116,13 @@ export default function Rewards() {
     const targetPct = Math.min(100, Math.round((balance / Math.max(1, target)) * 100));
     const prizes = overview?.reward_wheel_prizes || FALLBACK_WHEEL;
     const planSpinTotal = Number(overview?.plan_spin_rewards?.total_reward || 0);
-    const planSpinPct = Number(overview?.plan_spin_rewards?.reward_pct || 1);
-    const remainingPlanSpins = Number(overview?.plan_spin_rewards?.remaining_queue || overview?.spin_tokens || 0);
 
     return <DashboardLayout>
         <ConfettiBurst active={burst} />
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4 sm:mb-8">
             <div>
-                <p className="text-xs uppercase tracking-widest text-amber-400/80">Deterministic plan rewards</p>
                 <h1 className="text-2xl sm:text-4xl font-display font-semibold mt-1">Reward Hub</h1>
-                <p className="text-xs sm:text-sm text-zinc-400 mt-2 max-w-2xl">Use plan spin tokens and approved YouTube tasks to grow your reward balance. Daily check-in rewards have been removed.</p>
+                <p className="text-sm sm:text-base text-zinc-400 mt-2">Use spin tokens and approved task rewards to grow your wallet.</p>
             </div>
             <Badge color="gold">{overview?.spin_tokens || 0} spin tokens</Badge>
         </div>
@@ -136,11 +133,9 @@ export default function Rewards() {
                     <div>
                         <p className="text-xs uppercase tracking-widest text-zinc-500">Plan Spin Pool</p>
                         <h2 className="text-xl sm:text-2xl font-display mt-2"><span className="block text-sm text-zinc-400 font-body mb-1">Total plan reward</span><span className="gradient-text-gold">${planSpinTotal.toFixed(2)}</span></h2>
-                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">Every active plan receives deterministic spin outcomes totaling {planSpinPct.toFixed(0)}% of the plan value. Rewards are credited only when you spin.</p>
                     </div>
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl gradient-gold flex items-center justify-center neon-gold"><Zap className="w-5 h-5 sm:w-6 sm:h-6 text-black" /></div>
                 </div>
-                <div className="mt-4 rounded-xl bg-black/35 border border-white/5 p-3 text-xs text-zinc-400">Remaining queued plan spins: <span className="text-amber-200 font-semibold">{remainingPlanSpins}</span></div>
             </Card>
 
             <Card>
@@ -166,7 +161,6 @@ export default function Rewards() {
                     <div>
                         <p className="text-xs uppercase tracking-widest text-zinc-500">Limited Deposit Boost</p>
                         <h2 className="text-xl sm:text-2xl font-display mt-2">Get <span className="gradient-text-gold">30% extra bonus</span></h2>
-                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">Approved deposits add to your balance and target progress. Plan rewards are now issued through deterministic spins totaling 1% of the plan value.</p>
                     </div>
                     <Zap className="w-8 h-8 text-amber-300" />
                 </div>
@@ -180,7 +174,7 @@ export default function Rewards() {
                     <div>
                         <p className="text-xs uppercase tracking-widest text-zinc-500">Lucky Event</p>
                         <h2 className="text-xl sm:text-2xl font-display mt-2">Reward Spin Wheel</h2>
-                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">Available spins: {overview?.spin_tokens || 0}. Plan spin outcomes are queued server-side and total 1% of the active plan value.</p>
+                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">Use your available spin tokens to unlock plan rewards.</p>
                     </div>
                     <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6 text-amber-300" />
                 </div>
@@ -190,14 +184,14 @@ export default function Rewards() {
 
             <div className="lg:col-span-2 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><h2 className="text-lg sm:text-xl font-display">Available Tasks</h2><Badge>{tasks.length} tasks</Badge></div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3 sm:gap-4">
                     <AnimatePresence>
-                        {tasks.map(task => <motion.div key={task.id} layout initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="glass-strong p-4 sm:p-5 group hover:border-amber-500/30 transition-all">
+                        {tasks.map(task => <motion.div key={task.id} layout initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="glass-strong p-4 sm:p-5 group hover:border-amber-500/30 transition-all h-fit">
                             <div className="flex items-start justify-between gap-3">
                                 <div><Badge color={task.type === "vip" ? "gold" : "purple"}>{task.type}</Badge><h3 className="font-display text-lg mt-3">{task.title}</h3></div>
                                 {task.status === "locked" ? <Lock className="w-5 h-5 text-zinc-500" /> : task.status === "cooldown" ? <Timer className="w-5 h-5 text-amber-300" /> : <CheckCircle2 className="w-5 h-5 text-emerald-300" />}
                             </div>
-                            <p className="text-sm text-zinc-400 mt-2 min-h-[42px]">{task.description || "Complete the task and submit screenshot proof in the Task Center."}</p>
+                            <p className="text-sm text-zinc-400 mt-2">{task.description || "Complete the task and submit screenshot proof in the Task Center."}</p>
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-4">
                                 <span className="text-2xl font-display gradient-text-gold">+{task.reward}</span>
                                 <button disabled={task.status !== "available"} onClick={() => complete(task)} className={`px-4 py-2 rounded-xl text-sm ${task.status === "available" ? "btn-gold" : "bg-white/5 text-zinc-500 border border-white/10"}`}>{task.status === "available" ? "submit proof" : task.status}</button>

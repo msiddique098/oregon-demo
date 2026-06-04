@@ -108,10 +108,10 @@ export default function Tasks() {
                 <StatCard label="Rejected" value={summary.rejected} accent="rose" icon={XCircle} />
             </div>
 
-            <div className="grid xl:grid-cols-3 gap-5">
-                <div className="xl:col-span-2 space-y-5">
+            <div className="grid 2xl:grid-cols-3 gap-5">
+                <div className="2xl:col-span-2 space-y-5">
                     {tasks.length === 0 ? <Card><p className="text-zinc-400">No YouTube tasks are available right now.</p></Card> : tasks.map(task => (
-                        <Card key={task.id}>
+                        <Card key={task.id} className="h-fit">
                             <div className="flex items-start justify-between gap-4 flex-wrap">
                                 <div>
                                     <div className="flex items-center gap-2 flex-wrap">{statusBadge(task.status)}<Badge color="purple">+{task.reward} USDT</Badge>{task.channel_name && <Badge color="zinc">{task.channel_name}</Badge>}</div>
@@ -152,7 +152,7 @@ export default function Tasks() {
                             <li>• Screenshot must clearly show the YouTube channel/video and completed action.</li>
                             <li>• Edited, duplicate, blurry, or unrelated screenshots can be rejected.</li>
                             <li>• Rewards are added to your wallet after admin approval only.</li>
-                            <li>• Rejected tasks may be resubmitted when the task becomes available.</li>
+                            <li>• Once you submit a task, that same task will no longer appear in your available list.</li>
                         </ul>
                     </Card>
                     <Card>

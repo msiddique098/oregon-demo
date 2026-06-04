@@ -2,6 +2,7 @@ import uuid
 import random
 import asyncio
 import re
+from urllib.parse import urlsplit, urlunsplit
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Literal, Dict, Any
 
@@ -100,6 +101,10 @@ class TaskIn(BaseModel):
     thumbnail: Optional[str] = None
     active: bool = True
     target_user_ids: Optional[List[str]] = None
+    # Admin may type user IDs, exact names, referral codes, or emails. Backend
+    # resolves these to target_user_ids before saving.
+    target_user_identifiers: Optional[List[str]] = None
+    target_user_labels: Optional[List[str]] = None
 
     # YouTube task platform fields
     youtube_url: Optional[str] = None
@@ -128,6 +133,12 @@ class TaskReviewIn(BaseModel):
     status: Literal["approved", "rejected"]
     rejection_reason: Optional[str] = None
     admin_note: Optional[str] = None
+
+
+class TaskUsersPatchIn(BaseModel):
+    add_users: Optional[List[str]] = None
+    remove_users: Optional[List[str]] = None
+    replace_users: Optional[List[str]] = None
 
 
 class VipLevelIn(BaseModel):
@@ -160,6 +171,25 @@ class JackpotIn(BaseModel):
     active: bool = True
 
 
+def normalize_task_link(value: Optional[str]) -> Optional[str]:
+    """Canonicalize task links so duplicate campaigns can be detected."""
+    raw = (value or "").strip()
+    if not raw:
+        return None
+    if not re.match(r"^https?://", raw, flags=re.I):
+        raw = f"https://{raw}"
+    try:
+        parsed = urlsplit(raw)
+        netloc = parsed.netloc.lower()
+        if netloc.startswith("www."):
+            netloc = netloc[4:]
+        path = (parsed.path or "").rstrip("/")
+        query = parsed.query or ""
+        return urlunsplit(("https", netloc, path, query, "")).rstrip("/").lower()
+    except Exception:
+        return raw.rstrip("/").lower()
+
+
 def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: str, JWT_ALGO: str):
     router = APIRouter()
     ws_manager = WebSocketManager()
@@ -189,6 +219,11 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
         )
         await db.tasks.create_index([("active", 1), ("type", 1), ("vip_level", 1)])
         await db.tasks.create_index([("youtube_url", 1)])
+        await db.tasks.create_index([("normalized_youtube_url", 1)])
+        async for task in db.tasks.find({"youtube_url": {"$nin": [None, ""]}, "normalized_youtube_url": {"$exists": False}}):
+            normalized_url = normalize_task_link(task.get("youtube_url"))
+            if normalized_url:
+                await db.tasks.update_one({"id": task["id"]}, {"$set": {"normalized_youtube_url": normalized_url}})
         await db.task_submissions.create_index([("user_id", 1), ("task_id", 1), ("created_at", -1)])
         await db.task_submissions.create_index([("status", 1), ("created_at", -1)])
         await db.task_completions.create_index([("user_id", 1), ("task_id", 1), ("created_at", -1)])
@@ -228,7 +263,7 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
                 {"title": "Invite a New Member", "description": "Share your referral code and grow your network.", "reward": 5, "type": "referral", "vip_level": None, "cooldown_hours": 48, "thumbnail": None, "active": True, "youtube_url": None, "channel_name": None, "instructions": "Invite a new member using your referral code.", "proof_required": False, "proof_tips": None},
             ]
             for d in defaults:
-                await db.tasks.insert_one({"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **d})
+                await db.tasks.insert_one({"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), "normalized_youtube_url": normalize_task_link(d.get("youtube_url")), **d})
 
         if await db.vip_levels.count_documents({}) == 0:
             levels = [
@@ -251,6 +286,82 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
     def _vip_rank(name: Optional[str]) -> int:
         order = {"Free": 0, "Basic": 0, "Silver": 1, "Gold": 2, "Platinum": 3, "Elite VIP": 4}
         return order.get(name or "Free", 0)
+
+    async def _labels_for_user_ids(user_ids: Optional[List[str]]) -> List[str]:
+        ids = [str(v).strip() for v in (user_ids or []) if str(v).strip()]
+        if not ids:
+            return []
+        users = await db.users.find({"id": {"$in": ids}, "role": "user"}, {"_id": 0, "id": 1, "name": 1, "email": 1}).to_list(500)
+        by_id = {u["id"]: u for u in users}
+        labels = []
+        for uid in ids:
+            u = by_id.get(uid)
+            labels.append(f"{u.get('name', 'User')} <{u.get('email', '')}>" if u else uid)
+        return labels
+
+    async def _resolve_task_user_identifiers(identifiers: Optional[List[str]]) -> tuple[List[str], List[str]]:
+        values = []
+        for raw in identifiers or []:
+            text = str(raw or "").strip()
+            if text and text not in values:
+                values.append(text)
+        if not values:
+            return [], []
+
+        found_ids: List[str] = []
+        labels: List[str] = []
+        unknown: List[str] = []
+        for value in values:
+            query = {
+                "role": "user",
+                "$or": [
+                    {"id": value},
+                    {"email": value.lower()},
+                    {"referral_code": value.upper()},
+                    {"name": {"$regex": f"^{re.escape(value)}$", "$options": "i"}},
+                ],
+            }
+            user_doc = await db.users.find_one(query, {"_id": 0, "id": 1, "name": 1, "email": 1})
+            if not user_doc:
+                unknown.append(value)
+                continue
+            if user_doc["id"] not in found_ids:
+                found_ids.append(user_doc["id"])
+                labels.append(f"{user_doc.get('name', 'User')} <{user_doc.get('email', '')}>")
+
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"User not found for: {', '.join(unknown)}")
+        return found_ids, labels
+
+    async def _task_payload_from_body(body: TaskIn) -> dict:
+        payload = body.model_dump()
+        identifiers = payload.pop("target_user_identifiers", None)
+        payload.pop("target_user_labels", None)
+        if identifiers is not None:
+            ids, labels = await _resolve_task_user_identifiers(identifiers)
+        else:
+            ids, labels = await _resolve_task_user_identifiers(payload.get("target_user_ids") or [])
+        payload["target_user_ids"] = ids
+        payload["target_user_labels"] = labels
+        payload["normalized_youtube_url"] = normalize_task_link(payload.get("youtube_url"))
+        return payload
+
+    async def _assert_no_duplicate_task_link(normalized_url: Optional[str], exclude_task_id: Optional[str] = None):
+        if not normalized_url:
+            return
+        q: dict = {"normalized_youtube_url": normalized_url}
+        if exclude_task_id:
+            q["id"] = {"$ne": exclude_task_id}
+        existing = await db.tasks.find_one(q, {"_id": 0})
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "message": "Task with this link already exists. You can add user to this task.",
+                    "existing_task_id": existing.get("id"),
+                    "existing_task": existing,
+                },
+            )
 
     async def _log_balance(user: dict, balance_type: str, amount: float, reason: str, ref: Optional[str] = None):
         await db.balance_logs.insert_one({
@@ -500,7 +611,7 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
         if type_filter:
             q["type"] = type_filter
         raw = await db.tasks.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
-        submitted = await db.task_submissions.distinct("task_id", {"user_id": user["id"], "status": {"$in": ["pending", "approved"]}})
+        submitted = await db.task_submissions.distinct("task_id", {"user_id": user["id"]})
         completed = await db.task_completions.distinct("task_id", {"user_id": user["id"]})
         hidden_task_ids = set(submitted) | set(completed)
         return [await _task_status_for_user(t, user) for t in raw if t.get("id") not in hidden_task_ids]
@@ -516,9 +627,9 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
             raise HTTPException(status_code=403, detail="VIP level required")
         if task.get("proof_required", True) and not proof:
             raise HTTPException(status_code=400, detail="Screenshot proof is required")
-        existing_pending = await db.task_submissions.find_one({"user_id": user["id"], "task_id": task_id, "status": "pending"})
-        if existing_pending:
-            raise HTTPException(status_code=409, detail="This task already has a pending proof review")
+        existing_submission = await db.task_submissions.find_one({"user_id": user["id"], "task_id": task_id}, {"_id": 0})
+        if existing_submission:
+            raise HTTPException(status_code=409, detail="You have already submitted this task")
         last = await db.task_completions.find_one({"user_id": user["id"], "task_id": task_id}, {"_id": 0}, sort=[("created_at", -1)])
         if last:
             next_at = datetime.fromisoformat(last["created_at"]) + timedelta(hours=int(task.get("cooldown_hours", 24)))
@@ -597,10 +708,8 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
 
     @router.post("/rewards/checkin")
     async def daily_checkin(user: dict = Depends(get_current_user)):
-        raise HTTPException(
-            status_code=410,
-            detail="Daily check-in rewards are disabled. Rewards now come from deterministic plan spins and approved tasks.",
-        )
+        # Backward-compatible no-op for older cached frontends. The active UI no longer displays check-in cards.
+        return {"ok": True, "disabled": True, "message": ""}
 
     @router.post("/rewards/spin")
     async def spin_wheel(user: dict = Depends(get_current_user)):
@@ -609,7 +718,7 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
         if tokens <= 0:
             raise HTTPException(status_code=429, detail="No spin tokens available")
         if not queue:
-            raise HTTPException(status_code=409, detail="No deterministic spin rewards are queued for this account")
+            raise HTTPException(status_code=409, detail="No spin rewards are queued for this account")
 
         spin_count = int(user.get("spin_count", 0))
         raw_reward = queue[0]
@@ -707,57 +816,10 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
     async def admin_tasks(admin: dict = Depends(admin_required)):
         return await db.tasks.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
 
-    async def _resolve_target_user_ids(values: Optional[List[str]]) -> Optional[List[str]]:
-        terms = [str(v).strip() for v in (values or []) if str(v).strip()]
-        if not terms:
-            return None
-
-        resolved: list[str] = []
-        missing: list[str] = []
-        for term in terms:
-            exact = await db.users.find_one(
-                {
-                    "role": {"$ne": "admin"},
-                    "$or": [
-                        {"id": term},
-                        {"email": term.lower()},
-                        {"referral_code": term.upper()},
-                        {"registration_code": term.upper()},
-                    ],
-                },
-                {"_id": 0, "id": 1},
-            )
-            if exact:
-                resolved.append(exact["id"])
-                continue
-
-            escaped = re.escape(term)
-            matches = await db.users.find(
-                {
-                    "role": {"$ne": "admin"},
-                    "$or": [
-                        {"id": {"$regex": escaped, "$options": "i"}},
-                        {"email": {"$regex": escaped, "$options": "i"}},
-                        {"name": {"$regex": escaped, "$options": "i"}},
-                    ],
-                },
-                {"_id": 0, "id": 1},
-            ).limit(20).to_list(20)
-            if len(matches) == 1:
-                resolved.append(matches[0]["id"])
-            elif len(matches) > 1:
-                raise HTTPException(status_code=400, detail=f"Target '{term}' matches multiple users. Use the exact user ID or email.")
-            else:
-                missing.append(term)
-
-        if missing:
-            raise HTTPException(status_code=400, detail=f"Target user not found: {', '.join(missing)}")
-        return list(dict.fromkeys(resolved))
-
     @router.post("/admin/tasks-v2")
     async def admin_create_task(body: TaskIn, admin: dict = Depends(admin_required)):
-        payload = body.model_dump()
-        payload["target_user_ids"] = await _resolve_target_user_ids(payload.get("target_user_ids"))
+        payload = await _task_payload_from_body(body)
+        await _assert_no_duplicate_task_link(payload.get("normalized_youtube_url"))
         rec = {"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **payload}
         await db.tasks.insert_one(rec)
         await db.admin_logs.insert_one({"id": str(uuid.uuid4()), "admin_id": admin["id"], "action": "task.create", "target_id": rec["id"], "created_at": now_utc().isoformat()})
@@ -766,21 +828,55 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
 
     @router.patch("/admin/tasks-v2/{task_id}")
     async def admin_update_task(task_id: str, body: TaskIn, admin: dict = Depends(admin_required)):
-        payload = body.model_dump()
-        payload["target_user_ids"] = await _resolve_target_user_ids(payload.get("target_user_ids"))
+        existing = await db.tasks.find_one({"id": task_id}, {"_id": 0})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Task not found")
+        payload = await _task_payload_from_body(body)
+        if payload.get("normalized_youtube_url") != existing.get("normalized_youtube_url"):
+            await _assert_no_duplicate_task_link(payload.get("normalized_youtube_url"), exclude_task_id=task_id)
+        payload["updated_at"] = now_utc().isoformat()
         await db.tasks.update_one({"id": task_id}, {"$set": payload})
         rec = await db.tasks.find_one({"id": task_id}, {"_id": 0})
-        if not rec:
-            raise HTTPException(status_code=404, detail="Task not found")
         await db.admin_logs.insert_one({"id": str(uuid.uuid4()), "admin_id": admin["id"], "action": "task.update", "target_id": task_id, "created_at": now_utc().isoformat()})
+        await ws_manager.emit_all("task.updated", rec)
+        return rec
+
+    @router.patch("/admin/tasks-v2/{task_id}/users")
+    async def admin_update_task_users(task_id: str, body: TaskUsersPatchIn, admin: dict = Depends(admin_required)):
+        task = await db.tasks.find_one({"id": task_id}, {"_id": 0})
+        if not task:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        current_ids = [uid for uid in (task.get("target_user_ids") or []) if uid]
+        if body.replace_users is not None:
+            new_ids, _ = await _resolve_task_user_identifiers(body.replace_users)
+        else:
+            add_ids, _ = await _resolve_task_user_identifiers(body.add_users or [])
+            remove_ids, _ = await _resolve_task_user_identifiers(body.remove_users or [])
+            new_ids = [uid for uid in current_ids if uid not in set(remove_ids)]
+            for uid in add_ids:
+                if uid not in new_ids:
+                    new_ids.append(uid)
+
+        labels = await _labels_for_user_ids(new_ids)
+        await db.tasks.update_one(
+            {"id": task_id},
+            {"$set": {"target_user_ids": new_ids, "target_user_labels": labels, "updated_at": now_utc().isoformat()}},
+        )
+        rec = await db.tasks.find_one({"id": task_id}, {"_id": 0})
+        await db.admin_logs.insert_one({"id": str(uuid.uuid4()), "admin_id": admin["id"], "action": "task.users.update", "target_id": task_id, "created_at": now_utc().isoformat()})
         await ws_manager.emit_all("task.updated", rec)
         return rec
 
     @router.delete("/admin/tasks-v2/{task_id}")
     async def admin_delete_task(task_id: str, admin: dict = Depends(admin_required)):
-        await db.tasks.update_one({"id": task_id}, {"$set": {"active": False}})
-        await ws_manager.emit_all("task.disabled", {"id": task_id})
-        return {"ok": True}
+        existing = await db.tasks.find_one({"id": task_id}, {"_id": 0})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Task not found")
+        await db.tasks.delete_one({"id": task_id})
+        await db.admin_logs.insert_one({"id": str(uuid.uuid4()), "admin_id": admin["id"], "action": "task.delete", "target_id": task_id, "created_at": now_utc().isoformat()})
+        await ws_manager.emit_all("task.deleted", {"id": task_id})
+        return {"ok": True, "deleted": True}
 
     @router.get("/admin/vip-levels")
     async def admin_vip_levels(admin: dict = Depends(admin_required)):

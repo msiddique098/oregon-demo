@@ -9,10 +9,11 @@ import uuid
 import logging
 import secrets
 import random
+import re
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
-from reward_math import normalize_plan_spin_fields
+from reward_math import normalize_plan_spin_fields, build_signup_spin_rewards, SIGNUP_SPIN_REWARD_TOTAL
 
 import bcrypt
 import jwt
@@ -96,7 +97,7 @@ def _build_live_feed_seed(total: int = 80) -> list[dict]:
         ("wallet", "Wallet workflow refreshed: approved rewards are reflected after review"),
         ("crown", "Membership plan workflow updated with current task and spin rules"),
         ("users", "Referral dashboard refreshed with eligible commission status"),
-        ("sparkles", "Plan spin rewards are issued through deterministic queued spins"),
+        ("sparkles", "Plan spin rewards are issued through queued spins"),
         ("diamond", "Withdrawal review queue updated for pending requests"),
         ("trending", "Campaign task list refreshed with new proof requirements"),
         ("check", "Completed task proofs move to balance only after approval"),
@@ -153,7 +154,7 @@ def gen_registration_code() -> str:
     return "EREGON-" + secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8].upper()
 
 # ---------------- Ledger ----------------
-# Transaction types: admin_credit, admin_debit, withdrawal_debit, withdrawal_refund,
+# Transaction types: admin_credit, admin_debit, admin_user_reward, registration_code_reward, withdrawal_debit, withdrawal_refund,
 # deposit_credit, referral_commission, task_reward, membership_bonus, bulk_bonus, spin_reward
 async def record_tx(user_id: str, type_: str, amount: float, coin: str,
                     before_balance: float, after_balance: float,
@@ -257,7 +258,7 @@ class UserOut(BaseModel):
     current_streak: int = 0
     longest_streak: int = 0
     last_checkin_at: Optional[str] = None
-    spin_tokens: int = 2
+    spin_tokens: int = 0
     last_spin_at: Optional[str] = None
     achievement_count: int = 0
 
@@ -480,7 +481,7 @@ def user_to_out(u: dict) -> dict:
         "current_streak": int(u.get("current_streak", 0)),
         "longest_streak": int(u.get("longest_streak", 0)),
         "last_checkin_at": u.get("last_checkin_at"),
-        "spin_tokens": int(u.get("spin_tokens", 2)),
+        "spin_tokens": int(u.get("spin_tokens", 0)),
         "last_spin_at": u.get("last_spin_at"),
         "achievement_count": int(u.get("achievement_count", 0)),
         "registration_code": u.get("registration_code"),
@@ -495,6 +496,8 @@ def user_to_out(u: dict) -> dict:
 WALLET_BALANCE_TX_TYPES = {
     "admin_credit",
     "admin_debit",
+    "admin_user_reward",
+    "registration_code_reward",
     "withdrawal_debit",
     "withdrawal_refund",
     "deposit_credit",
@@ -540,7 +543,7 @@ def _normalize_package_document(data: dict) -> dict:
     for perk in perks:
         text = str(perk)
         if "daily" in text.lower() and "reward" in text.lower():
-            text = "Deterministic plan spin rewards"
+            text = "Plan spin rewards"
         cleaned_perks.append(text)
     if cleaned_perks:
         payload["perks"] = cleaned_perks
@@ -560,7 +563,7 @@ async def _grant_plan_spin_rewards(user_id: str, package: dict, admin_id: Option
     package_doc = _normalize_package_document(package)
     queue = list(package_doc.get("spin_reward_queue") or [])
     if not queue:
-        return {"granted": False, "reason": "Plan has no deterministic spin rewards"}
+        return {"granted": False, "reason": "Plan has no spin rewards"}
 
     if user_doc.get("plan_spin_reward_source_id") == package_doc.get("id"):
         return {"granted": False, "reason": "Plan spin rewards already queued for this plan"}
@@ -585,7 +588,7 @@ async def _grant_plan_spin_rewards(user_id: str, package: dict, admin_id: Option
         "id": str(uuid.uuid4()),
         "user_id": user_id,
         "title": "Plan Spins Added",
-        "body": f"{len(queue)} deterministic spins were added for {package_doc.get('name', 'your plan')}. Total queued reward value is {package_doc.get('plan_spin_reward_total', round(sum(queue), 2)):g} USDT (1% of plan value).",
+        "body": f"{len(queue)} spin tokens were added for {package_doc.get('name', 'your plan')}. Use them in the Reward Hub to unlock your plan rewards.",
         "category": "rewards",
         "read": False,
         "created_at": now,
@@ -643,10 +646,11 @@ async def register(body: RegisterIn, response: Response):
         if ref:
             referred_by = ref["id"]
 
-    signup_reward = round(float(reg_code.get("reward_amount", 10.0)), 2)
     signup_reward_coin = reg_code.get("reward_coin", "USDT").upper()
+    signup_code_reward = round(max(0.0, float(reg_code.get("reward_amount", 0.0))), 2)
     created_at = now_utc().isoformat()
-    reward_claimed = signup_reward > 0
+    welcome_spin_queue = build_signup_spin_rewards()
+    welcome_spin_total = round(sum(welcome_spin_queue), 2)
 
     user = {
         "id": str(uuid.uuid4()),
@@ -659,64 +663,69 @@ async def register(body: RegisterIn, response: Response):
         "registration_code": registration_code,
         "registration_code_id": reg_code["id"],
         "coin_symbol": signup_reward_coin,
-        # Admin registration-code amount is credited immediately as the signup
-        # user's first task completion reward, so the balance shown after
-        # registration matches the amount configured by the admin.
-        "balance": signup_reward if reward_claimed else 0.0,
+        # Registration-code reward is credited immediately. The two welcome
+        # spins are additional deterministic rewards and still total 13.10 USDT.
+        "balance": signup_code_reward,
         "daily_profit": 0.0,
-        "total_earnings": signup_reward if reward_claimed else 0.0,
+        "total_earnings": 0.0,
         "referral_earnings": 0.0,
         "task_progress": 0.0,
-        "tasks_completed": 1 if reward_claimed else 0,
-        "tasks_pending": 5,
+        "tasks_completed": 0,
+        "tasks_pending": 0,
         "commission_rate": 5.0,
         "status": "active",
         "withdrawal_processing_hours": 24,
         "locked_balance": 0.0,
-        "bonus_balance": signup_reward if reward_claimed else 0.0,
+        "bonus_balance": signup_code_reward,
         "current_streak": 0,
         "longest_streak": 0,
         "last_checkin_at": None,
-        "spin_tokens": 0,
+        "spin_tokens": len(welcome_spin_queue),
         "spin_count": 0,
-        "spin_reward_queue": [],
+        "spin_reward_queue": welcome_spin_queue,
+        "signup_spin_reward_total": welcome_spin_total,
+        "signup_spin_reward_granted_at": created_at,
+        "signup_spin_reward_source_id": reg_code["id"],
         "last_spin_at": None,
         "achievement_count": 0,
         "membership_id": None,
         "membership_name": reg_code.get("plan_name", "Free"),
-        "first_task_reward_amount": signup_reward,
+        "first_task_reward_amount": 0.0,
         "first_task_reward_coin": signup_reward_coin,
-        "first_task_reward_claimed": reward_claimed,
-        "first_task_reward_claimed_at": created_at if reward_claimed else None,
+        "first_task_reward_claimed": True,
+        "first_task_reward_claimed_at": created_at,
         "created_at": created_at,
     }
     await db.users.insert_one(user)
 
-    if reward_claimed:
-        bonus = {
-            "id": str(uuid.uuid4()),
-            "user_id": user["id"],
-            "amount": signup_reward,
-            "source": "first_task_reward",
-            "note": f"First task completion reward from registration code {registration_code}",
-            "created_at": created_at,
-        }
-        await db.bonuses.insert_one(bonus)
+    if signup_code_reward > 0:
         await record_tx(
-            user["id"],
-            "first_task_reward",
-            signup_reward,
-            signup_reward_coin,
-            0.0,
-            signup_reward,
-            reference_id=bonus["id"],
-            note="First task completion reward credited at registration",
+            user_id=user["id"],
+            type_="registration_code_reward",
+            amount=signup_code_reward,
+            coin=signup_reward_coin,
+            before_balance=0.0,
+            after_balance=signup_code_reward,
+            admin_id=reg_code.get("created_by"),
+            reference_id=reg_code.get("id"),
+            note=reg_code.get("note") or f"Registration code reward for {registration_code}",
         )
         await db.notifications.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": user["id"],
-            "title": "First Task Reward Credited",
-            "body": f"You received {signup_reward:g} {signup_reward_coin} from your registration code.",
+            "title": "Signup Reward Credited",
+            "body": f"You received {signup_code_reward:g} {signup_reward_coin} from your registration code.",
+            "category": "rewards",
+            "read": False,
+            "created_at": created_at,
+        })
+
+    if welcome_spin_queue:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "title": "Welcome Spins Added",
+            "body": f"You received {len(welcome_spin_queue)} welcome spins from your registration code.",
             "category": "rewards",
             "read": False,
             "created_at": created_at,
@@ -1045,11 +1054,8 @@ async def admin_list_users(admin: dict = Depends(admin_required), q: Optional[st
     query = {"role": {"$ne": "admin"}}
     if search:
         query["$and"] = [{"$or": [
-            {"id": {"$regex": search, "$options": "i"}},
             {"email": {"$regex": search, "$options": "i"}},
             {"name": {"$regex": search, "$options": "i"}},
-            {"referral_code": {"$regex": search, "$options": "i"}},
-            {"registration_code": {"$regex": search, "$options": "i"}},
         ]}]
 
     users = await db.users.find(query, {"_id": 0}).sort("created_at", -1).skip(safe_skip).to_list(safe_limit)
@@ -1067,7 +1073,7 @@ async def admin_list_users(admin: dict = Depends(admin_required), q: Optional[st
             existing_emails = {str(u.get("email", "")).lower() for u in users}
             if search:
                 needle = search.lower()
-                generated = [u for u in generated if needle in u.get("id", "").lower() or needle in u.get("name", "").lower() or needle in u.get("email", "").lower()]
+                generated = [u for u in generated if needle in u.get("name", "").lower() or needle in u.get("email", "").lower()]
             generated = [u for u in generated if u.get("id") not in existing_ids and str(u.get("email", "")).lower() not in existing_emails]
             users = (users + generated)[:safe_limit]
         except Exception as exc:
@@ -1590,11 +1596,11 @@ async def seed():
     # Seed default packages
     if await db.packages.count_documents({}) == 0:
         defaults = [
-            {"name": "Basic", "tier": "Basic", "investment": 100, "daily_profit_pct": 0.0, "commission_boost_pct": 0, "task_boost_pct": 0, "duration_days": 30, "badge_color": "zinc", "perks": ["Deterministic plan spin rewards", "Standard support"], "priority_withdrawal_hours": 48, "spin_tokens": 2},
-            {"name": "Silver", "tier": "Silver", "investment": 500, "daily_profit_pct": 0.0, "commission_boost_pct": 5, "task_boost_pct": 10, "duration_days": 60, "badge_color": "slate", "perks": ["5 deterministic spins", "Priority support", "+5% referral commission"], "priority_withdrawal_hours": 36, "spin_tokens": 5},
-            {"name": "Gold", "tier": "Gold", "investment": 2000, "daily_profit_pct": 0.0, "commission_boost_pct": 10, "task_boost_pct": 25, "duration_days": 90, "badge_color": "amber", "perks": ["10 deterministic spins", "VIP support", "+10% referral commission", "Exclusive tasks"], "priority_withdrawal_hours": 24, "spin_tokens": 10},
-            {"name": "Platinum", "tier": "Platinum", "investment": 5000, "daily_profit_pct": 0.0, "commission_boost_pct": 15, "task_boost_pct": 50, "duration_days": 120, "badge_color": "purple", "perks": ["20 deterministic spins", "Dedicated manager", "+15% referral", "Priority withdrawals"], "priority_withdrawal_hours": 12, "spin_tokens": 20},
-            {"name": "Elite VIP", "tier": "Elite VIP", "investment": 15000, "daily_profit_pct": 0.0, "commission_boost_pct": 25, "task_boost_pct": 100, "duration_days": 180, "badge_color": "gold", "perks": ["30 deterministic spins", "Concierge support", "+25% referral", "Instant withdrawals", "Elite events access"], "priority_withdrawal_hours": 2, "spin_tokens": 30},
+            {"name": "Basic", "tier": "Basic", "investment": 100, "daily_profit_pct": 0.0, "commission_boost_pct": 0, "task_boost_pct": 0, "duration_days": 30, "badge_color": "zinc", "perks": ["Plan spin rewards", "Standard support"], "priority_withdrawal_hours": 48, "spin_tokens": 2},
+            {"name": "Silver", "tier": "Silver", "investment": 500, "daily_profit_pct": 0.0, "commission_boost_pct": 5, "task_boost_pct": 10, "duration_days": 60, "badge_color": "slate", "perks": ["5 plan spins", "Priority support", "+5% referral commission"], "priority_withdrawal_hours": 36, "spin_tokens": 5},
+            {"name": "Gold", "tier": "Gold", "investment": 2000, "daily_profit_pct": 0.0, "commission_boost_pct": 10, "task_boost_pct": 25, "duration_days": 90, "badge_color": "amber", "perks": ["10 plan spins", "VIP support", "+10% referral commission", "Exclusive tasks"], "priority_withdrawal_hours": 24, "spin_tokens": 10},
+            {"name": "Platinum", "tier": "Platinum", "investment": 5000, "daily_profit_pct": 0.0, "commission_boost_pct": 15, "task_boost_pct": 50, "duration_days": 120, "badge_color": "purple", "perks": ["20 plan spins", "Dedicated manager", "+15% referral", "Priority withdrawals"], "priority_withdrawal_hours": 12, "spin_tokens": 20},
+            {"name": "Elite VIP", "tier": "Elite VIP", "investment": 15000, "daily_profit_pct": 0.0, "commission_boost_pct": 25, "task_boost_pct": 100, "duration_days": 180, "badge_color": "gold", "perks": ["30 plan spins", "Concierge support", "+25% referral", "Instant withdrawals", "Elite events access"], "priority_withdrawal_hours": 2, "spin_tokens": 30},
         ]
         for d in defaults:
             await db.packages.insert_one(_normalize_package_document({"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **d}))
@@ -1619,7 +1625,7 @@ async def seed():
         await db.announcements.insert_one({
             "id": str(uuid.uuid4()),
             "title": "Welcome to Eregon Marketing",
-            "body": "Unlock VIP tiers, deterministic plan spins, and approved task rewards through a clean reward workflow.",
+            "body": "Unlock VIP tiers, plan spins, and approved task rewards through a clean reward workflow.",
             "pinned": True,
             "created_at": now_utc().isoformat(),
         })
@@ -1951,6 +1957,32 @@ class BulkCommissionIn(BaseModel):
     user_ids: Optional[List[str]] = None
     delta_percent: float  # add this to existing commission_rate
 
+class AdminUserRewardIn(BaseModel):
+    user_identifier: str = Field(min_length=1, max_length=160)
+    amount: float = Field(gt=0)
+    coin: str = "USDT"
+    message: str = Field(default="Manual reward from Eregon Admin", min_length=1, max_length=240)
+
+async def _resolve_single_user_identifier(identifier: str) -> dict:
+    value = str(identifier or "").strip()
+    if not value:
+        raise HTTPException(status_code=400, detail="User ID, email, name, or referral code is required")
+    q = {
+        "role": "user",
+        "$or": [
+            {"id": value},
+            {"email": value.lower()},
+            {"referral_code": value.upper()},
+            {"name": {"$regex": f"^{re.escape(value)}$", "$options": "i"}},
+        ],
+    }
+    matches = await db.users.find(q).to_list(5)
+    if not matches:
+        raise HTTPException(status_code=404, detail="User not found for the supplied ID, email, name, or referral code")
+    if len(matches) > 1:
+        raise HTTPException(status_code=400, detail="Multiple users match this name. Use email or user ID instead")
+    return matches[0]
+
 async def _resolve_users(target: str, tier: Optional[str], user_ids: Optional[List[str]]):
     q: dict = {"role": "user"}
     if target == "tier" and tier:
@@ -1986,6 +2018,49 @@ async def admin_bulk_commission(body: BulkCommissionIn, admin: dict = Depends(ad
         count += 1
     return {"ok": True, "affected": count}
 
+@api.post("/admin/user-rewards")
+async def admin_grant_user_reward(body: AdminUserRewardIn, admin: dict = Depends(admin_required)):
+    user_doc = await _resolve_single_user_identifier(body.user_identifier)
+    amount = round(float(body.amount), 2)
+    coin = (body.coin or user_doc.get("coin_symbol", "USDT")).upper()
+    note = body.message.strip()
+    before = float(user_doc.get("balance", 0))
+    after = round(before + amount, 2)
+    bonus_before = float(user_doc.get("bonus_balance", 0))
+    bonus_after = round(bonus_before + amount, 2)
+    reference_id = str(uuid.uuid4())
+    await db.users.update_one(
+        {"id": user_doc["id"]},
+        {"$set": {"balance": after, "bonus_balance": bonus_after, "coin_symbol": coin, "last_active": now_utc().isoformat()}},
+    )
+    tx = await record_tx(
+        user_id=user_doc["id"],
+        type_="admin_user_reward",
+        amount=amount,
+        coin=coin,
+        before_balance=before,
+        after_balance=after,
+        admin_id=admin["id"],
+        reference_id=reference_id,
+        note=note,
+    )
+    bonus = {"id": reference_id, "user_id": user_doc["id"], "amount": amount, "source": "admin_user_reward", "note": note, "created_at": now_utc().isoformat()}
+    await db.bonuses.insert_one(bonus)
+    notification = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_doc["id"],
+        "title": "Reward Credited",
+        "body": f"{amount:g} {coin} credited: {note}",
+        "category": "rewards",
+        "read": False,
+        "created_at": now_utc().isoformat(),
+    }
+    await db.notifications.insert_one(notification)
+    await _phase2_emit_user(user_doc["id"], "balance.updated", {"balance": after, "bonus_balance": bonus_after, "delta": amount, "source": "admin_user_reward", "note": note})
+    await _phase2_emit_user(user_doc["id"], "notification.created", notification)
+    await db.admin_logs.insert_one({"id": str(uuid.uuid4()), "admin_id": admin["id"], "action": "user.reward.credit", "target_id": user_doc["id"], "created_at": now_utc().isoformat()})
+    return {"ok": True, "user_id": user_doc["id"], "email": user_doc.get("email"), "before_balance": before, "after_balance": after, "transaction": tx}
+
 # ---------------- Notification helpers ----------------
 @api.get("/user/notifications/unread-count")
 async def unread_count(user: dict = Depends(get_current_user)):
@@ -1996,6 +2071,52 @@ async def unread_count(user: dict = Depends(get_current_user)):
 async def read_all(user: dict = Depends(get_current_user)):
     await db.notifications.update_many({"user_id": {"$in": [user["id"], "all"]}}, {"$set": {"read": True}})
     return {"ok": True}
+
+async def _migrate_registration_code_signup_rewards() -> None:
+    """Backfill admin-created registration code rewards for users created before this fix."""
+    async for user_doc in db.users.find({"role": "user", "registration_code_id": {"$exists": True, "$ne": None}}):
+        code_id = user_doc.get("registration_code_id")
+        already = await db.transactions.find_one({
+            "user_id": user_doc.get("id"),
+            "type": "registration_code_reward",
+            "reference_id": code_id,
+        })
+        if already:
+            continue
+        reg_code = await db.registration_codes.find_one({"id": code_id}, {"_id": 0})
+        if not reg_code:
+            continue
+        amount = round(max(0.0, float(reg_code.get("reward_amount", 0.0))), 2)
+        if amount <= 0:
+            continue
+        coin = (reg_code.get("reward_coin") or user_doc.get("coin_symbol") or "USDT").upper()
+        before = float(user_doc.get("balance", 0))
+        after = round(before + amount, 2)
+        bonus_after = round(float(user_doc.get("bonus_balance", 0)) + amount, 2)
+        await db.users.update_one(
+            {"id": user_doc["id"]},
+            {"$set": {"balance": after, "bonus_balance": bonus_after, "coin_symbol": coin, "registration_code_reward_migrated_at": now_utc().isoformat()}},
+        )
+        await record_tx(
+            user_id=user_doc["id"],
+            type_="registration_code_reward",
+            amount=amount,
+            coin=coin,
+            before_balance=before,
+            after_balance=after,
+            admin_id=reg_code.get("created_by"),
+            reference_id=code_id,
+            note=reg_code.get("note") or f"Registration code reward for {reg_code.get('code', user_doc.get('registration_code', 'invite code'))}",
+        )
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_doc["id"],
+            "title": "Signup Reward Credited",
+            "body": f"{amount:g} {coin} from your registration code has been added to your wallet.",
+            "category": "rewards",
+            "read": False,
+            "created_at": now_utc().isoformat(),
+        })
 
 app.include_router(api)
 
@@ -2020,6 +2141,7 @@ app.include_router(_phase2_router, prefix="/api")
 @app.on_event("startup")
 async def _phase2_start():
     await _seed_phase2()
+    await _migrate_registration_code_signup_rewards()
     logger.info("Eregon Marketing Phase 2 ready (tasks, deterministic plan spins, ws)")
 
 # ====================================================================

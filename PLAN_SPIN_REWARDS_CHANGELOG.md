@@ -23,3 +23,9 @@ Validation performed in this sandbox:
 Not completed in this sandbox:
 
 - Frontend production build was not generated because `frontend/node_modules` is not included in the uploaded zip. `npm run build` fails with `craco: not found` until dependencies are installed with `yarn install` or `npm install`.
+
+
+## Follow-up UI cleanup
+- Removed user-facing technical/deterministic reward wording from public/user pages.
+- Made Reward Hub task cards auto-fit so a small number of cards fills the available width instead of leaving a large blank area.
+- Reduced unnecessary task-card reserved height and made task cards fit their content.

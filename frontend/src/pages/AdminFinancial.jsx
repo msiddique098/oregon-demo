@@ -1,13 +1,14 @@
 import React, { useEffect, useState, useMemo } from "react";
 import AdminLayout from "../components/AdminLayout";
-import { Badge } from "../components/ui-eregon";
-import { API, api } from "../lib/api";
-import { Download, Filter, History, Search } from "lucide-react";
+import { Badge, Card } from "../components/ui-eregon";
+import { API, api, formatApiError } from "../lib/api";
+import { Download, Filter, Gift, History, Search } from "lucide-react";
+import { toast } from "sonner";
 
 const TYPE_OPTIONS = [
     "admin_credit", "admin_debit", "admin_adjust_daily_profit", "admin_adjust_total_earnings",
     "admin_adjust_referral", "withdrawal_debit", "withdrawal_refund", "deposit_credit",
-    "bulk_bonus", "referral_commission", "task_reward", "membership_bonus",
+    "bulk_bonus", "admin_user_reward", "registration_code_reward", "referral_commission", "task_reward", "membership_bonus",
     "spin_reward", "achievement_reward", "first_task_reward",
 ];
 
@@ -16,6 +17,8 @@ export function AdminFinancialLogs() {
     const [users, setUsers] = useState([]);
     const [f, setF] = useState({ user_id: "", type: "", coin: "", date_from: "", date_to: "" });
     const [search, setSearch] = useState("");
+    const [rewardForm, setRewardForm] = useState({ user_identifier: "", amount: "", coin: "USDT", message: "" });
+    const [rewardSaving, setRewardSaving] = useState(false);
 
     const load = () => {
         const params = {};
@@ -57,6 +60,23 @@ export function AdminFinancialLogs() {
         URL.revokeObjectURL(url);
     };
 
+    const grantUserReward = async (e) => {
+        e.preventDefault();
+        setRewardSaving(true);
+        try {
+            await api.post("/admin/user-rewards", {
+                user_identifier: rewardForm.user_identifier.trim(),
+                amount: Number(rewardForm.amount),
+                coin: rewardForm.coin || "USDT",
+                message: rewardForm.message.trim() || "Manual reward from Eregon Admin",
+            });
+            toast.success("Reward credited and ledger entry created");
+            setRewardForm({ user_identifier: "", amount: "", coin: "USDT", message: "" });
+            load();
+        } catch (err) { toast.error(formatApiError(err)); }
+        finally { setRewardSaving(false); }
+    };
+
     return (
         <AdminLayout>
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
@@ -66,6 +86,21 @@ export function AdminFinancialLogs() {
                 </div>
                 <button onClick={exportCsv} className="btn-gold" data-testid="export-csv-btn"><Download className="w-4 h-4" /> Export CSV</button>
             </div>
+
+            <Card className="mt-6 border-amber-500/20">
+                <form onSubmit={grantUserReward} className="grid lg:grid-cols-[1.2fr_.6fr_.5fr_1.4fr_auto] gap-3 items-end">
+                    <div>
+                        <p className="text-xs uppercase tracking-widest text-amber-400/80 mb-2">Manual user reward</p>
+                        <input className="input-eregon" placeholder="User ID, email, exact name, or referral code" value={rewardForm.user_identifier} onChange={e => setRewardForm({ ...rewardForm, user_identifier: e.target.value })} required />
+                    </div>
+                    <input className="input-eregon" type="number" min="0.01" step="0.01" placeholder="Amount" value={rewardForm.amount} onChange={e => setRewardForm({ ...rewardForm, amount: e.target.value })} required />
+                    <select className="input-eregon" value={rewardForm.coin} onChange={e => setRewardForm({ ...rewardForm, coin: e.target.value })}>
+                        <option>USDT</option><option>BTC</option><option>ETH</option><option>BNB</option>
+                    </select>
+                    <input className="input-eregon" placeholder="Message shown in user's ledger" value={rewardForm.message} onChange={e => setRewardForm({ ...rewardForm, message: e.target.value })} />
+                    <button disabled={rewardSaving} className={`btn-gold ${rewardSaving ? "opacity-60" : ""}`}><Gift className="w-4 h-4" /> {rewardSaving ? "Crediting..." : "Credit Reward"}</button>
+                </form>
+            </Card>
 
             <div className="glass-strong p-4 mt-6 flex flex-wrap items-center gap-2">
                 <Filter className="w-4 h-4 text-zinc-500 ml-2" />

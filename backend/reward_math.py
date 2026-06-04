@@ -14,6 +14,35 @@ PLAN_SPIN_REWARD_PCT = 1.0
 MAX_PLAN_SPINS = 100
 
 
+SIGNUP_SPIN_REWARD_TOTAL = 13.10
+SIGNUP_SPIN_REWARD_TOKENS = 2
+
+
+def build_signup_spin_rewards(total: float = SIGNUP_SPIN_REWARD_TOTAL, rng=None) -> list[float]:
+    """Build the two welcome spin outcomes for a registration/referral code.
+
+    The two visible spin outcomes differ per user, but the stored queue always
+    totals exactly 13.10 USDT. Rewards are only credited when the user spins.
+    """
+    if rng is None:
+        import random as _random
+        rng = _random
+
+    total_cents = int(round(float(total) * 100))
+    if total_cents <= 1:
+        return []
+
+    # Keep both rewards meaningful and non-zero, while allowing a different
+    # split for each registration.
+    min_cents = 100  # $1.00
+    max_first = max(min_cents, total_cents - min_cents)
+    first = int(rng.randint(min_cents, max_first))
+    second = total_cents - first
+    rewards = [round(first / 100, 2), round(second / 100, 2)]
+    rng.shuffle(rewards)
+    return rewards
+
+
 def _to_float(value: Any, default: float = 0.0) -> float:
     try:
         number = float(value)

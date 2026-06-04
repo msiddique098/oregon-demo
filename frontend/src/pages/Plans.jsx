@@ -18,7 +18,7 @@ export default function Plans() {
                 <div className="relative text-center max-w-3xl mx-auto mb-12">
                     <p className="text-xs uppercase tracking-widest text-amber-400/80 mb-3">Eregon Membership</p>
                     <h1 className="text-2xl sm:text-4xl md:text-6xl font-display font-semibold">Choose your <span className="gradient-text-gold">growth plan</span></h1>
-                    <p className="text-zinc-400 mt-4">Each plan shows exactly how many spin-wheel attempts it includes. Total spin rewards are deterministic and equal to 1% of the plan value.</p>
+                    <p className="text-zinc-400 mt-4">Choose a membership plan and unlock spin-wheel attempts, priority withdrawals, and referral perks.</p>
                 </div>
                 <div className="relative grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
                     {packages.map((p, idx) => {
@@ -32,7 +32,7 @@ export default function Plans() {
                                     <p className="text-xs uppercase tracking-widest text-zinc-500">{p.tier}</p>
                                 </div>
                                 <h3 className={`text-2xl sm:text-3xl font-display font-semibold ${isFeatured ? "gradient-text-gold" : "text-white"}`}>${p.investment}</h3>
-                                <p className="text-sm text-emerald-300 mt-1">{p.spin_tokens || 0} spins · ${Number(p.plan_spin_reward_total || Number(p.investment || 0) * 0.01).toFixed(2)} total rewards</p>
+                                <p className="text-sm text-emerald-300 mt-1">{p.spin_tokens || 0} included spins</p>
                                 <div className="my-4 h-px bg-white/5"></div>
                                 <ul className="space-y-2 text-sm text-zinc-300">
                                     {p.perks.map((perk, i) => (
@@ -40,7 +40,7 @@ export default function Plans() {
                                     ))}
                                     <li className="flex items-start gap-2"><Check className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" /> {p.duration_days} days duration</li>
                                     <li className="flex items-start gap-2"><Check className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" /> Withdrawal in {p.priority_withdrawal_hours}h</li>
-                                    <li className="flex items-start gap-2"><Check className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" /> {p.spin_tokens || 0} total spins worth 1% of plan value</li>
+                                    <li className="flex items-start gap-2"><Check className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" /> {p.spin_tokens || 0} included spin attempts</li>
                                 </ul>
                                 <Link to="/register" className={`${isFeatured ? "btn-gold" : "btn-eregon"} w-full mt-6 text-sm py-2.5`}>
                                     Join {p.tier}
