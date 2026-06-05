@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Mail, Lock, User, ArrowRight, TicketCheck, Crown } from "lucide-react";
+import { Mail, Lock, User, ArrowRight, TicketCheck, Crown, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import { formatApiError, api } from "../lib/api";
 
@@ -47,14 +47,41 @@ export function Register() {
     const [password, setPassword] = useState("");
     const [registrationCode, setRegistrationCode] = useState("");
     const [err, setErr] = useState("");
+    const [emailStatus, setEmailStatus] = useState("");
+    const [verifiedEmail, setVerifiedEmail] = useState("");
+    const [verifyingEmail, setVerifyingEmail] = useState(false);
     const [loading, setLoading] = useState(false);
     const { register } = useAuth();
     const nav = useNavigate();
+    const currentEmail = email.trim().toLowerCase();
+    const emailVerified = verifiedEmail && verifiedEmail === currentEmail;
+
+    const verifyEmail = async () => {
+        setErr("");
+        setEmailStatus("");
+        setVerifyingEmail(true);
+        try {
+            const { data } = await api.post("/auth/verify-email", { email: currentEmail });
+            setVerifiedEmail(String(data.email || currentEmail).toLowerCase());
+            setEmailStatus(data.message || "Email verified");
+            return true;
+        } catch (e) {
+            setVerifiedEmail("");
+            setErr(formatApiError(e));
+            return false;
+        } finally {
+            setVerifyingEmail(false);
+        }
+    };
 
     const submit = async (e) => {
         e.preventDefault();
         setErr(""); setLoading(true);
         try {
+            if (!emailVerified) {
+                const ok = await verifyEmail();
+                if (!ok) return;
+            }
             await register({
                 name,
                 email,
@@ -70,13 +97,20 @@ export function Register() {
         <AuthFrame title="Create your account" subtitle="Open your Eregon account in seconds">
             <form onSubmit={submit} className="space-y-4" data-testid="register-form">
                 <Field icon={User} placeholder="Full name" value={name} onChange={setName} testId="register-name" />
-                <Field icon={Mail} type="email" placeholder="Email" value={email} onChange={setEmail} testId="register-email" />
+                <Field icon={Mail} type="email" placeholder="Email" value={email} onChange={(v) => { setEmail(v); setVerifiedEmail(""); setEmailStatus(""); }} testId="register-email" />
+                <div className="flex items-center gap-2 -mt-2">
+                    <button type="button" onClick={verifyEmail} disabled={verifyingEmail || !currentEmail} className="btn-ghost py-2 px-3 text-xs" data-testid="register-verify-email">
+                        {verifyingEmail ? "Checking..." : emailVerified ? "Verified" : "Verify email"}
+                        {emailVerified && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-300" />}
+                    </button>
+                    {emailStatus && <p className="text-xs text-emerald-300">{emailStatus}</p>}
+                </div>
                 <Field icon={Lock} type="password" placeholder="Password (min 6 chars)" value={password} onChange={setPassword} testId="register-password" />
                 <Field icon={TicketCheck} placeholder="Registration code (required)" value={registrationCode} onChange={(v) => setRegistrationCode(v.toUpperCase())} testId="register-code" />
                 <p className="-mt-2 text-[11px] text-amber-300/80">Ask admin for your unique Eregon registration code. Your first-task reward is linked to this code.</p>
                 {err && <p className="text-sm text-rose-400" data-testid="register-error">{err}</p>}
-                <button type="submit" disabled={loading} className="btn-gold w-full" data-testid="register-submit">
-                    {loading ? "Creating..." : "Open Eregon Account"} <ArrowRight className="w-4 h-4" />
+                <button type="submit" disabled={loading || verifyingEmail} className="btn-gold w-full" data-testid="register-submit">
+                    {loading ? "Creating..." : emailVerified ? "Open Eregon Account" : "Verify & Open Account"} <ArrowRight className="w-4 h-4" />
                 </button>
                 <p className="text-xs text-zinc-500 pt-2 text-center">
                     Already a member? <Link to="/login" className="text-amber-300 hover:underline">Sign in</Link>

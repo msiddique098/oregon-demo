@@ -17,6 +17,7 @@ from reward_math import normalize_plan_spin_fields, build_signup_spin_rewards, S
 
 import bcrypt
 import jwt
+from email_validator import EmailNotValidError, validate_email
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -224,6 +225,9 @@ class LoginIn(BaseModel):
     password: str
 
 class ForgotIn(BaseModel):
+    email: EmailStr
+
+class VerifyEmailIn(BaseModel):
     email: EmailStr
 
 class ResetIn(BaseModel):
@@ -450,6 +454,37 @@ async def get_current_user(request: Request) -> dict:
         raise HTTPException(status_code=401, detail="User not found")
     return user
 
+DISALLOWED_SIGNUP_DOMAINS = {
+    "example.com",
+    "example.net",
+    "example.org",
+    "test.com",
+    "mailinator.com",
+    "tempmail.com",
+    "10minutemail.com",
+    "guerrillamail.com",
+    "yopmail.com",
+    "trashmail.com",
+    "dispostable.com",
+}
+
+
+async def verify_signup_email_address(email: str) -> str:
+    normalized = str(email or "").strip().lower()
+    if await db.users.find_one({"email": normalized}):
+        raise HTTPException(status_code=400, detail="Email already registered")
+
+    domain = normalized.rsplit("@", 1)[-1] if "@" in normalized else ""
+    if domain in DISALLOWED_SIGNUP_DOMAINS or domain.endswith((".test", ".invalid", ".localhost")):
+        raise HTTPException(status_code=400, detail="Use a real email address that can receive mail")
+
+    try:
+        result = validate_email(normalized, check_deliverability=True)
+    except EmailNotValidError as exc:
+        raise HTTPException(status_code=400, detail=f"Email cannot be verified: {exc}") from exc
+
+    return result.normalized.lower()
+
 async def admin_required(user: dict = Depends(get_current_user)) -> dict:
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -621,11 +656,14 @@ async def _migrate_packages_to_plan_spins() -> None:
         )
 
 # ---------------- Auth Routes ----------------
+@api.post("/auth/verify-email")
+async def verify_email(body: VerifyEmailIn):
+    email = await verify_signup_email_address(body.email)
+    return {"ok": True, "email": email, "message": "Email looks valid and can receive mail"}
+
 @api.post("/auth/register", response_model=AuthOut)
 async def register(body: RegisterIn, response: Response):
-    email = body.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
+    email = await verify_signup_email_address(body.email)
 
     registration_code = body.registration_code.strip().upper()
     reg_code = await db.registration_codes.find_one(

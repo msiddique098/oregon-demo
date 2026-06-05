@@ -45,7 +45,7 @@ class TestAuth:
         assert r.status_code == 401
 
     def test_register_and_logout(self):
-        email = f"test_{uuid.uuid4().hex[:8]}@eregon.test"
+        email = f"test_{uuid.uuid4().hex[:8]}@gmail.com"
         admin_login = requests.post(f"{API}/auth/login",
                                     json={"email": "admin@eregon.online", "password": "Admin@123"})
         assert admin_login.status_code == 200, admin_login.text
