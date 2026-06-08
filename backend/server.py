@@ -240,6 +240,7 @@ class UserOut(BaseModel):
     email: EmailStr
     name: str
     role: str
+    admin_role: Optional[str] = None
     referral_code: str
     referred_by: Optional[str] = None
     membership_id: Optional[str] = None
@@ -500,6 +501,7 @@ def user_to_out(u: dict) -> dict:
         "email": u["email"],
         "name": u["name"],
         "role": u["role"],
+        "admin_role": u.get("admin_role") if u.get("role") == "admin" else None,
         "referral_code": u.get("referral_code", ""),
         "referred_by": u.get("referred_by"),
         "membership_id": u.get("membership_id"),

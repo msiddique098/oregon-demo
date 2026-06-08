@@ -30,11 +30,12 @@ import { AdminGrowthEngine, AdminTasksV2, AdminTaskSubmissions, AdminVipLevels }
 import AdminRegistrationCodes from "@/pages/AdminRegistrationCodes";
 import AdminEnterprise from "@/pages/AdminEnterprise";
 
-function Protected({ children, role }) {
+function Protected({ children, role, adminRole }) {
     const { user, loading } = useAuth();
     if (loading) return <div className="min-h-screen bg-[#050505] text-white flex items-center justify-center">Loading Eregon wallet...</div>;
     if (!user) return <Navigate to="/login" replace />;
     if (role === "admin" && user.role !== "admin") return <Navigate to="/dashboard" replace />;
+    if (adminRole && user.admin_role !== adminRole) return <Navigate to="/admin" replace />;
     return children;
 }
 
@@ -69,7 +70,7 @@ function App() {
                     <Route path="/admin" element={<Protected role="admin"><AdminDashboard /></Protected>} />
                     <Route path="/admin/users" element={<Protected role="admin"><AdminUsers /></Protected>} />
                     <Route path="/admin/packages" element={<Protected role="admin"><AdminPackages /></Protected>} />
-                    <Route path="/admin/wallets" element={<Protected role="admin"><AdminWallets /></Protected>} />
+                    <Route path="/admin/wallets" element={<Protected role="admin" adminRole="super_admin"><AdminWallets /></Protected>} />
                     <Route path="/admin/withdrawals" element={<Protected role="admin"><AdminWithdrawals /></Protected>} />
                     <Route path="/admin/deposits" element={<Protected role="admin"><AdminDeposits /></Protected>} />
                     <Route path="/admin/announcements" element={<Protected role="admin"><AdminAnnouncements /></Protected>} />

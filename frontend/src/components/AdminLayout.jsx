@@ -43,14 +43,17 @@ const items = [
     { to: "/admin/feed", label: "Live Feed", icon: Radio },
     { to: "/admin/activity", label: "Activity", icon: Activity },
     { to: "/admin/packages", label: "Packages", icon: Package },
-    { to: "/admin/wallets", label: "Wallets", icon: Wallet },
+    { to: "/admin/wallets", label: "Wallets", icon: Wallet, superAdminOnly: true },
     { to: "/admin/announcements", label: "Announcements", icon: Megaphone },
 ];
 
 function AdminNavItems({ onNavigate }) {
+    const { user } = useAuth();
+    const visibleItems = items.filter(item => !item.superAdminOnly || user?.admin_role === "super_admin");
+
     return (
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto overscroll-contain">
-            {items.map(({ to, label, icon: Icon }) => (
+            {visibleItems.map(({ to, label, icon: Icon }) => (
                 <NavLink
                     key={to}
                     to={to}
