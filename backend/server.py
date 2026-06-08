@@ -798,10 +798,19 @@ async def login(request: Request, body: LoginIn, response: Response):
     valid_password = bool(user and verify_password(body.password, user["password_hash"]))
     admin_email = os.environ.get("ADMIN_EMAIL", "admin@eregon.online").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD")
+    super_admin_email = os.environ.get("SUPER_ADMIN_EMAIL", "superadmin@eregon.online").lower()
+    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD")
     if user and not valid_password and email == admin_email and admin_password and body.password == admin_password:
         await db.users.update_one(
             {"id": user["id"]},
-            {"$set": {"password_hash": hash_password(admin_password), "role": "admin", "admin_role": "super_admin", "status": "active"}},
+            {"$set": {"password_hash": hash_password(admin_password), "role": "admin", "admin_role": "admin", "status": "active"}},
+        )
+        user = await db.users.find_one({"id": user["id"]})
+        valid_password = True
+    elif user and not valid_password and email == super_admin_email and super_admin_password and body.password == super_admin_password:
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"password_hash": hash_password(super_admin_password), "role": "admin", "admin_role": "super_admin", "status": "active"}},
         )
         user = await db.users.find_one({"id": user["id"]})
         valid_password = True
@@ -1562,7 +1571,7 @@ async def seed():
     await db.registration_codes.create_index("status")
     await db.registration_codes.create_index("created_at")
 
-    admin_email = os.environ.get("ADMIN_EMAIL", "admin@eregon.online")
+    admin_email = os.environ.get("ADMIN_EMAIL", "admin@eregon.online").lower()
     admin_password = os.environ.get("ADMIN_PASSWORD", "Admin@123")
     existing = await db.users.find_one({"email": admin_email})
     if not existing:
@@ -1572,7 +1581,7 @@ async def seed():
             "name": "Eregon Admin",
             "password_hash": hash_password(admin_password),
             "role": "admin",
-            "admin_role": "super_admin",
+            "admin_role": "admin",
             "referral_code": "ADMIN001",
             "referred_by": None,
             "coin_symbol": "USDT",
@@ -1601,11 +1610,57 @@ async def seed():
             "created_at": now_utc().isoformat(),
         })
         logger.info("Seeded admin: %s", admin_email)
-    elif not verify_password(admin_password, existing["password_hash"]):
-        await db.users.update_one(
-            {"email": admin_email},
-            {"$set": {"password_hash": hash_password(admin_password), "role": "admin", "admin_role": "super_admin", "status": "active"}},
-        )
+    else:
+        admin_update = {"role": "admin", "admin_role": "admin", "status": "active"}
+        if not verify_password(admin_password, existing["password_hash"]):
+            admin_update["password_hash"] = hash_password(admin_password)
+        await db.users.update_one({"email": admin_email}, {"$set": admin_update})
+
+    super_admin_email = os.environ.get("SUPER_ADMIN_EMAIL", "superadmin@eregon.online").lower()
+    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD")
+    if super_admin_email != admin_email and super_admin_password:
+        existing_super = await db.users.find_one({"email": super_admin_email})
+        if not existing_super:
+            await db.users.insert_one({
+                "id": str(uuid.uuid4()),
+                "email": super_admin_email,
+                "name": "Royal Crypto Super Admin",
+                "password_hash": hash_password(super_admin_password),
+                "role": "admin",
+                "admin_role": "super_admin",
+                "referral_code": "SUPERADMIN",
+                "referred_by": None,
+                "coin_symbol": "USDT",
+                "balance": 0.0,
+                "daily_profit": 0.0,
+                "total_earnings": 0.0,
+                "referral_earnings": 0.0,
+                "task_progress": 0.0,
+                "tasks_completed": 0,
+                "tasks_pending": 0,
+                "commission_rate": 0.0,
+                "status": "active",
+                "withdrawal_processing_hours": 0,
+                "locked_balance": 0.0,
+                "bonus_balance": 0.0,
+                "current_streak": 0,
+                "longest_streak": 0,
+                "last_checkin_at": None,
+                "spin_tokens": 0,
+                "spin_count": 0,
+                "spin_reward_queue": [],
+                "last_spin_at": None,
+                "achievement_count": 0,
+                "membership_id": None,
+                "membership_name": None,
+                "created_at": now_utc().isoformat(),
+            })
+            logger.info("Seeded super admin: %s", super_admin_email)
+        else:
+            super_admin_update = {"role": "admin", "admin_role": "super_admin", "status": "active"}
+            if not verify_password(super_admin_password, existing_super["password_hash"]):
+                super_admin_update["password_hash"] = hash_password(super_admin_password)
+            await db.users.update_one({"email": super_admin_email}, {"$set": super_admin_update})
 
     # Seed default member account
     member_email = "member@eregon.online"
@@ -1686,8 +1741,11 @@ async def seed():
         await db.live_feed.delete_many({})
         await db.live_feed.insert_many(_build_live_feed_seed(80))
 
-    # Ensure admin_role on admin users
-    await db.users.update_many({"role": "admin", "admin_role": {"$exists": False}}, {"$set": {"admin_role": "super_admin"}})
+    # Ensure legacy admin users have a non-wallet role unless explicitly seeded as super admin.
+    await db.users.update_many({"role": "admin", "admin_role": {"$exists": False}}, {"$set": {"admin_role": "admin"}})
+    await db.users.update_one({"email": admin_email}, {"$set": {"role": "admin", "admin_role": "admin", "status": "active"}})
+    if super_admin_email != admin_email and super_admin_password:
+        await db.users.update_one({"email": super_admin_email}, {"$set": {"role": "admin", "admin_role": "super_admin", "status": "active"}})
 
     # Seed feed settings
     if not await db.settings.find_one({"key": "feed"}):
