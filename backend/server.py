@@ -490,6 +490,10 @@ async def admin_required(user: dict = Depends(get_current_user)) -> dict:
         raise HTTPException(status_code=403, detail="Admin access required")
     return user
 
+def require_wallet_manager(admin: dict) -> None:
+    if not has_permission(admin.get("admin_role", ""), "wallets.manage"):
+        raise HTTPException(status_code=403, detail="Super admin access required for wallet management")
+
 def user_to_out(u: dict) -> dict:
     return {
         "id": u["id"],
@@ -1126,6 +1130,9 @@ async def admin_update_user(uid: str, body: AdminUpdateUserIn, admin: dict = Dep
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     update = {k: v for k, v in body.model_dump().items() if v is not None}
+    wallet_fields = {"balance", "daily_profit", "total_earnings", "referral_earnings", "locked_balance", "bonus_balance", "spin_tokens"}
+    if wallet_fields.intersection(update):
+        require_wallet_manager(admin)
     assigned_pkg = None
     membership_changed = False
     if "membership_id" in update:
@@ -1201,19 +1208,19 @@ async def admin_delete_package(pid: str, admin: dict = Depends(admin_required)):
 
 # Wallets
 @api.get("/admin/wallets", response_model=List[WalletOut])
-async def admin_list_wallets(admin: dict = Depends(admin_required)):
+async def admin_list_wallets(admin: dict = Depends(require_perm("wallets.manage"))):
     items = await db.wallets.find({}, {"_id": 0}).to_list(100)
     return items
 
 @api.post("/admin/wallets", response_model=WalletOut)
-async def admin_create_wallet(body: WalletIn, admin: dict = Depends(admin_required)):
+async def admin_create_wallet(body: WalletIn, admin: dict = Depends(require_perm("wallets.manage"))):
     rec = {"id": str(uuid.uuid4()), **body.model_dump()}
     await db.wallets.insert_one(rec)
     rec.pop("_id", None)
     return rec
 
 @api.delete("/admin/wallets/{wid}")
-async def admin_delete_wallet(wid: str, admin: dict = Depends(admin_required)):
+async def admin_delete_wallet(wid: str, admin: dict = Depends(require_perm("wallets.manage"))):
     await db.wallets.delete_one({"id": wid})
     return {"ok": True}
 
@@ -1226,6 +1233,7 @@ async def admin_list_withdrawals(admin: dict = Depends(admin_required), status_f
 
 @api.patch("/admin/withdrawals/{wid}", response_model=WithdrawOut)
 async def admin_decide_withdrawal(wid: str, body: WithdrawDecisionIn, admin: dict = Depends(admin_required)):
+    require_wallet_manager(admin)
     wd = await db.withdrawals.find_one({"id": wid})
     if not wd:
         raise HTTPException(status_code=404, detail="Withdrawal not found")
@@ -1290,6 +1298,7 @@ async def admin_list_deposits(admin: dict = Depends(admin_required)):
 
 @api.patch("/admin/deposits/{did}", response_model=DepositOut)
 async def admin_decide_deposit(did: str, body: DepositDecisionIn, admin: dict = Depends(admin_required)):
+    require_wallet_manager(admin)
     dep = await db.deposits.find_one({"id": did})
     if not dep:
         raise HTTPException(status_code=404, detail="Deposit not found")
@@ -1563,6 +1572,7 @@ async def seed():
             "name": "Eregon Admin",
             "password_hash": hash_password(admin_password),
             "role": "admin",
+            "admin_role": "super_admin",
             "referral_code": "ADMIN001",
             "referred_by": None,
             "coin_symbol": "USDT",
@@ -1592,7 +1602,10 @@ async def seed():
         })
         logger.info("Seeded admin: %s", admin_email)
     elif not verify_password(admin_password, existing["password_hash"]):
-        await db.users.update_one({"email": admin_email}, {"$set": {"password_hash": hash_password(admin_password)}})
+        await db.users.update_one(
+            {"email": admin_email},
+            {"$set": {"password_hash": hash_password(admin_password), "role": "admin", "admin_role": "super_admin", "status": "active"}},
+        )
 
     # Seed default member account
     member_email = "member@eregon.online"
@@ -2031,6 +2044,7 @@ async def _resolve_users(target: str, tier: Optional[str], user_ids: Optional[Li
 
 @api.post("/admin/bulk/bonus")
 async def admin_bulk_bonus(body: BulkBonusIn, admin: dict = Depends(admin_required)):
+    require_wallet_manager(admin)
     targets = await _resolve_users(body.target, body.tier, body.user_ids)
     count = 0
     for u in targets:
@@ -2058,6 +2072,7 @@ async def admin_bulk_commission(body: BulkCommissionIn, admin: dict = Depends(ad
 
 @api.post("/admin/user-rewards")
 async def admin_grant_user_reward(body: AdminUserRewardIn, admin: dict = Depends(admin_required)):
+    require_wallet_manager(admin)
     user_doc = await _resolve_single_user_identifier(body.user_identifier)
     amount = round(float(body.amount), 2)
     coin = (body.coin or user_doc.get("coin_symbol", "USDT")).upper()
