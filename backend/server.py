@@ -498,6 +498,12 @@ def require_wallet_manager(admin: dict) -> None:
 def practice_users_enabled() -> bool:
     return os.environ.get("SEED_PRACTICE_USERS", "false").lower() in {"1", "true", "yes", "on"}
 
+REAL_USER_QUERY = {
+    "role": "user",
+    "practice_seed": {"$ne": True},
+    "email": {"$not": re.compile("(demo|test)", re.IGNORECASE)},
+}
+
 def user_to_out(u: dict) -> dict:
     return {
         "id": u["id"],
@@ -1053,15 +1059,15 @@ async def list_announcements_public():
 # ---------------- Admin Endpoints ----------------
 @api.get("/admin/stats")
 async def admin_stats(admin: dict = Depends(admin_required)):
-    total_users = await db.users.count_documents({"role": "user"})
-    active_users = await db.users.count_documents({"role": "user", "status": "active"})
+    total_users = await db.users.count_documents(REAL_USER_QUERY)
+    active_users = await db.users.count_documents({**REAL_USER_QUERY, "status": "active"})
     pending_wd = await db.withdrawals.count_documents({"status": "pending"})
     pending_dep = await db.deposits.count_documents({"status": "pending"})
     total_packages = await db.packages.count_documents({})
 
     # Sum balances
     agg = await db.users.aggregate([
-        {"$match": {"role": "user"}},
+        {"$match": REAL_USER_QUERY},
         {"$group": {"_id": None, "total": {"$sum": "$balance"}, "profit": {"$sum": "$daily_profit"}, "spin_tokens": {"$sum": "$spin_tokens"}}}
     ]).to_list(1)
     totals = agg[0] if agg else {"total": 0, "profit": 0, "spin_tokens": 0}
