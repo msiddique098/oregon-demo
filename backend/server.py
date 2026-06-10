@@ -495,6 +495,9 @@ def require_wallet_manager(admin: dict) -> None:
     if not has_permission(admin.get("admin_role", ""), "wallets.manage"):
         raise HTTPException(status_code=403, detail="Super admin access required for wallet management")
 
+def practice_users_enabled() -> bool:
+    return os.environ.get("SEED_PRACTICE_USERS", "false").lower() in {"1", "true", "yes", "on"}
+
 def user_to_out(u: dict) -> dict:
     return {
         "id": u["id"],
@@ -1096,9 +1099,9 @@ async def admin_list_users(admin: dict = Depends(admin_required), q: Optional[st
     safe_skip = max(0, skip)
     search = (q or "").strip()
 
-    if not search and safe_skip == 0:
+    if practice_users_enabled() and not search and safe_skip == 0:
         try:
-            await seed_practice_users(ignore_env=True)
+            await seed_practice_users()
         except Exception as exc:
             logger.warning("Practice user database seed skipped during admin list: %s", exc)
 
@@ -1116,7 +1119,7 @@ async def admin_list_users(admin: dict = Depends(admin_required), q: Optional[st
     # Fallback/top-up for admin testing view: when Mongo has no normal users yet
     # or seed insertion did not complete, merge deterministic practice records
     # into the same existing response. This does not add any new UI/pages/buttons.
-    if safe_skip == 0 and len(users) < safe_limit:
+    if practice_users_enabled() and safe_skip == 0 and len(users) < safe_limit:
         try:
             packages = await db.packages.find({}, {"_id": 0}).sort("investment", 1).to_list(20)
             target = int(os.environ.get("PRACTICE_USER_COUNT", "1500"))
@@ -1539,7 +1542,7 @@ def _build_practice_users(packages: list[dict], total: int = 1500) -> list[dict]
 
 
 async def seed_practice_users(target_override: Optional[int] = None, password_override: Optional[str] = None, ignore_env: bool = False):
-    if not ignore_env and os.environ.get("SEED_PRACTICE_USERS", "true").lower() not in {"1", "true", "yes", "on"}:
+    if not ignore_env and not practice_users_enabled():
         return {"ok": True, "inserted": 0, "existing_practice_users": await db.users.count_documents({"practice_seed": True}), "target": 0, "skipped": "SEED_PRACTICE_USERS is disabled"}
 
     target = int(target_override or os.environ.get("PRACTICE_USER_COUNT", "1500"))
