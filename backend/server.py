@@ -1771,10 +1771,20 @@ async def seed():
     await db.live_feed.create_index("created_at")
     await db.notifications.create_index("user_id")
 
+async def run_startup_task(name: str, task):
+    try:
+        await task()
+        return True
+    except Exception as exc:
+        logger.error("%s skipped during startup: %s", name, exc)
+        return False
+
 @app.on_event("startup")
 async def on_start():
-    await seed()
-    logger.info("Eregon Marketing API ready")
+    if await run_startup_task("Core database seed", seed):
+        logger.info("Eregon Marketing API ready")
+    else:
+        logger.warning("Eregon Marketing API started without database seed; MongoDB may be unavailable")
 
 @app.on_event("shutdown")
 async def on_shutdown():
@@ -2262,9 +2272,14 @@ app.include_router(_phase2_router, prefix="/api")
 
 @app.on_event("startup")
 async def _phase2_start():
-    await _seed_phase2()
-    await _migrate_registration_code_signup_rewards()
-    logger.info("Eregon Marketing Phase 2 ready (tasks, deterministic plan spins, ws)")
+    async def _phase2_tasks():
+        await _seed_phase2()
+        await _migrate_registration_code_signup_rewards()
+
+    if await run_startup_task("Phase 2 database seed", _phase2_tasks):
+        logger.info("Eregon Marketing Phase 2 ready (tasks, deterministic plan spins, ws)")
+    else:
+        logger.warning("Eregon Marketing Phase 2 started without database seed; MongoDB may be unavailable")
 
 # ====================================================================
 # ENTERPRISE SAFE GROWTH EXTENSIONS — transparent rules, real social proof,
@@ -2284,8 +2299,10 @@ app.include_router(_enterprise_router, prefix="/api")
 
 @app.on_event("startup")
 async def _enterprise_start():
-    await _seed_enterprise()
-    logger.info("Eregon Marketing Enterprise safe growth controls ready")
+    if await run_startup_task("Enterprise database seed", _seed_enterprise):
+        logger.info("Eregon Marketing Enterprise safe growth controls ready")
+    else:
+        logger.warning("Eregon Marketing Enterprise started without database seed; MongoDB may be unavailable")
 
 
 STATIC_DIR = ROOT_DIR / "static"
