@@ -8,6 +8,7 @@ import RealtimeStatus from "./RealtimeStatus";
 
 const items = [
     { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
+    { to: "/dashboard/active-plan", label: "Active Plan", icon: Crown },
     { to: "/dashboard/transactions", label: "Ledger", icon: History },
     { to: "/dashboard/tasks", label: "Tasks", icon: CheckSquare },
     { to: "/dashboard/rewards", label: "Rewards", icon: Gift },

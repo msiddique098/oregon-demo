@@ -20,6 +20,7 @@ import Transactions from "@/pages/Transactions";
 import Tickets from "@/pages/Tickets";
 import Rewards from "@/pages/Rewards";
 import Leaderboard from "@/pages/Leaderboard";
+import ActivePlan from "@/pages/ActivePlan";
 
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminUsers from "@/pages/AdminUsers";
@@ -57,6 +58,7 @@ function App() {
                     <Route path="/forgot" element={<Forgot />} />
 
                     <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
+                    <Route path="/dashboard/active-plan" element={<Protected><ActivePlan /></Protected>} />
                     <Route path="/dashboard/tasks" element={<Protected><Tasks /></Protected>} />
                     <Route path="/dashboard/deposit" element={<Protected><Deposit /></Protected>} />
                     <Route path="/dashboard/withdraw" element={<Protected><Withdraw /></Protected>} />
