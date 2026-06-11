@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import DashboardLayout from "../components/DashboardLayout";
 import { Badge } from "../components/ui-eregon";
 import WithdrawalTimeline from "../components/WithdrawalTimeline";
@@ -6,8 +7,10 @@ import { api, formatApiError } from "../lib/api";
 import { Copy, Check, Wallet as WalletIcon, UploadCloud, Eye } from "lucide-react";
 
 export function Deposit() {
+    const location = useLocation();
     const [wallets, setWallets] = useState([]);
     const [deposits, setDeposits] = useState([]);
+    const [packages, setPackages] = useState([]);
     const [selected, setSelected] = useState(null);
     const [copied, setCopied] = useState("");
     const [amount, setAmount] = useState("");
@@ -15,11 +18,22 @@ export function Deposit() {
     const [proof, setProof] = useState("");
     const [msg, setMsg] = useState("");
     const [err, setErr] = useState("");
+    const query = useMemo(() => new URLSearchParams(location.search), [location.search]);
+    const selectedPackage = useMemo(
+        () => packages.find((p) => p.id === query.get("package_id")) || null,
+        [packages, query]
+    );
 
     useEffect(() => {
         api.get("/user/wallets").then(r => { setWallets(r.data); if (r.data.length) setSelected(r.data[0]); });
         api.get("/user/deposits").then(r => setDeposits(r.data));
+        api.get("/user/packages").then(r => setPackages(r.data || [])).catch(() => setPackages([]));
     }, []);
+
+    useEffect(() => {
+        const requestedAmount = query.get("amount");
+        if (requestedAmount) setAmount(requestedAmount);
+    }, [location.search, query]);
 
     const copy = (text, id) => {
         navigator.clipboard.writeText(text);
@@ -39,8 +53,14 @@ export function Deposit() {
         e.preventDefault();
         setMsg(""); setErr("");
         try {
-            await api.post("/user/deposits", { amount: parseFloat(amount), coin: selected.coin, tx_hash: tx, proof_data_url: proof });
-            setMsg("Deposit submitted — pending Eregon approval.");
+            await api.post("/user/deposits", {
+                amount: parseFloat(amount),
+                coin: selected.coin,
+                tx_hash: tx,
+                proof_data_url: proof,
+                package_id: selectedPackage?.id || undefined,
+            });
+            setMsg(selectedPackage ? "Plan subscription submitted - pending Eregon approval." : "Deposit submitted - pending Eregon approval.");
             setAmount(""); setTx(""); setProof("");
             api.get("/user/deposits").then(r => setDeposits(r.data));
         } catch (e) { setErr(formatApiError(e)); }
@@ -88,6 +108,16 @@ export function Deposit() {
 
                 <form className="glass-strong p-6 space-y-4" onSubmit={submit} data-testid="deposit-form">
                     <h3 className="font-display text-lg">Submit deposit proof</h3>
+                    {selectedPackage && (
+                        <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
+                            <p className="text-xs uppercase tracking-widest text-amber-300">Plan subscription</p>
+                            <div className="mt-2 flex items-center justify-between gap-3">
+                                <span className="font-display text-lg">{selectedPackage.name}</span>
+                                <Badge color="gold">${Number(selectedPackage.investment || 0).toLocaleString()}</Badge>
+                            </div>
+                            <p className="text-xs text-zinc-400 mt-2">Your plan activates after an admin approves this deposit proof.</p>
+                        </div>
+                    )}
                     <input className="input-eregon" type="number" min="0" step="any" placeholder="Amount" value={amount} onChange={e => setAmount(e.target.value)} required data-testid="deposit-amount" />
                     <input className="input-eregon" placeholder="Transaction hash (optional)" value={tx} onChange={e => setTx(e.target.value)} />
                     <label className="block">
@@ -111,12 +141,13 @@ export function Deposit() {
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm min-w-[720px]">
-                            <thead><tr className="text-xs uppercase text-zinc-500"><th className="text-left py-2">Coin</th><th className="text-left">Amount</th><th className="text-left">Status</th><th className="text-left">Date</th></tr></thead>
+                            <thead><tr className="text-xs uppercase text-zinc-500"><th className="text-left py-2">Coin</th><th className="text-left">Amount</th><th className="text-left">Plan</th><th className="text-left">Status</th><th className="text-left">Date</th></tr></thead>
                             <tbody>
                                 {deposits.map(d => (
                                     <tr key={d.id} className="border-t border-white/5">
                                         <td className="py-3">{d.coin}</td>
                                         <td>{d.amount}</td>
+                                        <td className="text-zinc-400">{d.package_name || "—"}</td>
                                         <td><Badge color={d.status === "approved" ? "emerald" : d.status === "rejected" ? "rose" : "gold"}>{d.status}</Badge></td>
                                         <td className="text-zinc-400">{new Date(d.created_at).toLocaleString()}</td>
                                     </tr>

@@ -365,6 +365,7 @@ class DepositIn(BaseModel):
     coin: str
     tx_hash: Optional[str] = None
     proof_data_url: Optional[str] = None
+    package_id: Optional[str] = None
 
 class DepositOut(BaseModel):
     id: str
@@ -374,6 +375,8 @@ class DepositOut(BaseModel):
     coin: str
     tx_hash: Optional[str] = None
     proof_data_url: Optional[str] = None
+    package_id: Optional[str] = None
+    package_name: Optional[str] = None
     status: str
     created_at: str
 
@@ -1022,6 +1025,14 @@ async def user_deposits(user: dict = Depends(get_current_user)):
 async def submit_deposit(body: DepositIn, user: dict = Depends(get_current_user)):
     if body.amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
+    package = None
+    if body.package_id:
+        package = await db.packages.find_one({"id": body.package_id}, {"_id": 0})
+        if not package:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        required_amount = float(package.get("investment", 0))
+        if float(body.amount) < required_amount:
+            raise HTTPException(status_code=400, detail=f"Amount must cover the {package.get('name', 'selected')} plan")
     rec = {
         "id": str(uuid.uuid4()),
         "user_id": user["id"],
@@ -1030,6 +1041,8 @@ async def submit_deposit(body: DepositIn, user: dict = Depends(get_current_user)
         "coin": body.coin,
         "tx_hash": body.tx_hash,
         "proof_data_url": body.proof_data_url,
+        "package_id": package.get("id") if package else None,
+        "package_name": package.get("name") if package else None,
         "status": "pending",
         "created_at": now_utc().isoformat(),
     }
@@ -1367,7 +1380,18 @@ async def admin_decide_deposit(did: str, body: DepositDecisionIn, admin: dict = 
         if user_doc:
             before = float(user_doc.get("balance", 0))
             after = before + float(dep["amount"])
-            await db.users.update_one({"id": dep["user_id"]}, {"$set": {"balance": after}})
+            user_update = {"balance": after}
+            package = None
+            if dep.get("package_id"):
+                package = await db.packages.find_one({"id": dep["package_id"]}, {"_id": 0})
+                if package:
+                    user_update.update({
+                        "membership_id": package.get("id"),
+                        "membership_name": package.get("name"),
+                        "commission_rate": float(package.get("commission_boost_pct", user_doc.get("commission_rate", 0))),
+                        "withdrawal_processing_hours": int(package.get("priority_withdrawal_hours", user_doc.get("withdrawal_processing_hours", 48))),
+                    })
+            await db.users.update_one({"id": dep["user_id"]}, {"$set": user_update})
             await record_tx(
                 user_id=dep["user_id"], type_="deposit_credit",
                 amount=float(dep["amount"]), coin=dep["coin"],
@@ -1375,6 +1399,14 @@ async def admin_decide_deposit(did: str, body: DepositDecisionIn, admin: dict = 
                 admin_id=admin["id"], reference_id=dep["id"],
                 note=f"Deposit approved · tx {dep.get('tx_hash') or '—'}",
             )
+            if package:
+                await _grant_plan_spin_rewards(dep["user_id"], package, admin_id=admin["id"])
+                await create_notification(
+                    dep["user_id"],
+                    "Plan Subscription Approved",
+                    f"Your {package.get('name', 'membership')} plan is now active.",
+                    "plan",
+                )
     await db.deposits.update_one({"id": did}, {"$set": update})
     updated = await db.deposits.find_one({"id": did}, {"_id": 0})
     u = await db.users.find_one({"id": updated["user_id"]}, {"_id": 0, "email": 1})

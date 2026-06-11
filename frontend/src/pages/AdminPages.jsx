@@ -231,7 +231,7 @@ export function AdminDeposits() {
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[720px]">
                         <thead className="bg-black/40"><tr className="text-xs uppercase text-zinc-500">
-                            <th className="text-left px-5 py-3">User</th><th className="text-left">Amount</th><th className="text-left">Coin</th><th className="text-left">Tx</th><th className="text-left">Proof</th><th className="text-left">Spin Values</th><th className="text-left">Status</th><th></th>
+                            <th className="text-left px-5 py-3">User</th><th className="text-left">Amount</th><th className="text-left">Coin</th><th className="text-left">Plan</th><th className="text-left">Tx</th><th className="text-left">Proof</th><th className="text-left">Spin Values</th><th className="text-left">Status</th><th></th>
                         </tr></thead>
                         <tbody>
                             {items.map(d => (
@@ -239,6 +239,7 @@ export function AdminDeposits() {
                                     <td className="px-5 py-3">{d.user_email}</td>
                                     <td className="gradient-text-gold">{d.amount}</td>
                                     <td>{d.coin}</td>
+                                    <td>{d.package_name ? <Badge color="purple">{d.package_name}</Badge> : <span className="text-zinc-500">—</span>}</td>
                                     <td className="truncate max-w-[140px] text-zinc-400">{d.tx_hash || "—"}</td>
                                     <td>{d.proof_data_url ? <a href={d.proof_data_url} target="_blank" rel="noreferrer" className="text-purple-300 underline text-xs">view</a> : "—"}</td>
                                     <td className="min-w-[180px]">
@@ -255,7 +256,7 @@ export function AdminDeposits() {
                                     </td>
                                 </tr>
                             ))}
-                            {items.length === 0 && <tr><td colSpan={8} className="text-center py-10 text-zinc-500">No deposits.</td></tr>}
+                            {items.length === 0 && <tr><td colSpan={9} className="text-center py-10 text-zinc-500">No deposits.</td></tr>}
                         </tbody>
                     </table>
                 </div>

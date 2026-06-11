@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { ArrowDownToLine, Check, Crown, Gift, ShieldCheck, Zap } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import CinematicLoader from "../components/CinematicLoader";
@@ -13,6 +14,7 @@ function money(value) {
 }
 
 export default function ActivePlan() {
+    const navigate = useNavigate();
     const [dashboard, setDashboard] = useState(null);
     const [packages, setPackages] = useState([]);
 
@@ -28,6 +30,13 @@ export default function ActivePlan() {
         [packages]
     );
     const activeInvestment = Number(activePlan?.investment || 0);
+    const subscribe = (plan) => {
+        const params = new URLSearchParams({
+            package_id: plan.id,
+            amount: String(plan.investment || 0),
+        });
+        navigate(`/dashboard/deposit?${params.toString()}`);
+    };
 
     if (!dashboard || !user) {
         return (
@@ -135,6 +144,14 @@ export default function ActivePlan() {
                                 <div className="mt-5 text-xs text-zinc-500">
                                     {isCurrent ? "Currently assigned" : isLower ? "Previous tier" : "Available upgrade"}
                                 </div>
+                                <button
+                                    type="button"
+                                    onClick={() => subscribe(plan)}
+                                    disabled={isCurrent}
+                                    className={`mt-4 w-full ${isCurrent ? "btn-ghost opacity-60 cursor-not-allowed" : "btn-eregon"}`}
+                                >
+                                    {isCurrent ? "Active" : isLower ? "Subscribe Again" : "Subscribe"}
+                                </button>
                             </div>
                         );
                     })}
