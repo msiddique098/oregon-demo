@@ -504,6 +504,15 @@ REAL_USER_QUERY = {
     "email": {"$not": re.compile("(demo|test)", re.IGNORECASE)},
 }
 
+def admin_stats_user_query() -> dict:
+    query = {
+        "role": "user",
+        "email": {"$not": re.compile("(demo|test)", re.IGNORECASE)},
+    }
+    if os.environ.get("INCLUDE_PRACTICE_USERS_IN_STATS", "false").lower() not in {"1", "true", "yes", "on"}:
+        query["practice_seed"] = {"$ne": True}
+    return query
+
 def user_to_out(u: dict) -> dict:
     return {
         "id": u["id"],
@@ -1059,15 +1068,16 @@ async def list_announcements_public():
 # ---------------- Admin Endpoints ----------------
 @api.get("/admin/stats")
 async def admin_stats(admin: dict = Depends(admin_required)):
-    total_users = await db.users.count_documents(REAL_USER_QUERY)
-    active_users = await db.users.count_documents({**REAL_USER_QUERY, "status": "active"})
+    stats_user_query = admin_stats_user_query()
+    total_users = await db.users.count_documents(stats_user_query)
+    active_users = await db.users.count_documents({**stats_user_query, "status": "active"})
     pending_wd = await db.withdrawals.count_documents({"status": "pending"})
     pending_dep = await db.deposits.count_documents({"status": "pending"})
     total_packages = await db.packages.count_documents({})
 
     # Sum balances
     agg = await db.users.aggregate([
-        {"$match": REAL_USER_QUERY},
+        {"$match": stats_user_query},
         {"$group": {"_id": None, "total": {"$sum": "$balance"}, "profit": {"$sum": "$daily_profit"}, "spin_tokens": {"$sum": "$spin_tokens"}}}
     ]).to_list(1)
     totals = agg[0] if agg else {"total": 0, "profit": 0, "spin_tokens": 0}
