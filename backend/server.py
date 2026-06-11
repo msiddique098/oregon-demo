@@ -1180,62 +1180,6 @@ async def admin_list_users(admin: dict = Depends(admin_required),
     return [user_to_out(u) for u in users]
 
 
-@api.get("/admin/debug/database-map")
-async def admin_database_map(admin: dict = Depends(admin_required)):
-    if admin.get("admin_role") != "super_admin":
-        raise HTTPException(status_code=403, detail="Super admin access required")
-
-    safe_sample_fields = {
-        "id": 1,
-        "email": 1,
-        "name": 1,
-        "role": 1,
-        "admin_role": 1,
-        "status": 1,
-        "balance": 1,
-        "created_at": 1,
-        "last_active": 1,
-        "practice_seed": 1,
-        "source": 1,
-        "_id": 0,
-    }
-    user_collection_names = {"users", "user", "customers", "customer", "accounts", "members"}
-    databases = []
-
-    for database_name in await client.list_database_names():
-        if database_name in {"admin", "config", "local"}:
-            continue
-
-        inspected_db = client[database_name]
-        collections = []
-        for collection_name in await inspected_db.list_collection_names():
-            collection = inspected_db[collection_name]
-            try:
-                count = await collection.count_documents({})
-            except Exception as exc:
-                collections.append({
-                    "name": collection_name,
-                    "error": str(exc),
-                })
-                continue
-
-            collection_info = {
-                "name": collection_name,
-                "count": count,
-            }
-            if collection_name.lower() in user_collection_names or count >= 100:
-                samples = await collection.find({}, safe_sample_fields).sort("$natural", -1).limit(5).to_list(5)
-                collection_info["sample"] = samples
-            collections.append(collection_info)
-
-        databases.append({
-            "name": database_name,
-            "collections": collections,
-        })
-
-    return {"configured_db": os.environ["DB_NAME"], "databases": databases}
-
-
 @api.patch("/admin/users/{uid}", response_model=UserOut)
 async def admin_update_user(uid: str, body: AdminUpdateUserIn, admin: dict = Depends(admin_required)):
     user = await db.users.find_one({"id": uid})
