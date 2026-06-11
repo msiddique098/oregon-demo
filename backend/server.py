@@ -238,7 +238,7 @@ class ResetIn(BaseModel):
 class UserOut(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
-    email: EmailStr
+    email: str
     name: str
     role: str
     admin_role: Optional[str] = None
@@ -1137,7 +1137,10 @@ async def admin_list_users(admin: dict = Depends(admin_required),
 
     # Do not hide existing records if older rows have role missing or a non-user
     # member role. Only admin accounts are excluded from this management table.
-    query: dict = {"role": {"$ne": "admin"}}
+    query: dict = {
+        "role": {"$ne": "admin"},
+        "email": {"$not": re.compile("(demo|test)", re.IGNORECASE)},
+    }
     if search:
         query["$and"] = [{"$or": [
             {"email": {"$regex": search, "$options": "i"}},
