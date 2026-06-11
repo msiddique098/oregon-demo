@@ -2,90 +2,65 @@ import React, { useEffect, useState, useCallback } from "react";
 import AdminLayout from "../components/AdminLayout";
 import { Badge } from "../components/ui-eregon";
 import { api, formatApiError } from "../lib/api";
-import { Search, Edit3, Trash2, X, Save } from "lucide-react";
+import { Search, Edit3, Trash2, X, Save, RefreshCw } from "lucide-react";
 
-const FIRST_NAMES = ["James","Mary","Robert","Patricia","John","Jennifer","Michael","Linda","David","Elizabeth","William","Barbara","Richard","Susan","Joseph","Jessica","Thomas","Sarah","Christopher","Karen","Charles","Nancy","Daniel","Lisa","Matthew","Betty","Anthony","Margaret","Mark","Sandra","Donald","Ashley","Steven","Kimberly","Paul","Emily","Andrew","Donna","Joshua","Michelle"];
-const LAST_NAMES = ["Smith","Johnson","Williams","Brown","Jones","Garcia","Miller","Davis","Rodriguez","Martinez","Hernandez","Lopez","Gonzalez","Wilson","Anderson","Thomas","Taylor","Moore","Jackson","Martin","Lee","Perez","Thompson","White","Harris","Sanchez","Clark","Ramirez","Lewis","Robinson","Walker","Young","Allen","King","Wright","Scott","Torres","Nguyen","Hill","Flores"];
-const MEMBERSHIPS = ["Basic", "Silver", "Gold", "Platinum", "Elite VIP"];
+const initialFilters = {
+    min_balance: "",
+    max_balance: "",
+    signup_from: "",
+    signup_to: "",
+    activity_from: "",
+    activity_to: "",
+    sort_by: "created_at",
+    sort_dir: "desc",
+};
 
-function seededNumber(seed) {
-    let x = Math.sin(seed) * 10000;
-    return x - Math.floor(x);
+function dateParam(value, endOfDay = false) {
+    if (!value) return undefined;
+    return `${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`;
 }
 
-function buildLocalUsers(total = 1500) {
-    const now = Date.now();
-    return Array.from({ length: total }, (_, i) => {
-        const first = FIRST_NAMES[i % FIRST_NAMES.length];
-        const last = LAST_NAMES[(i * 7 + Math.floor(i / FIRST_NAMES.length)) % LAST_NAMES.length];
-        const highBalance = i < Math.floor(total * 0.03);
-        const balance = highBalance
-            ? 25000 + seededNumber(i + 22) * 25000
-            : 2400 + seededNumber(i + 11) * 2600;
-        const tasksCompleted = 8 + Math.floor(seededNumber(i + 30) * 170);
-        const tasksPending = Math.floor(seededNumber(i + 31) * 8);
-        return {
-            id: `rm-local-${i + 1001}`,
-            name: `${first} ${last}`,
-            email: `${first}.${last}.${i + 1001}`.toLowerCase() + "@eregon.test",
-            role: "user",
-            coin_symbol: "USDT",
-            balance: Number(balance.toFixed(2)),
-            daily_profit: Number((balance * (0.003 + seededNumber(i + 12) * 0.009)).toFixed(2)),
-            total_earnings: Number((balance * (1.08 + seededNumber(i + 13) * 0.35)).toFixed(2)),
-            referral_earnings: Number((balance * (0.06 + seededNumber(i + 14) * 0.16)).toFixed(2)),
-            task_progress: Number((5 + seededNumber(i + 15) * 93).toFixed(1)),
-            tasks_completed: tasksCompleted,
-            tasks_pending: tasksPending,
-            commission_rate: [5, 7.5, 10, 12, 15, 18, 20][Math.floor(seededNumber(i + 16) * 7)],
-            status: seededNumber(i + 17) > 0.98 ? "suspended" : "active",
-            membership_id: null,
-            membership_name: MEMBERSHIPS[Math.floor(seededNumber(i + 18) * MEMBERSHIPS.length)],
-            withdrawal_processing_hours: [2, 12, 24, 36, 48][Math.floor(seededNumber(i + 19) * 5)],
-            locked_balance: 0,
-            bonus_balance: Number((balance * (0.015 + seededNumber(i + 20) * 0.06)).toFixed(2)),
-            spin_tokens: 2,
-            last_spin_at: null,
-            achievement_count: Math.floor(seededNumber(i + 21) * 12),
-            created_at: new Date(now - (14 + Math.floor(seededNumber(i + 23) * 540)) * 86400000).toISOString(),
-        };
-    });
+function formatDate(value) {
+    if (!value) return "Never";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "Never";
+    return date.toLocaleString();
 }
 
 export default function AdminUsers() {
-    const [users, setUsers] = useState(() => buildLocalUsers(1500));
+    const [users, setUsers] = useState([]);
     const [packages, setPackages] = useState([]);
     const [q, setQ] = useState("");
+    const [filters, setFilters] = useState(initialFilters);
+    const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(null);
     const [form, setForm] = useState({});
     const [err, setErr] = useState("");
 
     const load = useCallback(async () => {
-        const fallback = buildLocalUsers(1500);
-        const needle = q.trim().toLowerCase();
-        const fallbackList = needle ? fallback.filter(u => u.name.toLowerCase().includes(needle) || u.email.toLowerCase().includes(needle) || String(u.id || "").toLowerCase().includes(needle)) : fallback;
-
-        // Show normal seeded users immediately inside the existing table.
-        // Then replace/merge with backend users if the API responds.
-        setUsers(fallbackList);
-
+        setLoading(true);
+        setErr("");
         try {
-            const { data } = await api.get("/admin/users", { params: q ? { q, limit: 2000 } : { limit: 2000 } });
-            const apiUsers = Array.isArray(data) ? data : [];
-            if (apiUsers.length > 0) {
-                const seen = new Set(apiUsers.map(u => String(u.email || u.id || "").toLowerCase()));
-                const merged = [...apiUsers];
-                for (const u of fallbackList) {
-                    const key = String(u.email || u.id || "").toLowerCase();
-                    if (!seen.has(key)) merged.push(u);
-                    if (merged.length >= 2000) break;
-                }
-                setUsers(merged);
-            }
+            const params = {
+                limit: 5000,
+                sort_by: filters.sort_by,
+                sort_dir: filters.sort_dir,
+            };
+            if (q.trim()) params.q = q.trim();
+            if (filters.min_balance !== "") params.min_balance = filters.min_balance;
+            if (filters.max_balance !== "") params.max_balance = filters.max_balance;
+            if (filters.signup_from) params.signup_from = dateParam(filters.signup_from);
+            if (filters.signup_to) params.signup_to = dateParam(filters.signup_to, true);
+            if (filters.activity_from) params.activity_from = dateParam(filters.activity_from);
+            if (filters.activity_to) params.activity_to = dateParam(filters.activity_to, true);
+            const { data } = await api.get("/admin/users", { params });
+            setUsers(Array.isArray(data) ? data : []);
         } catch (e) {
-            console.warn("Admin users API did not return users; keeping generated list", e);
+            setErr(formatApiError(e));
+        } finally {
+            setLoading(false);
         }
-    }, [q]);
+    }, [q, filters]);
 
     useEffect(() => {
         load();
@@ -121,25 +96,66 @@ export default function AdminUsers() {
         load();
     };
 
+    const setFilter = (key, value) => setFilters(prev => ({ ...prev, [key]: value }));
+    const clearFilters = () => {
+        setQ("");
+        setFilters(initialFilters);
+    };
+
     return (
         <AdminLayout>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 flex-wrap gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                 <div>
                     <p className="text-xs uppercase tracking-widest text-amber-400/80">User Management</p>
                     <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Eregon Members</h1>
                 </div>
-                <div className="relative">
+                <div className="relative w-full sm:w-auto">
                     <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input className="input-eregon pl-9 w-72" placeholder="Search by name, email, or user ID" value={q} onChange={e => setQ(e.target.value)} data-testid="admin-user-search" />
+                    <input className="input-eregon pl-9 w-full sm:w-80" placeholder="Search by name, email, or user ID" value={q} onChange={e => setQ(e.target.value)} data-testid="admin-user-search" />
+                </div>
+            </div>
+
+            <div className="glass-strong mt-6 p-4">
+                <div className="grid md:grid-cols-4 xl:grid-cols-8 gap-3">
+                    <FilterField label="Min balance" type="number" value={filters.min_balance} onChange={v => setFilter("min_balance", v)} />
+                    <FilterField label="Max balance" type="number" value={filters.max_balance} onChange={v => setFilter("max_balance", v)} />
+                    <FilterField label="Signup from" type="date" value={filters.signup_from} onChange={v => setFilter("signup_from", v)} />
+                    <FilterField label="Signup to" type="date" value={filters.signup_to} onChange={v => setFilter("signup_to", v)} />
+                    <FilterField label="Active from" type="date" value={filters.activity_from} onChange={v => setFilter("activity_from", v)} />
+                    <FilterField label="Active to" type="date" value={filters.activity_to} onChange={v => setFilter("activity_to", v)} />
+                    <div>
+                        <label className="text-xs text-zinc-500 uppercase tracking-widest">Sort by</label>
+                        <select className="input-eregon mt-1" value={filters.sort_by} onChange={e => setFilter("sort_by", e.target.value)}>
+                            <option value="created_at">Signup date</option>
+                            <option value="last_active">Latest activity</option>
+                            <option value="balance">Balance</option>
+                            <option value="email">Email</option>
+                            <option value="name">Name</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs text-zinc-500 uppercase tracking-widest">Direction</label>
+                        <select className="input-eregon mt-1" value={filters.sort_dir} onChange={e => setFilter("sort_dir", e.target.value)}>
+                            <option value="desc">Newest/highest</option>
+                            <option value="asc">Oldest/lowest</option>
+                        </select>
+                    </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 mt-4">
+                    <p className="text-xs text-zinc-500">{loading ? "Loading users..." : `${users.length.toLocaleString()} users shown`}</p>
+                    <div className="flex gap-2">
+                        <button onClick={clearFilters} className="btn-ghost py-2 px-3 text-xs"><X className="w-3.5 h-3.5" /> Clear</button>
+                        <button onClick={load} className="btn-ghost py-2 px-3 text-xs"><RefreshCw className="w-3.5 h-3.5" /> Refresh</button>
+                    </div>
                 </div>
             </div>
 
             <div className="glass-strong mt-6 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[720px]">
+                    <table className="w-full text-sm min-w-[980px]">
                         <thead className="bg-black/40">
                             <tr className="text-xs uppercase tracking-widest text-zinc-500">
-                                <th className="text-left px-5 py-3">User</th><th className="text-left">Coin</th><th className="text-left">Balance</th><th className="text-left">Spins</th><th className="text-left">Tasks</th><th className="text-left">Membership</th><th className="text-left">Status</th><th></th>
+                                <th className="text-left px-5 py-3">User</th><th className="text-left">Coin</th><th className="text-left">Balance</th><th className="text-left">Signup</th><th className="text-left">Latest activity</th><th className="text-left">Spins</th><th className="text-left">Tasks</th><th className="text-left">Membership</th><th className="text-left">Status</th><th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -148,6 +164,8 @@ export default function AdminUsers() {
                                     <td className="px-5 py-3"><div><p className="font-medium">{u.name}</p><p className="text-xs text-zinc-500">{u.email}</p><p className="text-[10px] text-amber-300/80 break-all">ID: {u.id}</p></div></td>
                                     <td>{u.coin_symbol}</td>
                                     <td className="gradient-text-gold font-semibold">{Number(u.balance || 0).toLocaleString()}</td>
+                                    <td className="text-xs text-zinc-400">{formatDate(u.created_at)}</td>
+                                    <td className="text-xs text-zinc-400">{formatDate(u.last_active)}</td>
                                     <td className="text-emerald-300">{Number(u.spin_tokens || 0).toLocaleString()}</td>
                                     <td>{Number(u.tasks_completed || 0)}/{Number(u.tasks_completed || 0) + Number(u.tasks_pending || 0)}</td>
                                     <td><Badge color="purple">{u.membership_name || "Free"}</Badge></td>
@@ -160,11 +178,12 @@ export default function AdminUsers() {
                                     </td>
                                 </tr>
                             ))}
-                            {users.length === 0 && <tr><td colSpan={8} className="text-center py-10 text-zinc-500">No users found.</td></tr>}
+                            {users.length === 0 && <tr><td colSpan={10} className="text-center py-10 text-zinc-500">{loading ? "Loading users..." : "No users found."}</td></tr>}
                         </tbody>
                     </table>
                 </div>
             </div>
+            {err && !editing && <p className="text-sm text-rose-400 mt-3">{err}</p>}
 
             {editing && (
                 <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
@@ -212,4 +231,8 @@ export default function AdminUsers() {
 
 function Field({ label, value, onChange, type = "text" }) {
     return <div><label className="text-xs text-zinc-500 uppercase tracking-widest">{label}</label><input className="input-eregon mt-1" type={type} value={value ?? ""} onChange={e => onChange(e.target.value)} /></div>;
+}
+
+function FilterField({ label, value, onChange, type = "text" }) {
+    return <div><label className="text-xs text-zinc-500 uppercase tracking-widest">{label}</label><input className="input-eregon mt-1" type={type} value={value} onChange={e => onChange(e.target.value)} /></div>;
 }

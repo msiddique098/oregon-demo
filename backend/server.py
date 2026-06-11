@@ -277,6 +277,7 @@ class UserOut(BaseModel):
     first_task_reward_claimed_at: Optional[str] = None
 
     created_at: str
+    last_active: Optional[str] = None
 
 class AuthOut(BaseModel):
     access_token: str
@@ -551,6 +552,7 @@ def user_to_out(u: dict) -> dict:
         "first_task_reward_claimed": bool(u.get("first_task_reward_claimed", False)),
         "first_task_reward_claimed_at": u.get("first_task_reward_claimed_at"),
         "created_at": u["created_at"] if isinstance(u["created_at"], str) else u["created_at"].isoformat(),
+        "last_active": u.get("last_active"),
     }
 
 WALLET_BALANCE_TX_TYPES = {
@@ -1106,7 +1108,18 @@ async def admin_stats(admin: dict = Depends(admin_required)):
     }
 
 @api.get("/admin/users", response_model=List[UserOut])
-async def admin_list_users(admin: dict = Depends(admin_required), q: Optional[str] = None, limit: int = 2000, skip: int = 0):
+async def admin_list_users(admin: dict = Depends(admin_required),
+                           q: Optional[str] = None,
+                           limit: int = 2000,
+                           skip: int = 0,
+                           min_balance: Optional[float] = None,
+                           max_balance: Optional[float] = None,
+                           signup_from: Optional[str] = None,
+                           signup_to: Optional[str] = None,
+                           activity_from: Optional[str] = None,
+                           activity_to: Optional[str] = None,
+                           sort_by: Literal["created_at", "last_active", "balance", "email", "name"] = "created_at",
+                           sort_dir: Literal["asc", "desc"] = "desc"):
     # Keep the existing admin UI unchanged: the regular users table loads normal
     # user records. On the first admin list load, silently top up the testing
     # dataset. If the database insert is slow or unavailable on a serverless cold
@@ -1124,33 +1137,45 @@ async def admin_list_users(admin: dict = Depends(admin_required), q: Optional[st
 
     # Do not hide existing records if older rows have role missing or a non-user
     # member role. Only admin accounts are excluded from this management table.
-    query = {"role": {"$ne": "admin"}}
+    query: dict = {"role": {"$ne": "admin"}}
     if search:
         query["$and"] = [{"$or": [
             {"email": {"$regex": search, "$options": "i"}},
             {"name": {"$regex": search, "$options": "i"}},
+            {"id": {"$regex": search, "$options": "i"}},
         ]}]
 
-    users = await db.users.find(query, {"_id": 0}).sort("created_at", -1).skip(safe_skip).to_list(safe_limit)
+    if min_balance is not None or max_balance is not None:
+        query["balance"] = {}
+        if min_balance is not None:
+            query["balance"]["$gte"] = min_balance
+        if max_balance is not None:
+            query["balance"]["$lte"] = max_balance
 
-    # Fallback/top-up for admin testing view: when Mongo has no normal users yet
-    # or seed insertion did not complete, merge deterministic practice records
-    # into the same existing response. This does not add any new UI/pages/buttons.
-    if practice_users_enabled() and safe_skip == 0 and len(users) < safe_limit:
-        try:
-            packages = await db.packages.find({}, {"_id": 0}).sort("investment", 1).to_list(20)
-            target = int(os.environ.get("PRACTICE_USER_COUNT", "1500"))
-            target = max(1, min(target, 5000))
-            generated = _build_practice_users(packages, target)
-            existing_ids = {u.get("id") for u in users}
-            existing_emails = {str(u.get("email", "")).lower() for u in users}
-            if search:
-                needle = search.lower()
-                generated = [u for u in generated if needle in u.get("name", "").lower() or needle in u.get("email", "").lower()]
-            generated = [u for u in generated if u.get("id") not in existing_ids and str(u.get("email", "")).lower() not in existing_emails]
-            users = (users + generated)[:safe_limit]
-        except Exception as exc:
-            logger.warning("Practice user fallback generation failed: %s", exc)
+    if signup_from or signup_to:
+        query["created_at"] = {}
+        if signup_from:
+            query["created_at"]["$gte"] = signup_from
+        if signup_to:
+            query["created_at"]["$lte"] = signup_to
+
+    if activity_from or activity_to:
+        query["last_active"] = {}
+        if activity_from:
+            query["last_active"]["$gte"] = activity_from
+        if activity_to:
+            query["last_active"]["$lte"] = activity_to
+
+    sort_field = {
+        "created_at": "created_at",
+        "last_active": "last_active",
+        "balance": "balance",
+        "email": "email",
+        "name": "name",
+    }[sort_by]
+    sort_direction = 1 if sort_dir == "asc" else -1
+
+    users = await db.users.find(query, {"_id": 0}).sort(sort_field, sort_direction).skip(safe_skip).to_list(safe_limit)
 
     return [user_to_out(u) for u in users]
 
