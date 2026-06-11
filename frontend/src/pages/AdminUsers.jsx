@@ -20,13 +20,6 @@ function dateParam(value, endOfDay = false) {
     return `${value}T${endOfDay ? "23:59:59.999" : "00:00:00.000"}Z`;
 }
 
-function formatDate(value) {
-    if (!value) return "Never";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "Never";
-    return date.toLocaleString();
-}
-
 export default function AdminUsers() {
     const [users, setUsers] = useState([]);
     const [packages, setPackages] = useState([]);
@@ -136,8 +129,8 @@ export default function AdminUsers() {
                     <div>
                         <label className="text-xs text-zinc-500 uppercase tracking-widest">Direction</label>
                         <select className="input-eregon mt-1" value={filters.sort_dir} onChange={e => setFilter("sort_dir", e.target.value)}>
-                            <option value="desc">Newest/highest</option>
-                            <option value="asc">Oldest/lowest</option>
+                            <option value="desc">Descending</option>
+                            <option value="asc">Ascending</option>
                         </select>
                     </div>
                 </div>
@@ -152,10 +145,10 @@ export default function AdminUsers() {
 
             <div className="glass-strong mt-6 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[980px]">
+                    <table className="w-full text-sm min-w-[820px]">
                         <thead className="bg-black/40">
                             <tr className="text-xs uppercase tracking-widest text-zinc-500">
-                                <th className="text-left px-5 py-3">User</th><th className="text-left">Coin</th><th className="text-left">Balance</th><th className="text-left">Signup</th><th className="text-left">Latest activity</th><th className="text-left">Spins</th><th className="text-left">Tasks</th><th className="text-left">Membership</th><th className="text-left">Status</th><th></th>
+                                <th className="text-left px-5 py-3">User</th><th className="text-left">Coin</th><th className="text-left">Balance</th><th className="text-left">Spins</th><th className="text-left">Tasks</th><th className="text-left">Membership</th><th className="text-left">Status</th><th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -164,8 +157,6 @@ export default function AdminUsers() {
                                     <td className="px-5 py-3"><div><p className="font-medium">{u.name}</p><p className="text-xs text-zinc-500">{u.email}</p><p className="text-[10px] text-amber-300/80 break-all">ID: {u.id}</p></div></td>
                                     <td>{u.coin_symbol}</td>
                                     <td className="gradient-text-gold font-semibold">{Number(u.balance || 0).toLocaleString()}</td>
-                                    <td className="text-xs text-zinc-400">{formatDate(u.created_at)}</td>
-                                    <td className="text-xs text-zinc-400">{formatDate(u.last_active)}</td>
                                     <td className="text-emerald-300">{Number(u.spin_tokens || 0).toLocaleString()}</td>
                                     <td>{Number(u.tasks_completed || 0)}/{Number(u.tasks_completed || 0) + Number(u.tasks_pending || 0)}</td>
                                     <td><Badge color="purple">{u.membership_name || "Free"}</Badge></td>
@@ -178,7 +169,7 @@ export default function AdminUsers() {
                                     </td>
                                 </tr>
                             ))}
-                            {users.length === 0 && <tr><td colSpan={10} className="text-center py-10 text-zinc-500">{loading ? "Loading users..." : "No users found."}</td></tr>}
+                            {users.length === 0 && <tr><td colSpan={8} className="text-center py-10 text-zinc-500">{loading ? "Loading users..." : "No users found."}</td></tr>}
                         </tbody>
                     </table>
                 </div>
