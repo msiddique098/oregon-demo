@@ -10,6 +10,7 @@ import logging
 import secrets
 import random
 import re
+import json
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
@@ -1781,6 +1782,84 @@ async def seed():
     await db.live_feed.create_index("created_at")
     await db.notifications.create_index("user_id")
 
+def _legacy_referral_code(email: str) -> str:
+    suffix = uuid.uuid5(uuid.NAMESPACE_DNS, f"legacy-eregon-user-{email}").hex[:8].upper()
+    return f"LEG{suffix}"
+
+async def import_legacy_app_data_users():
+    legacy_path = Path(os.environ.get("LEGACY_APP_DATA_FILE", "/app/data/db.json"))
+    if not legacy_path.exists():
+        return
+
+    with legacy_path.open("r", encoding="utf-8") as fh:
+        payload = json.load(fh)
+
+    users = payload.get("users") or []
+    inserted = 0
+    skipped = 0
+
+    for legacy in users:
+        email = str(legacy.get("email") or "").strip().lower()
+        if not email or legacy.get("role") == "admin":
+            skipped += 1
+            continue
+        if await db.users.find_one({"email": email}, {"_id": 1}):
+            skipped += 1
+            continue
+
+        legacy_id = str(legacy.get("id") or "")
+        user_id = legacy_id or str(uuid.uuid5(uuid.NAMESPACE_DNS, f"legacy-eregon-user-id-{email}"))
+        created_at = legacy.get("createdAt") or legacy.get("created_at") or now_utc().isoformat()
+        balance = float(legacy.get("balance") or 0)
+        password_hash = legacy.get("password_hash") or legacy.get("passwordHash") or hash_password(secrets.token_urlsafe(24))
+
+        user_doc = {
+            "id": user_id,
+            "email": email,
+            "name": legacy.get("name") or email.split("@")[0],
+            "password_hash": password_hash,
+            "role": "user",
+            "referral_code": legacy.get("referralCode") or legacy.get("referral_code") or _legacy_referral_code(email),
+            "referred_by": legacy.get("sponsorId") or legacy.get("sponsor_id"),
+            "coin_symbol": legacy.get("coin_symbol") or "USDT",
+            "balance": balance,
+            "daily_profit": float(legacy.get("daily_profit") or 0),
+            "total_earnings": float(legacy.get("total_earnings") or max(balance, 0)),
+            "referral_earnings": float(legacy.get("referral_earnings") or 0),
+            "task_progress": float(legacy.get("task_progress") or 0),
+            "tasks_completed": int(legacy.get("tasks_completed") or 0),
+            "tasks_pending": int(legacy.get("tasks_pending") or 0),
+            "commission_rate": float(legacy.get("commission_rate") or 5),
+            "status": legacy.get("status") or "active",
+            "withdrawal_processing_hours": int(legacy.get("withdrawal_processing_hours") or 24),
+            "locked_balance": float(legacy.get("locked_balance") or 0),
+            "bonus_balance": float(legacy.get("bonus_balance") or 0),
+            "current_streak": int(legacy.get("current_streak") or 0),
+            "longest_streak": int(legacy.get("longest_streak") or 0),
+            "last_checkin_at": legacy.get("last_checkin_at"),
+            "spin_tokens": int(legacy.get("spin_tokens") or 0),
+            "spin_count": int(legacy.get("spin_count") or 0),
+            "spin_reward_queue": legacy.get("spin_reward_queue") or [],
+            "last_spin_at": legacy.get("last_spin_at"),
+            "achievement_count": int(legacy.get("achievement_count") or 0),
+            "membership_id": legacy.get("membership_id"),
+            "membership_name": legacy.get("membership_name") or "Legacy",
+            "plan_spin_reward_total": float(legacy.get("plan_spin_reward_total") or 0),
+            "plan_spin_reward_pct": float(legacy.get("plan_spin_reward_pct") or 1),
+            "plan_spin_reward_source_id": legacy.get("plan_spin_reward_source_id"),
+            "first_deposit_rewarded": bool(legacy.get("firstDepositRewarded", legacy.get("first_deposit_rewarded", False))),
+            "legacy_source": "app_data_db_json",
+            "legacy_id": legacy_id,
+            "created_at": created_at,
+            "last_active": legacy.get("lastActive") or legacy.get("last_active") or created_at,
+        }
+
+        await db.users.insert_one(user_doc)
+        inserted += 1
+
+    if inserted or skipped:
+        logger.info("Legacy app data user import complete: inserted=%s skipped=%s", inserted, skipped)
+
 async def run_startup_task(name: str, task):
     try:
         await task()
@@ -1793,6 +1872,7 @@ async def run_startup_task(name: str, task):
 async def on_start():
     if await run_startup_task("Core database seed", seed):
         logger.info("Eregon Marketing API ready")
+        await run_startup_task("Legacy app data user import", import_legacy_app_data_users)
     else:
         logger.warning("Eregon Marketing API started without database seed; MongoDB may be unavailable")
 
