@@ -125,7 +125,7 @@ export default function Rewards() {
                 <h1 className="text-2xl sm:text-4xl font-display font-semibold mt-1">Reward Hub</h1>
                 <p className="text-sm sm:text-base text-zinc-400 mt-2">Use spin tokens and approved task rewards to grow your wallet.</p>
             </div>
-            <Badge color="gold">{overview?.spin_tokens || 0} spin tokens</Badge>
+            <Badge color="gold">{remainingSpins} spins remaining</Badge>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-5 mb-4 sm:mb-6">
@@ -134,7 +134,7 @@ export default function Rewards() {
                     <div>
                         <p className="text-xs uppercase tracking-widest text-zinc-500">Plan Spin Rewards</p>
                         <h2 className="text-xl sm:text-2xl font-display mt-2"><span className="block text-sm text-zinc-400 font-body mb-1">Received from spins</span><span className="gradient-text-gold">${planSpinReceived.toFixed(2)}</span></h2>
-                        <p className="text-xs text-zinc-500 mt-2">{planSpinReceivedCount} completed spins · {remainingSpins} available</p>
+                        <p className="text-xs text-zinc-500 mt-2">{planSpinReceivedCount} completed spins - {remainingSpins} spins remaining</p>
                     </div>
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl gradient-gold flex items-center justify-center neon-gold"><Zap className="w-5 h-5 sm:w-6 sm:h-6 text-black" /></div>
                 </div>
@@ -145,7 +145,7 @@ export default function Rewards() {
                     <div>
                         <p className="text-xs uppercase tracking-widest text-zinc-500">Current Reward Balance</p>
                         <h2 className="text-2xl sm:text-3xl font-display mt-2 gradient-text-gold">$<AnimatedCounter value={balance} decimals={2} /></h2>
-                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">This is your real updated balance after approved tasks, plan spins, referral rewards, and deposit bonuses.</p>
+                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">This is your real updated balance after approved tasks, plan spins, daily plan rewards, referral rewards, and deposit bonuses.</p>
                     </div>
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl gradient-purple flex items-center justify-center neon-purple"><Wallet className="w-5 h-5 sm:w-6 sm:h-6" /></div>
                 </div>
@@ -176,7 +176,7 @@ export default function Rewards() {
                     <div>
                         <p className="text-xs uppercase tracking-widest text-zinc-500">Lucky Event</p>
                         <h2 className="text-xl sm:text-2xl font-display mt-2">Reward Spin Wheel</h2>
-                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">Use your available spin tokens to unlock plan rewards.</p>
+                        <p className="text-xs sm:text-sm text-zinc-400 mt-2">{remainingSpins} spins are remaining. Use them to unlock plan rewards.</p>
                     </div>
                     <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6 text-amber-300" />
                 </div>

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowDownToLine, Check, Crown, Gift, ShieldCheck, Zap } from "lucide-react";
+import { ArrowDownToLine, BadgePercent, Check, Crown, Gift, ShieldCheck, Zap } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import CinematicLoader from "../components/CinematicLoader";
 import { Badge } from "../components/ui-eregon";
@@ -31,6 +31,7 @@ export default function ActivePlan() {
 
     const user = dashboard?.user;
     const activePlan = dashboard?.membership;
+    const remainingSpins = Number(user?.spin_tokens || 0);
     const sortedPackages = useMemo(
         () => [...packages].sort((a, b) => Number(a.investment || 0) - Number(b.investment || 0)),
         [packages]
@@ -77,7 +78,7 @@ export default function ActivePlan() {
                                 </div>
                             </div>
                             <p className="text-sm text-zinc-400 mt-5 max-w-2xl">
-                                Your active plan controls included spins, priority withdrawal timing, task boosts, and referral commission benefits.
+                                Your active plan controls included spins, daily plan-owner rewards, priority withdrawal timing, task boosts, and referral commission benefits.
                             </p>
                         </div>
                         <div className="grid grid-cols-2 gap-3 min-w-[220px]">
@@ -86,14 +87,15 @@ export default function ActivePlan() {
                                 <p className="text-lg font-display text-emerald-300">{money(user.balance)}</p>
                             </div>
                             <div className="rounded-xl bg-black/35 border border-white/5 p-3">
-                                <p className="text-xs text-zinc-500">Spin Tokens</p>
-                                <p className="text-lg font-display text-amber-300">{user.spin_tokens || 0}</p>
+                                <p className="text-xs text-zinc-500">Spins Remaining</p>
+                                <p className="text-lg font-display text-amber-300">{remainingSpins}</p>
                             </div>
                         </div>
                     </div>
 
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
-                        <PlanStat icon={Gift} label="Available Spins" value={String(user.spin_tokens || 0)} />
+                    <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 mt-6">
+                        <PlanStat icon={Gift} label="Available Spins" value={`${remainingSpins} remaining`} />
+                        <PlanStat icon={BadgePercent} label="Daily Plan Reward" value="+9%" />
                         <PlanStat icon={Zap} label="Task Boost" value={`+${Number(activePlan?.task_boost_pct || 0)}%`} />
                         <PlanStat icon={ShieldCheck} label="Commission Boost" value={`+${Number(activePlan?.commission_boost_pct || 0)}%`} />
                         <PlanStat icon={ArrowDownToLine} label="Withdrawal SLA" value={formatProcessingTime(activePlan?.priority_withdrawal_hours || user.withdrawal_processing_hours || 144)} />
@@ -139,7 +141,7 @@ export default function ActivePlan() {
                                     {isCurrent && <Badge color="gold">Active</Badge>}
                                 </div>
                                 <h3 className="text-2xl font-display font-semibold mt-2">{money(plan.investment)}</h3>
-                                <p className="text-sm text-emerald-300 mt-1">{plan.spin_tokens || 0} included spins</p>
+                                <p className="text-sm text-emerald-300 mt-1">{plan.spin_tokens || 0} included spins - 9% daily</p>
                                 <ul className="mt-4 space-y-2 text-sm text-zinc-300">
                                     {(plan.perks || []).slice(0, 3).map((perk, index) => (
                                         <li key={index} className="flex items-start gap-2">

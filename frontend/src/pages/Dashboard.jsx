@@ -96,7 +96,7 @@ export default function Dashboard() {
                     <p className="text-2xl sm:text-3xl font-display font-semibold text-emerald-300">
                         <AnimatedCounter value={u.spin_tokens || 0} decimals={0} />
                     </p>
-                    <p className="text-xs text-zinc-400 mt-2">Deterministic rewards from your plan</p>
+                    <p className="text-xs text-zinc-400 mt-2">{Number(u.spin_tokens || 0)} spins remaining</p>
                 </Link>
                 <StatCard testId="stat-tasks" label="Tasks Done" accent="purple" icon={CheckSquare}
                     to="/dashboard/tasks"
@@ -152,7 +152,8 @@ export default function Dashboard() {
                     </div>
                     {data.membership ? (
                         <ul className="mt-4 space-y-2 text-sm text-zinc-300">
-                            <li className="flex justify-between"><span>Available spins</span><span>{u.spin_tokens || 0}</span></li>
+                            <li className="flex justify-between"><span>Available spins</span><span>{u.spin_tokens || 0} remaining</span></li>
+                            <li className="flex justify-between"><span>Daily plan reward</span><span>+9%</span></li>
                             <li className="flex justify-between"><span>Included plan spins</span><span>{data.membership.spin_tokens || 0}</span></li>
                             <li className="flex justify-between"><span>Commission boost</span><span>+{data.membership.commission_boost_pct}%</span></li>
                             <li className="flex justify-between"><span>Task boost</span><span>+{data.membership.task_boost_pct}%</span></li>

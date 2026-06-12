@@ -34,6 +34,7 @@ JWT_ALGO = "HS256"
 ACCESS_TTL_MIN = 60 * 24  # 24h
 REFRESH_TTL_DAYS = 7
 FREE_WITHDRAWAL_PROCESSING_HOURS = 144
+PLAN_OWNER_DAILY_REWARD_PCT = 9.0
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -460,6 +461,7 @@ async def get_current_user(request: Request) -> dict:
     user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    user = await accrue_plan_owner_daily_reward(user)
     return user
 
 DISALLOWED_SIGNUP_DOMAINS = {
@@ -583,6 +585,90 @@ WALLET_BALANCE_TX_TYPES = {
     "achievement_reward",
     "first_task_reward",
 }
+
+
+async def accrue_plan_owner_daily_reward(user: dict) -> dict:
+    if not user or user.get("role") == "admin" or not user.get("membership_id"):
+        return user
+
+    today = now_utc().date().isoformat()
+    if user.get("plan_daily_reward_last_date") == today:
+        return user
+
+    package = await db.packages.find_one({"id": user["membership_id"]}, {"_id": 0})
+    if not package:
+        return user
+
+    try:
+        investment = float(package.get("investment", 0))
+    except (TypeError, ValueError):
+        return user
+    if investment <= 0:
+        return user
+
+    reward = round(investment * (PLAN_OWNER_DAILY_REWARD_PCT / 100.0), 2)
+    if reward <= 0:
+        return user
+
+    reference_id = f"plan_owner_daily:{user['id']}:{user['membership_id']}:{today}"
+    existing = await db.transactions.find_one(
+        {"user_id": user["id"], "type": "membership_bonus", "reference_id": reference_id},
+        {"_id": 0, "after_balance": 1},
+    )
+    if existing:
+        await db.users.update_one(
+            {"id": user["id"]},
+            {"$set": {"plan_daily_reward_last_date": today, "plan_daily_reward_last_at": now_utc().isoformat()}},
+        )
+        return await db.users.find_one({"id": user["id"]}, {"_id": 0}) or user
+
+    before_balance = round(float(user.get("balance", 0)), 2)
+    after_balance = round(before_balance + reward, 2)
+    now = now_utc().isoformat()
+    result = await db.users.update_one(
+        {
+            "id": user["id"],
+            "membership_id": user["membership_id"],
+            "$or": [
+                {"plan_daily_reward_last_date": {"$exists": False}},
+                {"plan_daily_reward_last_date": {"$ne": today}},
+            ],
+        },
+        {
+            "$inc": {
+                "balance": reward,
+                "daily_profit": reward,
+                "total_earnings": reward,
+                "bonus_balance": reward,
+            },
+            "$set": {
+                "plan_daily_reward_last_date": today,
+                "plan_daily_reward_last_at": now,
+                "plan_daily_reward_pct": PLAN_OWNER_DAILY_REWARD_PCT,
+                "updated_at": now,
+            },
+        },
+    )
+    if result.modified_count == 0:
+        return await db.users.find_one({"id": user["id"]}, {"_id": 0}) or user
+
+    await record_tx(
+        user["id"],
+        "membership_bonus",
+        reward,
+        user.get("coin_symbol", "USDT"),
+        before_balance,
+        after_balance,
+        reference_id=reference_id,
+        note=f"Daily plan owner reward ({PLAN_OWNER_DAILY_REWARD_PCT:g}%) for {package.get('name', 'active plan')}",
+    )
+    await _phase2_emit_user(user["id"], "balance.updated", {
+        "balance": after_balance,
+        "bonus_balance": round(float(user.get("bonus_balance", 0)) + reward, 2),
+        "delta": reward,
+        "source": "membership_bonus",
+    })
+    return await db.users.find_one({"id": user["id"]}, {"_id": 0}) or {**user, "balance": after_balance}
 
 
 async def reconcile_user_wallet_balance(user: dict) -> dict:
