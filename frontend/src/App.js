@@ -74,7 +74,7 @@ function App() {
                     <Route path="/admin/packages" element={<Protected role="admin"><AdminPackages /></Protected>} />
                     <Route path="/admin/wallets" element={<Protected role="admin" adminRole="super_admin"><AdminWallets /></Protected>} />
                     <Route path="/admin/withdrawals" element={<Protected role="admin"><AdminWithdrawals /></Protected>} />
-                    <Route path="/admin/deposits" element={<Protected role="admin"><AdminDeposits /></Protected>} />
+                    <Route path="/admin/deposits" element={<Protected role="admin" adminRole="super_admin"><AdminDeposits /></Protected>} />
                     <Route path="/admin/announcements" element={<Protected role="admin"><AdminAnnouncements /></Protected>} />
                     <Route path="/admin/transactions" element={<Protected role="admin"><AdminFinancialLogs /></Protected>} />
                     <Route path="/admin/activity" element={<Protected role="admin"><AdminActivity /></Protected>} />

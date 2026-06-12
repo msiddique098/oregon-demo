@@ -222,7 +222,6 @@ export function AdminWithdrawals() {
 export function AdminDeposits() {
     const [items, setItems] = useState([]);
     const [spinInputs, setSpinInputs] = useState({});
-    const [bossVerified, setBossVerified] = useState({});
     const [busyId, setBusyId] = useState("");
     const [err, setErr] = useState("");
     const [msg, setMsg] = useState("");
@@ -231,12 +230,15 @@ export function AdminDeposits() {
     const decide = async (id, status) => {
         setErr("");
         setMsg("");
+        const action = status === "approved" ? "approve" : "reject";
+        const item = items.find((d) => d.id === id);
+        const label = item ? `${item.user_email} - ${item.amount} ${item.coin}` : "this deposit";
+        if (!window.confirm(`Confirm you want to ${action} ${label}?`)) return;
         setBusyId(id);
         try {
             const payload = { status };
             const values = parseSpinValues(spinInputs[id]);
             if (status === "approved" && values.length) payload.deterministic_spin_values = values;
-            if (status === "approved") payload.boss_verified_deposit = Boolean(bossVerified[id]);
             await api.patch(`/admin/deposits/${id}`, payload);
             setMsg(status === "approved" ? "Deposit approved." : "Deposit rejected.");
             load();
@@ -256,7 +258,7 @@ export function AdminDeposits() {
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[720px]">
                         <thead className="bg-black/40"><tr className="text-xs uppercase text-zinc-500">
-                            <th className="text-left px-5 py-3">User</th><th className="text-left">Amount</th><th className="text-left">Coin</th><th className="text-left">Plan</th><th className="text-left">Tx</th><th className="text-left">Proof</th><th className="text-left">Spin Values</th><th className="text-left">Boss Check</th><th className="text-left">Status</th><th></th>
+                            <th className="text-left px-5 py-3">User</th><th className="text-left">Amount</th><th className="text-left">Coin</th><th className="text-left">Plan</th><th className="text-left">Tx</th><th className="text-left">Proof</th><th className="text-left">Spin Values</th><th className="text-left">Status</th><th></th>
                         </tr></thead>
                         <tbody>
                             {items.map(d => (
@@ -272,29 +274,16 @@ export function AdminDeposits() {
                                             <input className="input-eregon text-xs py-2" placeholder="Blank = random 1-7%" value={spinInputs[d.id] || ""} onChange={e => setSpinInputs({...spinInputs, [d.id]: e.target.value})} />
                                         ) : <span className="text-xs text-zinc-500">locked</span>}
                                     </td>
-                                    <td className="min-w-[170px]">
-                                        {d.status === "pending" ? (
-                                            <label className="flex items-center gap-2 text-xs text-zinc-300">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={Boolean(bossVerified[d.id])}
-                                                    onChange={e => setBossVerified({...bossVerified, [d.id]: e.target.checked})}
-                                                    className="accent-amber-400"
-                                                />
-                                                Boss verified?
-                                            </label>
-                                        ) : <span className="text-xs text-zinc-500">locked</span>}
-                                    </td>
                                     <td><Badge color={d.status === "approved" ? "emerald" : d.status === "rejected" ? "rose" : "gold"}>{d.status}</Badge></td>
                                     <td className="pr-5">
                                         <div className="flex flex-wrap gap-2 justify-end">
-                                            <button disabled={busyId === d.id || (d.status === "pending" && !bossVerified[d.id])} onClick={() => decide(d.id, "approved")} className="btn-ghost text-xs py-1 px-2 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:opacity-50">{busyId === d.id ? "Working..." : "Approve"}</button>
+                                            <button disabled={busyId === d.id} onClick={() => decide(d.id, "approved")} className="btn-ghost text-xs py-1 px-2 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:opacity-50">{busyId === d.id ? "Working..." : "Approve"}</button>
                                             <button disabled={busyId === d.id} onClick={() => decide(d.id, "rejected")} className="btn-ghost text-xs py-1 px-2 hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-50">Reject</button>
                                         </div>
                                     </td>
                                 </tr>
                             ))}
-                            {items.length === 0 && <tr><td colSpan={10} className="text-center py-10 text-zinc-500">No deposits.</td></tr>}
+                            {items.length === 0 && <tr><td colSpan={9} className="text-center py-10 text-zinc-500">No deposits.</td></tr>}
                         </tbody>
                     </table>
                 </div>

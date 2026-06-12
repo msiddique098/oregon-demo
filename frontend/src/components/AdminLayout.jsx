@@ -32,7 +32,7 @@ const items = [
     { to: "/admin/transactions", label: "Ledger", icon: History },
     { to: "/admin/tickets", label: "Tickets", icon: MessageSquare },
     { to: "/admin/withdrawals", label: "Withdrawals", icon: ArrowUpFromLine },
-    { to: "/admin/deposits", label: "Deposits", icon: ArrowDownToLine },
+    { to: "/admin/deposits", label: "Deposits", icon: ArrowDownToLine, superAdminOnly: true },
     { to: "/admin/bulk", label: "Bulk Tools", icon: Zap },
     { to: "/admin/growth", label: "Growth", icon: Trophy },
     { to: "/admin/registration-codes", label: "Reg Codes", icon: TicketCheck },

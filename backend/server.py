@@ -384,7 +384,6 @@ class DepositDecisionIn(BaseModel):
     status: Literal["pending", "approved", "rejected"]
     admin_note: Optional[str] = None
     deterministic_spin_values: Optional[List[float]] = None
-    boss_verified_deposit: bool = False
 
 class AnnouncementIn(BaseModel):
     title: str
@@ -1458,6 +1457,7 @@ async def admin_decide_withdrawal(wid: str, body: WithdrawDecisionIn, admin: dic
 # Deposits
 @api.get("/admin/deposits", response_model=List[DepositOut])
 async def admin_list_deposits(admin: dict = Depends(admin_required)):
+    require_wallet_manager(admin)
     items = await db.deposits.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
     for d in items:
         u = await db.users.find_one({"id": d["user_id"]}, {"_id": 0, "email": 1})
@@ -1466,15 +1466,12 @@ async def admin_list_deposits(admin: dict = Depends(admin_required)):
 
 @api.patch("/admin/deposits/{did}", response_model=DepositOut)
 async def admin_decide_deposit(did: str, body: DepositDecisionIn, admin: dict = Depends(admin_required)):
-    if not has_permission(admin.get("admin_role", ""), "deposits.manage"):
-        raise HTTPException(status_code=403, detail="Deposit approval access required")
+    require_wallet_manager(admin)
     dep = await db.deposits.find_one({"id": did})
     if not dep:
         raise HTTPException(status_code=404, detail="Deposit not found")
     update = {"status": body.status}
     if dep["status"] != "approved" and body.status == "approved":
-        if not body.boss_verified_deposit:
-            raise HTTPException(status_code=400, detail="Boss verification is required before approving this deposit")
         user_doc = await db.users.find_one({"id": dep["user_id"]})
         if user_doc:
             user_update = {}
