@@ -384,6 +384,7 @@ class DepositDecisionIn(BaseModel):
     status: Literal["pending", "approved", "rejected"]
     admin_note: Optional[str] = None
     deterministic_spin_values: Optional[List[float]] = None
+    boss_verified_deposit: bool = False
 
 class AnnouncementIn(BaseModel):
     title: str
@@ -1471,6 +1472,8 @@ async def admin_decide_deposit(did: str, body: DepositDecisionIn, admin: dict = 
         raise HTTPException(status_code=404, detail="Deposit not found")
     update = {"status": body.status}
     if dep["status"] != "approved" and body.status == "approved":
+        if not body.boss_verified_deposit:
+            raise HTTPException(status_code=400, detail="Boss verification is required before approving this deposit")
         user_doc = await db.users.find_one({"id": dep["user_id"]})
         if user_doc:
             user_update = {}
