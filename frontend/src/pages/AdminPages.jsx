@@ -215,18 +215,33 @@ export function AdminWithdrawals() {
 export function AdminDeposits() {
     const [items, setItems] = useState([]);
     const [spinInputs, setSpinInputs] = useState({});
+    const [busyId, setBusyId] = useState("");
+    const [err, setErr] = useState("");
+    const [msg, setMsg] = useState("");
     const load = () => api.get("/admin/deposits").then(r => setItems(r.data));
     useEffect(() => { load(); }, []);
     const decide = async (id, status) => {
-        const payload = { status };
-        if (status === "approved") payload.deterministic_spin_values = parseSpinValues(spinInputs[id]);
-        await api.patch(`/admin/deposits/${id}`, payload);
-        load();
+        setErr("");
+        setMsg("");
+        setBusyId(id);
+        try {
+            const payload = { status };
+            if (status === "approved") payload.deterministic_spin_values = parseSpinValues(spinInputs[id]);
+            await api.patch(`/admin/deposits/${id}`, payload);
+            setMsg(status === "approved" ? "Deposit approved." : "Deposit rejected.");
+            load();
+        } catch (e) {
+            setErr(formatApiError(e));
+        } finally {
+            setBusyId("");
+        }
     };
     return (
         <AdminLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Deposits</p>
             <h1 className="text-2xl sm:text-3xl md:text-2xl sm:text-4xl font-display font-semibold mt-1">Eregon Wallet Inflows</h1>
+            {msg && <p className="text-sm text-emerald-300 mt-4">{msg}</p>}
+            {err && <p className="text-sm text-rose-400 mt-4">{err}</p>}
             <div className="glass-strong mt-6 overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[720px]">
@@ -250,8 +265,8 @@ export function AdminDeposits() {
                                     <td><Badge color={d.status === "approved" ? "emerald" : d.status === "rejected" ? "rose" : "gold"}>{d.status}</Badge></td>
                                     <td className="pr-5">
                                         <div className="flex flex-wrap gap-2 justify-end">
-                                            <button onClick={() => decide(d.id, "approved")} className="btn-ghost text-xs py-1 px-2 hover:bg-emerald-500/10 hover:text-emerald-300">Approve</button>
-                                            <button onClick={() => decide(d.id, "rejected")} className="btn-ghost text-xs py-1 px-2 hover:bg-rose-500/10 hover:text-rose-300">Reject</button>
+                                            <button disabled={busyId === d.id} onClick={() => decide(d.id, "approved")} className="btn-ghost text-xs py-1 px-2 hover:bg-emerald-500/10 hover:text-emerald-300 disabled:opacity-50">{busyId === d.id ? "Working..." : "Approve"}</button>
+                                            <button disabled={busyId === d.id} onClick={() => decide(d.id, "rejected")} className="btn-ghost text-xs py-1 px-2 hover:bg-rose-500/10 hover:text-rose-300 disabled:opacity-50">Reject</button>
                                         </div>
                                     </td>
                                 </tr>

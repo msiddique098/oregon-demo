@@ -4,8 +4,10 @@ import { Check, Crown } from "lucide-react";
 import PublicNav from "../components/PublicNav";
 import Footer from "../components/Footer";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
 
 export default function Plans() {
+    const { user } = useAuth();
     const [packages, setPackages] = useState([]);
 
     useEffect(() => { api.get("/public/packages").then(r => setPackages(r.data)).catch(() => {}); }, []);
@@ -23,6 +25,9 @@ export default function Plans() {
                 <div className="relative grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
                     {packages.map((p, idx) => {
                         const isFeatured = idx === packages.length - 1;
+                        const joinPath = user
+                            ? `/dashboard/deposit?package_id=${encodeURIComponent(p.id)}&amount=${encodeURIComponent(p.investment || 0)}`
+                            : "/register";
                         return (
                             <div key={p.id} data-testid={`plan-card-${p.tier}`}
                                 className={`glass-strong p-6 relative overflow-hidden ${isFeatured ? "border-amber-500/40 neon-gold" : ""}`}>
@@ -42,7 +47,7 @@ export default function Plans() {
                                     <li className="flex items-start gap-2"><Check className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" /> Withdrawal in {p.priority_withdrawal_hours}h</li>
                                     <li className="flex items-start gap-2"><Check className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" /> {p.spin_tokens || 0} included spin attempts</li>
                                 </ul>
-                                <Link to="/register" className={`${isFeatured ? "btn-gold" : "btn-eregon"} w-full mt-6 text-sm py-2.5`}>
+                                <Link to={joinPath} className={`${isFeatured ? "btn-gold" : "btn-eregon"} w-full mt-6 text-sm py-2.5`}>
                                     Join {p.tier}
                                 </Link>
                             </div>
