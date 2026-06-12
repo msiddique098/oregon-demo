@@ -222,6 +222,7 @@ export function AdminWithdrawals() {
 export function AdminDeposits() {
     const [items, setItems] = useState([]);
     const [spinInputs, setSpinInputs] = useState({});
+    const [proofPreview, setProofPreview] = useState(null);
     const [busyId, setBusyId] = useState("");
     const [err, setErr] = useState("");
     const [msg, setMsg] = useState("");
@@ -268,7 +269,7 @@ export function AdminDeposits() {
                                     <td>{d.coin}</td>
                                     <td>{d.package_name ? <Badge color="purple">{d.package_name}</Badge> : <span className="text-zinc-500">—</span>}</td>
                                     <td className="truncate max-w-[140px] text-zinc-400">{d.tx_hash || "—"}</td>
-                                    <td>{d.proof_data_url ? <a href={d.proof_data_url} target="_blank" rel="noreferrer" className="text-purple-300 underline text-xs">view</a> : "—"}</td>
+                                    <td>{d.proof_data_url ? <button type="button" onClick={() => setProofPreview({ src: d.proof_data_url, title: `${d.user_email} - ${d.amount} ${d.coin}` })} className="text-purple-300 underline text-xs">view</button> : "—"}</td>
                                     <td className="min-w-[180px]">
                                         {d.status === "pending" ? (
                                             <input className="input-eregon text-xs py-2" placeholder="Blank = random 1-7%" value={spinInputs[d.id] || ""} onChange={e => setSpinInputs({...spinInputs, [d.id]: e.target.value})} />
@@ -288,6 +289,22 @@ export function AdminDeposits() {
                     </table>
                 </div>
             </div>
+            {proofPreview && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setProofPreview(null)}>
+                    <div className="glass-strong max-w-4xl w-full max-h-[90vh] p-4 sm:p-6" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between gap-3 mb-4">
+                            <div>
+                                <p className="text-xs uppercase tracking-widest text-amber-400/80">Deposit Proof</p>
+                                <h3 className="font-display text-lg">{proofPreview.title}</h3>
+                            </div>
+                            <button type="button" onClick={() => setProofPreview(null)} className="btn-ghost text-xs py-1.5 px-3">Close</button>
+                        </div>
+                        <div className="rounded-xl bg-black/50 border border-white/10 overflow-auto max-h-[72vh]">
+                            <img src={proofPreview.src} alt="Deposit proof" className="block max-w-full h-auto mx-auto" />
+                        </div>
+                    </div>
+                </div>
+            )}
         </AdminLayout>
     );
 }
