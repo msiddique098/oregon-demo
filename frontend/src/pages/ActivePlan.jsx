@@ -13,6 +13,12 @@ function money(value) {
     })}`;
 }
 
+function formatProcessingTime(hours) {
+    const value = Number(hours || 0);
+    if (value >= 24 && value % 24 === 0) return `${value / 24} ${value === 24 ? "day" : "days"}`;
+    return `${value}h`;
+}
+
 export default function ActivePlan() {
     const navigate = useNavigate();
     const [dashboard, setDashboard] = useState(null);
@@ -90,7 +96,7 @@ export default function ActivePlan() {
                         <PlanStat icon={Gift} label="Plan Spin Pool" value={activePlan ? money(activePlan.plan_spin_reward_total || Number(activePlan.investment || 0) * 0.01) : "$0.00"} />
                         <PlanStat icon={Zap} label="Task Boost" value={`+${Number(activePlan?.task_boost_pct || 0)}%`} />
                         <PlanStat icon={ShieldCheck} label="Commission Boost" value={`+${Number(activePlan?.commission_boost_pct || 0)}%`} />
-                        <PlanStat icon={ArrowDownToLine} label="Withdrawal SLA" value={`${activePlan?.priority_withdrawal_hours || user.withdrawal_processing_hours || 48}h`} />
+                        <PlanStat icon={ArrowDownToLine} label="Withdrawal SLA" value={formatProcessingTime(activePlan?.priority_withdrawal_hours || user.withdrawal_processing_hours || 144)} />
                     </div>
                 </section>
 

@@ -6,6 +6,12 @@ import WithdrawalTimeline from "../components/WithdrawalTimeline";
 import { api, formatApiError } from "../lib/api";
 import { Copy, Check, Wallet as WalletIcon, UploadCloud, Eye } from "lucide-react";
 
+function formatProcessingTime(hours) {
+    const value = Number(hours || 0);
+    if (value >= 24 && value % 24 === 0) return `${value / 24} ${value === 24 ? "day" : "days"}`;
+    return `${value}h`;
+}
+
 export function Deposit() {
     const location = useLocation();
     const [wallets, setWallets] = useState([]);
@@ -241,7 +247,7 @@ export function Withdraw() {
                     {err && <p className="text-sm text-rose-400">{err}</p>}
                     <button className="btn-eregon w-full disabled:opacity-50 disabled:cursor-not-allowed" disabled={!canSubmit} data-testid="withdraw-submit">{submitting ? "Submitting..." : "Submit Request"}</button>
                     {address && address.trim().length < 8 && <p className="text-xs text-rose-300">Enter a valid destination address or payment ID.</p>}
-                    {user && <p className="text-xs text-zinc-500">Processing time: ~{user.withdrawal_processing_hours}h after approval.</p>}
+                    {user && <p className="text-xs text-zinc-500">Processing time: ~{formatProcessingTime(user.withdrawal_processing_hours)} after approval.</p>}
                 </form>
 
                 <div className="glass-strong p-6 lg:col-span-2">

@@ -33,6 +33,7 @@ JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALGO = "HS256"
 ACCESS_TTL_MIN = 60 * 24  # 24h
 REFRESH_TTL_DAYS = 7
+FREE_WITHDRAWAL_PROCESSING_HOURS = 144
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -256,7 +257,7 @@ class UserOut(BaseModel):
     tasks_pending: int = 0
     commission_rate: float = 0.0
     status: str = "active"
-    withdrawal_processing_hours: int = 24
+    withdrawal_processing_hours: int = FREE_WITHDRAWAL_PROCESSING_HOURS
 
     # Phase 2: categorized balances + gamification
     locked_balance: float = 0.0
@@ -501,6 +502,11 @@ def require_wallet_manager(admin: dict) -> None:
     if not has_permission(admin.get("admin_role", ""), "wallets.manage"):
         raise HTTPException(status_code=403, detail="Super admin access required for wallet management")
 
+def user_withdrawal_processing_hours(user: dict) -> int:
+    if not user.get("membership_id"):
+        return FREE_WITHDRAWAL_PROCESSING_HOURS
+    return int(user.get("withdrawal_processing_hours", FREE_WITHDRAWAL_PROCESSING_HOURS))
+
 def practice_users_enabled() -> bool:
     return os.environ.get("SEED_PRACTICE_USERS", "false").lower() in {"1", "true", "yes", "on"}
 
@@ -540,7 +546,7 @@ def user_to_out(u: dict) -> dict:
         "tasks_pending": int(u.get("tasks_pending", 0)),
         "commission_rate": float(u.get("commission_rate", 0)),
         "status": u.get("status", "active"),
-        "withdrawal_processing_hours": int(u.get("withdrawal_processing_hours", 24)),
+        "withdrawal_processing_hours": user_withdrawal_processing_hours(u),
         "locked_balance": float(u.get("locked_balance", 0)),
         "bonus_balance": float(u.get("bonus_balance", 0)),
         "current_streak": int(u.get("current_streak", 0)),
@@ -785,7 +791,7 @@ async def register(body: RegisterIn, response: Response):
         "tasks_pending": 0,
         "commission_rate": 5.0,
         "status": "active",
-        "withdrawal_processing_hours": 24,
+        "withdrawal_processing_hours": FREE_WITHDRAWAL_PROCESSING_HOURS,
         "locked_balance": 0.0,
         "bonus_balance": opening_balance,
         "current_streak": 0,
@@ -1099,7 +1105,7 @@ async def submit_withdrawal(body: WithdrawIn, user: dict = Depends(get_current_u
         "coin": body.coin,
         "address": body.address.strip(),
         "status": "pending",
-        "processing_hours": int(user.get("withdrawal_processing_hours", 24)),
+        "processing_hours": user_withdrawal_processing_hours(user),
         "created_at": now_utc().isoformat(),
         "decided_at": None,
         "admin_note": None,
