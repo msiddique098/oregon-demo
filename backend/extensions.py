@@ -526,7 +526,13 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
             {"$match": {"user_id": user["id"], "status": {"$in": ["pending", "reviewing", "approved", "processing"]}}},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]).to_list(1)
+        spin_rewards = await db.transactions.aggregate([
+            {"$match": {"user_id": user["id"], "type": "spin_reward"}},
+            {"$group": {"_id": None, "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
+        ]).to_list(1)
         pending_wd = float(pending_withdrawals[0]["total"]) if pending_withdrawals else 0.0
+        spin_reward_total = float(spin_rewards[0]["total"]) if spin_rewards else 0.0
+        spin_reward_count = int(spin_rewards[0]["count"]) if spin_rewards else 0
         withdrawable = max(0.0, float(user.get("balance", 0)) - float(user.get("locked_balance", 0)) - pending_wd)
         return {
             "wallet": {
@@ -558,11 +564,11 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
             "recent_bonuses": bonuses,
             "spin_tokens": int(user.get("spin_tokens", 0)),
             "plan_spin_rewards": {
-                "total_reward": float(user.get("plan_spin_reward_total", 0.0)),
-                "reward_pct": float(user.get("plan_spin_reward_pct", 1.0)),
                 "source_id": user.get("plan_spin_reward_source_id"),
                 "granted_at": user.get("plan_spin_reward_granted_at"),
                 "remaining_queue": len(user.get("spin_reward_queue", []) or []),
+                "received_reward": spin_reward_total,
+                "received_count": spin_reward_count,
             },
             "first_task_reward": {
                 "amount": float(user.get("first_task_reward_amount", 10.0)),

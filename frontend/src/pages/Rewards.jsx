@@ -10,18 +10,18 @@ import { api, formatApiError } from "../lib/api";
 import { toast } from "sonner";
 
 const FALLBACK_WHEEL = [
-    { label: "$0.20", value: 0.20, type: "cash_reward" },
-    { label: "$0.50", value: 0.50, type: "cash_reward" },
-    { label: "$1.00", value: 1.00, type: "cash_reward" },
-    { label: "$2.00", value: 2.00, type: "cash_reward" },
-    { label: "$5.00", value: 5.00, type: "cash_reward" },
-    { label: "$10.00", value: 10.00, type: "cash_reward" },
-    { label: "$15.00", value: 15.00, type: "cash_reward" },
-    { label: "$19.00", value: 19.00, type: "cash_reward" },
-    { label: "$25.00", value: 25.00, type: "cash_reward" },
-    { label: "$50.00", value: 50.00, type: "cash_reward" },
-    { label: "$75.00", value: 75.00, type: "cash_reward" },
-    { label: "$100.00", value: 100.00, type: "cash_reward" },
+    { label: "Lucky Drop", value: 0.20, type: "cash_reward" },
+    { label: "Boost Win", value: 0.50, type: "cash_reward" },
+    { label: "Gold Spark", value: 1.00, type: "cash_reward" },
+    { label: "Wallet Lift", value: 2.00, type: "cash_reward" },
+    { label: "Crown Drop", value: 5.00, type: "cash_reward" },
+    { label: "VIP Boost", value: 10.00, type: "cash_reward" },
+    { label: "Reward Pop", value: 15.00, type: "cash_reward" },
+    { label: "Prime Hit", value: 19.00, type: "cash_reward" },
+    { label: "Gold Burst", value: 25.00, type: "cash_reward" },
+    { label: "Royal Win", value: 50.00, type: "cash_reward" },
+    { label: "Elite Drop", value: 75.00, type: "cash_reward" },
+    { label: "Mega Boost", value: 100.00, type: "cash_reward" },
     { label: "Bonus Task", value: 0, type: "bonus_task" },
     { label: "Try Again", value: 0, type: "no_reward" },
 ];
@@ -36,7 +36,7 @@ function ConfettiBurst({ active }) {
 }
 
 function SpinWheel({ prizes, spinning, result }) {
-    const labels = prizes?.length ? prizes : FALLBACK_WHEEL;
+    const labels = FALLBACK_WHEEL;
     const resultIndex = result ? Math.max(0, labels.findIndex(p => p.label === result.label || Number(p.value) === Number(result.value))) : 0;
     const segment = 360 / labels.length;
     const finalRotation = spinning ? 1440 : result ? 1440 + (360 - resultIndex * segment) : 0;
@@ -55,7 +55,7 @@ function SpinWheel({ prizes, spinning, result }) {
             ))}
             <div className="absolute inset-[34%] rounded-full gradient-gold flex items-center justify-center text-black font-display font-bold">SPIN</div>
         </motion.div>
-        {result && !spinning && <div className="absolute -bottom-10 px-4 py-2 rounded-2xl bg-amber-500/15 border border-amber-400/30 text-amber-100 font-display">Won {result.label}</div>}
+        {result && !spinning && <div className="absolute -bottom-10 px-4 py-2 rounded-2xl bg-amber-500/15 border border-amber-400/30 text-amber-100 font-display">Won ${Number(result.value || 0).toFixed(2)}</div>}
     </div>;
 }
 
@@ -89,9 +89,9 @@ export default function Rewards() {
         try {
             const { data } = await api.post("/rewards/spin");
             setTimeout(async () => {
-                setSpinResult(data.prize || { label: `$${Number(data.reward || 0).toFixed(2)}`, value: data.reward, type: "cash_reward" });
+                setSpinResult({ label: "Spin reward", value: Number(data.reward || 0), type: "cash_reward" });
                 setSpinning(false);
-                toast.success(`Spin result: ${(data.prize && data.prize.label) || `+$${data.reward}`}`);
+                toast.success(`Spin result: +$${Number(data.reward || 0).toFixed(2)}`);
                 if (Number(data.reward || 0) > 0) celebrate();
                 await load();
             }, 2500);
@@ -114,8 +114,9 @@ export default function Rewards() {
     const target = Number(overview?.minimum_target || 100);
     const balance = Number(overview?.wallet?.total_balance || 0);
     const targetPct = Math.min(100, Math.round((balance / Math.max(1, target)) * 100));
-    const prizes = overview?.reward_wheel_prizes || FALLBACK_WHEEL;
-    const planSpinTotal = Number(overview?.plan_spin_rewards?.total_reward || 0);
+    const planSpinReceived = Number(overview?.plan_spin_rewards?.received_reward || 0);
+    const planSpinReceivedCount = Number(overview?.plan_spin_rewards?.received_count || 0);
+    const remainingSpins = Number(overview?.plan_spin_rewards?.remaining_queue || overview?.spin_tokens || 0);
 
     return <DashboardLayout>
         <ConfettiBurst active={burst} />
@@ -131,8 +132,9 @@ export default function Rewards() {
             <Card className="shadow-[0_0_35px_rgba(251,191,36,.15)]">
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <p className="text-xs uppercase tracking-widest text-zinc-500">Plan Spin Pool</p>
-                        <h2 className="text-xl sm:text-2xl font-display mt-2"><span className="block text-sm text-zinc-400 font-body mb-1">Total plan reward</span><span className="gradient-text-gold">${planSpinTotal.toFixed(2)}</span></h2>
+                        <p className="text-xs uppercase tracking-widest text-zinc-500">Plan Spin Rewards</p>
+                        <h2 className="text-xl sm:text-2xl font-display mt-2"><span className="block text-sm text-zinc-400 font-body mb-1">Received from spins</span><span className="gradient-text-gold">${planSpinReceived.toFixed(2)}</span></h2>
+                        <p className="text-xs text-zinc-500 mt-2">{planSpinReceivedCount} completed spins · {remainingSpins} available</p>
                     </div>
                     <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl gradient-gold flex items-center justify-center neon-gold"><Zap className="w-5 h-5 sm:w-6 sm:h-6 text-black" /></div>
                 </div>
@@ -178,7 +180,7 @@ export default function Rewards() {
                     </div>
                     <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6 text-amber-300" />
                 </div>
-                <SpinWheel prizes={prizes} spinning={spinning} result={spinResult} />
+                <SpinWheel spinning={spinning} result={spinResult} />
                 <button disabled={spinning || Number(overview?.spin_tokens || 0) <= 0} onClick={spin} className={`btn-eregon w-full mt-10 sm:mt-14 ${spinning || Number(overview?.spin_tokens || 0) <= 0 ? "opacity-60 cursor-not-allowed" : ""}`}><Zap className="w-4 h-4" /> {spinning ? "Spinning..." : "Spin now"}</button>
             </Card>
 

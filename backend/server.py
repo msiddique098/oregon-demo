@@ -1015,6 +1015,9 @@ async def user_dashboard(user: dict = Depends(get_current_user)):
     membership = None
     if user.get("membership_id"):
         membership = await db.packages.find_one({"id": user["membership_id"]}, {"_id": 0})
+        if membership:
+            for hidden_key in ("spin_reward_queue", "plan_spin_reward_total", "plan_spin_reward_pct"):
+                membership.pop(hidden_key, None)
     return {
         "user": user_to_out(user),
         "notifications": notifications,

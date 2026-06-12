@@ -152,8 +152,8 @@ export default function Dashboard() {
                     </div>
                     {data.membership ? (
                         <ul className="mt-4 space-y-2 text-sm text-zinc-300">
-                            <li className="flex justify-between"><span>Plan spin rewards</span><span className="text-amber-300">${Number(data.membership.plan_spin_reward_total || Number(data.membership.investment || 0) * 0.01).toFixed(2)}</span></li>
-                            <li className="flex justify-between"><span>Included spins</span><span>{data.membership.spin_tokens || 0}</span></li>
+                            <li className="flex justify-between"><span>Available spins</span><span>{u.spin_tokens || 0}</span></li>
+                            <li className="flex justify-between"><span>Included plan spins</span><span>{data.membership.spin_tokens || 0}</span></li>
                             <li className="flex justify-between"><span>Commission boost</span><span>+{data.membership.commission_boost_pct}%</span></li>
                             <li className="flex justify-between"><span>Task boost</span><span>+{data.membership.task_boost_pct}%</span></li>
                             <li className="flex justify-between"><span>Withdrawal SLA</span><span>{data.membership.priority_withdrawal_hours}h</span></li>

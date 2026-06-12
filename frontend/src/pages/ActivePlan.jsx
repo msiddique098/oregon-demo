@@ -93,7 +93,7 @@ export default function ActivePlan() {
                     </div>
 
                     <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
-                        <PlanStat icon={Gift} label="Plan Spin Pool" value={activePlan ? money(activePlan.plan_spin_reward_total || Number(activePlan.investment || 0) * 0.01) : "$0.00"} />
+                        <PlanStat icon={Gift} label="Available Spins" value={String(user.spin_tokens || 0)} />
                         <PlanStat icon={Zap} label="Task Boost" value={`+${Number(activePlan?.task_boost_pct || 0)}%`} />
                         <PlanStat icon={ShieldCheck} label="Commission Boost" value={`+${Number(activePlan?.commission_boost_pct || 0)}%`} />
                         <PlanStat icon={ArrowDownToLine} label="Withdrawal SLA" value={formatProcessingTime(activePlan?.priority_withdrawal_hours || user.withdrawal_processing_hours || 144)} />
