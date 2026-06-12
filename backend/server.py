@@ -1466,7 +1466,8 @@ async def admin_list_deposits(admin: dict = Depends(admin_required)):
 
 @api.patch("/admin/deposits/{did}", response_model=DepositOut)
 async def admin_decide_deposit(did: str, body: DepositDecisionIn, admin: dict = Depends(admin_required)):
-    require_wallet_manager(admin)
+    if not has_permission(admin.get("admin_role", ""), "deposits.manage"):
+        raise HTTPException(status_code=403, detail="Deposit approval access required")
     dep = await db.deposits.find_one({"id": did})
     if not dep:
         raise HTTPException(status_code=404, detail="Deposit not found")
