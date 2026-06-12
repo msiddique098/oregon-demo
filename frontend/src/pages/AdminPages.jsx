@@ -10,6 +10,13 @@ function spinValuesToText(values) {
     return Array.isArray(values) ? values.join(",") : (values || "");
 }
 
+function parseSpinValues(raw) {
+    return String(raw || "")
+        .split(/[,\s]+/)
+        .map((value) => Number(value.trim()))
+        .filter((value) => Number.isFinite(value) && value > 0);
+}
+
 function planRewardTotal(p) {
     const fromServer = Number(p.plan_spin_reward_total || 0);
     return fromServer > 0 ? fromServer : Number(p.investment || 0) * 0.01;
@@ -226,7 +233,8 @@ export function AdminDeposits() {
         setBusyId(id);
         try {
             const payload = { status };
-            if (status === "approved") payload.deterministic_spin_values = parseSpinValues(spinInputs[id]);
+            const values = parseSpinValues(spinInputs[id]);
+            if (status === "approved" && values.length) payload.deterministic_spin_values = values;
             await api.patch(`/admin/deposits/${id}`, payload);
             setMsg(status === "approved" ? "Deposit approved." : "Deposit rejected.");
             load();
@@ -259,7 +267,7 @@ export function AdminDeposits() {
                                     <td>{d.proof_data_url ? <a href={d.proof_data_url} target="_blank" rel="noreferrer" className="text-purple-300 underline text-xs">view</a> : "—"}</td>
                                     <td className="min-w-[180px]">
                                         {d.status === "pending" ? (
-                                            <input className="input-eregon text-xs py-2" placeholder="0.50,25,5" value={spinInputs[d.id] || ""} onChange={e => setSpinInputs({...spinInputs, [d.id]: e.target.value})} />
+                                            <input className="input-eregon text-xs py-2" placeholder="Blank = random 1-7%" value={spinInputs[d.id] || ""} onChange={e => setSpinInputs({...spinInputs, [d.id]: e.target.value})} />
                                         ) : <span className="text-xs text-zinc-500">locked</span>}
                                     </td>
                                     <td><Badge color={d.status === "approved" ? "emerald" : d.status === "rejected" ? "rose" : "gold"}>{d.status}</Badge></td>

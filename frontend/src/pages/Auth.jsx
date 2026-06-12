@@ -106,8 +106,8 @@ export function Register() {
                     {emailStatus && <p className="text-xs text-emerald-300">{emailStatus}</p>}
                 </div>
                 <Field icon={Lock} type="password" placeholder="Password (min 6 chars)" value={password} onChange={setPassword} testId="register-password" />
-                <Field icon={TicketCheck} placeholder="Registration code (required)" value={registrationCode} onChange={(v) => setRegistrationCode(v.toUpperCase())} testId="register-code" />
-                <p className="-mt-2 text-[11px] text-amber-300/80">Ask admin for your unique Eregon registration code. Your first-task reward is linked to this code.</p>
+                <Field icon={TicketCheck} placeholder="Registration code (optional)" value={registrationCode} onChange={(v) => setRegistrationCode(v.toUpperCase())} testId="register-code" />
+                <p className="-mt-2 text-[11px] text-amber-300/80">A unique code can unlock an admin-defined signup bonus. Accounts created without a code receive no signup bonus.</p>
                 {err && <p className="text-sm text-rose-400" data-testid="register-error">{err}</p>}
                 <button type="submit" disabled={loading || verifyingEmail} className="btn-gold w-full" data-testid="register-submit">
                     {loading ? "Creating..." : emailVerified ? "Open Eregon Account" : "Verify & Open Account"} <ArrowRight className="w-4 h-4" />

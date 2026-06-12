@@ -218,8 +218,8 @@ class RegisterIn(BaseModel):
     password: str = Field(min_length=6)
     name: str = Field(min_length=1, max_length=80)
     referral_code: Optional[str] = None
-    # Admin-issued invitation / identity code required for every new user
-    registration_code: str = Field(min_length=4, max_length=40)
+    # Optional admin-issued invitation / identity code for signup bonuses.
+    registration_code: Optional[str] = Field(default=None, max_length=40)
 
 class LoginIn(BaseModel):
     email: EmailStr
@@ -383,6 +383,7 @@ class DepositOut(BaseModel):
 class DepositDecisionIn(BaseModel):
     status: Literal["pending", "approved", "rejected"]
     admin_note: Optional[str] = None
+    deterministic_spin_values: Optional[List[float]] = None
 
 class AnnouncementIn(BaseModel):
     title: str
@@ -625,7 +626,17 @@ async def _grant_plan_spin_rewards(user_id: str, package: dict, admin_id: Option
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
 
-    package_doc = _normalize_package_document(package)
+    if package.get("custom_spin_rewards") and isinstance(package.get("spin_reward_queue"), list):
+        queue = _clean_spin_values(package.get("spin_reward_queue"))
+        package_doc = {
+            **package,
+            "spin_tokens": len(queue),
+            "spin_reward_queue": queue,
+            "plan_spin_reward_total": round(sum(queue), 2),
+            "plan_spin_reward_pct": float(package.get("plan_spin_reward_pct", 0)),
+        }
+    else:
+        package_doc = _normalize_package_document(package)
     queue = list(package_doc.get("spin_reward_queue") or [])
     if not queue:
         return {"granted": False, "reason": "Plan has no spin rewards"}
@@ -667,6 +678,32 @@ async def _grant_plan_spin_rewards(user_id: str, package: dict, admin_id: Option
     return {"granted": True, "spin_tokens": len(queue), "total_reward": package_doc.get("plan_spin_reward_total", round(sum(queue), 2))}
 
 
+def _clean_spin_values(values: Optional[List[float]]) -> list[float]:
+    cleaned = []
+    for value in values or []:
+        try:
+            amount = round(float(value), 2)
+        except (TypeError, ValueError):
+            continue
+        if amount > 0:
+            cleaned.append(amount)
+    return cleaned
+
+
+def _build_random_deposit_spin_rewards(amount: float, spin_count: int) -> list[float]:
+    total_pct = random.uniform(1.0, 7.0)
+    total_cents = max(1, int(round(float(amount) * total_pct)))
+    count = max(1, min(int(spin_count or 1), total_cents))
+    cuts = sorted(random.sample(range(1, total_cents), count - 1)) if count > 1 else []
+    parts = []
+    previous = 0
+    for cut in cuts + [total_cents]:
+        parts.append(cut - previous)
+        previous = cut
+    random.shuffle(parts)
+    return [round(part / 100.0, 2) for part in parts]
+
+
 async def _migrate_packages_to_plan_spins() -> None:
     """Startup migration for legacy packages that had daily-profit rewards."""
     async for package in db.packages.find({}):
@@ -695,18 +732,22 @@ async def verify_email(body: VerifyEmailIn):
 async def register(body: RegisterIn, response: Response):
     email = await verify_signup_email_address(body.email)
 
-    registration_code = body.registration_code.strip().upper()
-    reg_code = await db.registration_codes.find_one(
-        {"code": registration_code, "status": "active"},
-        {"_id": 0},
-    )
-    if not reg_code:
-        raise HTTPException(status_code=400, detail="Invalid or inactive registration code")
+    registration_code = (body.registration_code or "").strip().upper()
+    reg_code = None
+    if registration_code:
+        if len(registration_code) < 4:
+            raise HTTPException(status_code=400, detail="Registration code must be at least 4 characters")
+        reg_code = await db.registration_codes.find_one(
+            {"code": registration_code, "status": "active"},
+            {"_id": 0},
+        )
+        if not reg_code:
+            raise HTTPException(status_code=400, detail="Invalid or inactive registration code")
 
-    max_uses = int(reg_code.get("max_uses", 1))
-    used_count = int(reg_code.get("used_count", 0))
-    if used_count >= max_uses:
-        raise HTTPException(status_code=400, detail="Registration code has already been used")
+        max_uses = int(reg_code.get("max_uses", 1))
+        used_count = int(reg_code.get("used_count", 0))
+        if used_count >= max_uses:
+            raise HTTPException(status_code=400, detail="Registration code has already been used")
 
     referred_by = None
     if body.referral_code:
@@ -714,11 +755,13 @@ async def register(body: RegisterIn, response: Response):
         if ref:
             referred_by = ref["id"]
 
-    signup_reward_coin = reg_code.get("reward_coin", "USDT").upper()
-    signup_code_reward = round(max(0.0, float(reg_code.get("reward_amount", 0.0))), 2)
+    signup_reward_coin = (reg_code or {}).get("reward_coin", "USDT").upper()
+    signup_code_reward = round(max(0.0, float((reg_code or {}).get("reward_amount", 0.0))), 2) if reg_code else 0.0
+    referral_bonus = 5.0 if referred_by else 0.0
     created_at = now_utc().isoformat()
-    welcome_spin_queue = build_signup_spin_rewards()
+    welcome_spin_queue = build_signup_spin_rewards() if reg_code else []
     welcome_spin_total = round(sum(welcome_spin_queue), 2)
+    opening_balance = round(signup_code_reward + referral_bonus, 2)
 
     user = {
         "id": str(uuid.uuid4()),
@@ -728,12 +771,12 @@ async def register(body: RegisterIn, response: Response):
         "role": "user",
         "referral_code": gen_referral_code(),
         "referred_by": referred_by,
-        "registration_code": registration_code,
-        "registration_code_id": reg_code["id"],
+        "registration_code": registration_code or None,
+        "registration_code_id": reg_code["id"] if reg_code else None,
         "coin_symbol": signup_reward_coin,
         # Registration-code reward is credited immediately. The two welcome
         # spins are additional deterministic rewards and still total 13.10 USDT.
-        "balance": signup_code_reward,
+        "balance": opening_balance,
         "daily_profit": 0.0,
         "total_earnings": 0.0,
         "referral_earnings": 0.0,
@@ -744,7 +787,7 @@ async def register(body: RegisterIn, response: Response):
         "status": "active",
         "withdrawal_processing_hours": 24,
         "locked_balance": 0.0,
-        "bonus_balance": signup_code_reward,
+        "bonus_balance": opening_balance,
         "current_streak": 0,
         "longest_streak": 0,
         "last_checkin_at": None,
@@ -753,11 +796,11 @@ async def register(body: RegisterIn, response: Response):
         "spin_reward_queue": welcome_spin_queue,
         "signup_spin_reward_total": welcome_spin_total,
         "signup_spin_reward_granted_at": created_at,
-        "signup_spin_reward_source_id": reg_code["id"],
+        "signup_spin_reward_source_id": reg_code["id"] if reg_code else None,
         "last_spin_at": None,
         "achievement_count": 0,
         "membership_id": None,
-        "membership_name": reg_code.get("plan_name", "Free"),
+        "membership_name": (reg_code or {}).get("plan_name", "Free"),
         "first_task_reward_amount": 0.0,
         "first_task_reward_coin": signup_reward_coin,
         "first_task_reward_claimed": True,
@@ -788,6 +831,56 @@ async def register(body: RegisterIn, response: Response):
             "created_at": created_at,
         })
 
+    if referred_by:
+        referrer = await db.users.find_one({"id": referred_by}, {"_id": 0})
+        if referrer:
+            ref_coin = referrer.get("coin_symbol", "USDT")
+            ref_before = float(referrer.get("balance", 0))
+            ref_after = round(ref_before + 5.0, 2)
+            ref_earnings = round(float(referrer.get("referral_earnings", 0)) + 5.0, 2)
+            await db.users.update_one(
+                {"id": referred_by},
+                {"$set": {"balance": ref_after, "referral_earnings": ref_earnings, "bonus_balance": round(float(referrer.get("bonus_balance", 0)) + 5.0, 2)}},
+            )
+            await record_tx(
+                user_id=referred_by,
+                type_="referral_commission",
+                amount=5.0,
+                coin=ref_coin,
+                before_balance=ref_before,
+                after_balance=ref_after,
+                reference_id=user["id"],
+                note=f"Referral reward for inviting {email}",
+            )
+            await db.notifications.insert_one({
+                "id": str(uuid.uuid4()),
+                "user_id": referred_by,
+                "title": "Referral Reward Credited",
+                "body": f"You received 5 {ref_coin} for a successful referral.",
+                "category": "rewards",
+                "read": False,
+                "created_at": created_at,
+            })
+        await record_tx(
+            user_id=user["id"],
+            type_="referral_commission",
+            amount=5.0,
+            coin=signup_reward_coin,
+            before_balance=signup_code_reward,
+            after_balance=opening_balance,
+            reference_id=referred_by,
+            note="Referral signup reward",
+        )
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user["id"],
+            "title": "Referral Reward Credited",
+            "body": f"You received 5 {signup_reward_coin} for joining through a referral.",
+            "category": "rewards",
+            "read": False,
+            "created_at": created_at,
+        })
+
     if welcome_spin_queue:
         await db.notifications.insert_one({
             "id": str(uuid.uuid4()),
@@ -798,22 +891,24 @@ async def register(body: RegisterIn, response: Response):
             "read": False,
             "created_at": created_at,
         })
-    await db.registration_codes.update_one(
-        {"id": reg_code["id"]},
-        {
-            "$inc": {"used_count": 1},
-            "$push": {
-                "used_by": {
-                    "user_id": user["id"],
-                    "email": user["email"],
-                    "used_at": now_utc().isoformat(),
-                }
+    if reg_code:
+        await db.registration_codes.update_one(
+            {"id": reg_code["id"]},
+            {
+                "$inc": {"used_count": 1},
+                "$push": {
+                    "used_by": {
+                        "user_id": user["id"],
+                        "email": user["email"],
+                        "used_at": now_utc().isoformat(),
+                    }
+                },
             },
-        },
-    )
+        )
     token = create_token(user["id"], user["role"])
     response.set_cookie("access_token", token, httponly=True, samesite="lax", max_age=ACCESS_TTL_MIN * 60, path="/")
-    await _phase2_emit_admin("registration_code.used", {"code": registration_code, "user_id": user["id"], "email": email})
+    if reg_code:
+        await _phase2_emit_admin("registration_code.used", {"code": registration_code, "user_id": user["id"], "email": email})
     return {"access_token": token, "token_type": "bearer", "user": user_to_out(user)}
 
 @api.post("/auth/login", response_model=AuthOut)
@@ -1380,6 +1475,8 @@ async def admin_decide_deposit(did: str, body: DepositDecisionIn, admin: dict = 
         if user_doc:
             user_update = {}
             package = None
+            spin_reward_values = []
+            spin_reward_mode = None
             if dep.get("package_id"):
                 package = await db.packages.find_one({"id": dep["package_id"]}, {"_id": 0})
                 if package:
@@ -1389,6 +1486,12 @@ async def admin_decide_deposit(did: str, body: DepositDecisionIn, admin: dict = 
                         "commission_rate": float(package.get("commission_boost_pct", user_doc.get("commission_rate", 0))),
                         "withdrawal_processing_hours": int(package.get("priority_withdrawal_hours", user_doc.get("withdrawal_processing_hours", 48))),
                     })
+                    spin_reward_values = _clean_spin_values(body.deterministic_spin_values)
+                    if spin_reward_values:
+                        spin_reward_mode = "admin"
+                    else:
+                        spin_reward_values = _build_random_deposit_spin_rewards(float(dep["amount"]), int(package.get("spin_tokens", 1)))
+                        spin_reward_mode = "random"
             existing_credit = await db.transactions.find_one({"reference_id": dep["id"], "type": "deposit_credit"})
             if not existing_credit:
                 before = float(user_doc.get("balance", 0))
@@ -1404,7 +1507,20 @@ async def admin_decide_deposit(did: str, body: DepositDecisionIn, admin: dict = 
             if user_update:
                 await db.users.update_one({"id": dep["user_id"]}, {"$set": user_update})
             if package:
-                await _grant_plan_spin_rewards(dep["user_id"], package, admin_id=admin["id"])
+                reward_package = {
+                    **package,
+                    "custom_spin_rewards": True,
+                    "spin_tokens": len(spin_reward_values),
+                    "spin_reward_queue": spin_reward_values,
+                    "plan_spin_reward_total": round(sum(spin_reward_values), 2),
+                    "plan_spin_reward_pct": round((sum(spin_reward_values) / max(float(dep["amount"]), 0.01)) * 100, 2),
+                }
+                await _grant_plan_spin_rewards(dep["user_id"], reward_package, admin_id=admin["id"])
+                update.update({
+                    "spin_reward_values": spin_reward_values,
+                    "spin_reward_total": round(sum(spin_reward_values), 2),
+                    "spin_reward_mode": spin_reward_mode,
+                })
                 notification = {
                     "id": str(uuid.uuid4()),
                     "user_id": dep["user_id"],
