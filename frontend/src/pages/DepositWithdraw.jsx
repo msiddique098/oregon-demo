@@ -173,6 +173,7 @@ export function Withdraw() {
     const [list, setList] = useState([]);
     const [amount, setAmount] = useState("");
     const [coin, setCoin] = useState("USDT");
+    const [network, setNetwork] = useState("TRC20");
     const [address, setAddress] = useState("");
     const [msg, setMsg] = useState("");
     const [err, setErr] = useState("");
@@ -187,6 +188,13 @@ export function Withdraw() {
 
     useEffect(() => { load(); }, []);
 
+    useEffect(() => {
+        const options = (eligibility?.network_taxes || []).filter((item) => item.coin === coin);
+        if (options.length && !options.some((item) => item.network === network)) {
+            setNetwork(options[0].network);
+        }
+    }, [coin, eligibility, network]);
+
     const submit = async (e) => {
         e.preventDefault();
         setMsg(""); setErr("");
@@ -195,7 +203,7 @@ export function Withdraw() {
             const value = Number(amount);
             if (!Number.isFinite(value) || value <= 0) throw new Error("Enter a valid withdrawal amount.");
             if (!address.trim()) throw new Error("Enter your destination wallet address or payment ID.");
-            await api.post("/user/withdrawals", { amount: value, coin, address: address.trim() });
+            await api.post("/user/withdrawals", { amount: value, coin, network, address: address.trim() });
             setMsg("Withdrawal submitted for admin review.");
             setAmount(""); setAddress("");
             await load();
@@ -206,6 +214,11 @@ export function Withdraw() {
     const amountValue = Number(amount || 0);
     const maxWithdrawable = Number(eligibility?.withdrawable_balance ?? user?.balance ?? 0);
     const minimumWithdrawal = Number(eligibility?.minimum_withdrawal ?? 0);
+    const networkOptions = (eligibility?.network_taxes || []).filter((item) => item.coin === coin);
+    const selectedTax = networkOptions.find((item) => item.network === network) || networkOptions[0] || { tax_pct: 0, network };
+    const networkTaxPct = Number(selectedTax.tax_pct || 0);
+    const networkTaxAmount = Number((amountValue * networkTaxPct / 100).toFixed(2));
+    const receiveAmount = Number(Math.max(0, amountValue - networkTaxAmount).toFixed(2));
     const canSubmit = !submitting && amountValue > 0 && address.trim().length >= 8;
     const localWarning = amountValue > 0 && eligibility
         ? amountValue < minimumWithdrawal
@@ -239,7 +252,16 @@ export function Withdraw() {
                     <select className="input-eregon" value={coin} onChange={e => setCoin(e.target.value)} data-testid="withdraw-coin">
                         <option value="USDT">USDT</option><option value="BTC">BTC</option><option value="ETH">ETH</option><option value="BNB">BNB</option>
                     </select>
+                    <select className="input-eregon" value={network} onChange={e => setNetwork(e.target.value)} data-testid="withdraw-network">
+                        {(networkOptions.length ? networkOptions : [{ network: "TRC20", tax_pct: 0 }]).map((item) => (
+                            <option key={`${coin}-${item.network}`} value={item.network}>{item.network} - {Number(item.tax_pct || 0)}% tax</option>
+                        ))}
+                    </select>
                     <input className="input-eregon" placeholder="Destination wallet address or payment ID" value={address} onChange={e => setAddress(e.target.value)} required data-testid="withdraw-address" />
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm">
+                        <div className="flex justify-between gap-3"><span className="text-zinc-300">Network tax</span><span>{networkTaxAmount.toLocaleString()} {coin}</span></div>
+                        <div className="flex justify-between gap-3 mt-1 border-t border-white/10 pt-2"><span className="text-emerald-100">You will receive</span><span className="font-semibold text-emerald-300">{receiveAmount.toLocaleString()} {coin}</span></div>
+                    </div>
                     {localWarning && <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-100">{localWarning}</div>}
                     {eligibility?.failed?.length > 0 && <div className="rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-200 space-y-1">{eligibility.failed.map((f, i) => <p key={i}>• {f.message}</p>)}</div>}
                     {eligibility?.review?.length > 0 && <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-100 space-y-1">{eligibility.review.map((r, i) => <p key={i}>• {r.message}</p>)}</div>}
@@ -257,12 +279,14 @@ export function Withdraw() {
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm min-w-[720px]">
-                                <thead><tr className="text-xs uppercase text-zinc-500"><th className="text-left py-2">Amount</th><th className="text-left">Coin</th><th className="text-left">Address</th><th className="text-left">Status</th><th className="text-left">ETA</th><th className="text-left">Date</th><th className="text-left">Note</th><th></th></tr></thead>
+                                <thead><tr className="text-xs uppercase text-zinc-500"><th className="text-left py-2">Amount</th><th className="text-left">Receive</th><th className="text-left">Coin</th><th className="text-left">Network</th><th className="text-left">Address</th><th className="text-left">Status</th><th className="text-left">ETA</th><th className="text-left">Date</th><th className="text-left">Note</th><th></th></tr></thead>
                                 <tbody>
                                     {list.map(w => (
                                         <tr key={w.id} className="border-t border-white/5">
                                             <td className="py-3 gradient-text-gold font-semibold">{w.amount}</td>
+                                            <td className="text-emerald-300">{Number(w.receive_amount || w.amount || 0).toLocaleString()}</td>
                                             <td>{w.coin}</td>
+                                            <td className="text-zinc-300">{w.network || "TRC20"}</td>
                                             <td className="truncate max-w-[180px]">{w.address}</td>
                                             <td><Badge color={["approved","processing","completed"].includes(w.status) ? "emerald" : w.status === "rejected" ? "rose" : w.status === "reviewing" ? "purple" : "gold"}>{w.status}</Badge></td>
                                             <td className="text-zinc-400">{w.processing_hours}h</td>

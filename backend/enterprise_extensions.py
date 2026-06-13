@@ -5,6 +5,15 @@ from typing import Optional, List, Literal, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
+DEFAULT_WITHDRAWAL_NETWORK_TAXES = [
+    {"coin": "USDT", "network": "TRC20", "tax_pct": 1.0},
+    {"coin": "USDT", "network": "BEP20", "tax_pct": 1.0},
+    {"coin": "USDT", "network": "ERC20", "tax_pct": 3.0},
+    {"coin": "BTC", "network": "Bitcoin", "tax_pct": 2.0},
+    {"coin": "ETH", "network": "ERC20", "tax_pct": 3.0},
+    {"coin": "BNB", "network": "BEP20", "tax_pct": 1.0},
+]
+
 
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -105,6 +114,14 @@ def build_enterprise_router(db, get_current_user, admin_required, record_tx, ws_
                 "key": "withdrawal_config",
                 "value": {"minimum_withdrawal": 100, "currency": "USDT", "review_delay_hours": 24},
                 "description": "Transparent withdrawal configuration shown to users.",
+                "updated_at": now_utc().isoformat(),
+            })
+        if not await db.platform_settings.find_one({"key": "withdrawal_network_taxes"}):
+            await db.platform_settings.insert_one({
+                "id": str(uuid.uuid4()),
+                "key": "withdrawal_network_taxes",
+                "value": {"networks": DEFAULT_WITHDRAWAL_NETWORK_TAXES},
+                "description": "Network tax percentages used to estimate the net amount users receive from withdrawals.",
                 "updated_at": now_utc().isoformat(),
             })
 

@@ -168,10 +168,39 @@ export function AdminWallets() {
 export function AdminWithdrawals() {
     const [items, setItems] = useState([]);
     const [filter, setFilter] = useState("");
+    const [drafts, setDrafts] = useState({});
     const load = () => api.get("/admin/withdrawals", { params: filter ? { status_filter: filter } : {} }).then(r => setItems(r.data));
     useEffect(() => { load(); }, [filter]);
+    useEffect(() => {
+        setDrafts(Object.fromEntries(items.map((w) => [w.id, {
+            address: w.address || "",
+            network: w.network || "TRC20",
+            processing_hours: w.processing_hours || "",
+        }])));
+    }, [items]);
+    const updateDraft = (id, patch) => setDrafts((prev) => ({ ...prev, [id]: { ...(prev[id] || {}), ...patch } }));
+    const saveDetails = async (id) => {
+        const item = items.find((w) => w.id === id);
+        const draft = drafts[id] || {};
+        if (!item) return;
+        await api.patch(`/admin/withdrawals/${id}`, {
+            status: item.status,
+            processing_hours: draft.processing_hours ? parseInt(draft.processing_hours) : undefined,
+            address: draft.address,
+            network: draft.network,
+        });
+        load();
+    };
     const decide = async (id, status, processing_hours) => {
-        await api.patch(`/admin/withdrawals/${id}`, { status, processing_hours: processing_hours ? parseInt(processing_hours) : undefined });
+        const draft = drafts[id] || {};
+        const item = items.find((w) => w.id === id);
+        if (status === "approved" && item && !window.confirm(`Approve withdrawal for ${item.user_email} to ${draft.address || item.address} on ${draft.network || item.network}?`)) return;
+        await api.patch(`/admin/withdrawals/${id}`, {
+            status,
+            processing_hours: processing_hours ? parseInt(processing_hours) : undefined,
+            address: draft.address,
+            network: draft.network,
+        });
         load();
     };
     return (
@@ -187,25 +216,35 @@ export function AdminWithdrawals() {
             </div>
             <div className="glass-strong mt-6 overflow-hidden">
                 <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[720px]">
+                    <table className="w-full text-sm min-w-[980px]">
                         <thead className="bg-black/40"><tr className="text-xs uppercase text-zinc-500">
-                            <th className="text-left px-5 py-3">User</th><th className="text-left">Amount</th><th className="text-left">Coin</th><th className="text-left">Address</th><th className="text-left">Status</th><th className="text-left">SLA</th><th></th>
+                            <th className="text-left px-5 py-3">User</th><th className="text-left">Amount</th><th className="text-left">Receives</th><th className="text-left">Coin</th><th className="text-left">Network</th><th className="text-left">Address</th><th className="text-left">Status</th><th className="text-left">SLA</th><th></th>
                         </tr></thead>
                         <tbody>
                             {items.map(w => (
                                 <tr key={w.id} className="border-t border-white/5">
                                     <td className="px-5 py-3"><p>{w.user_name}</p><p className="text-xs text-zinc-500">{w.user_email}</p></td>
                                     <td className="gradient-text-gold font-semibold">{w.amount}</td>
+                                    <td>
+                                        <p className="text-emerald-300 font-semibold">{Number(w.receive_amount || w.amount || 0).toLocaleString()}</p>
+                                        <p className="text-[11px] text-zinc-500">Tax {Number(w.network_tax_pct || 0)}%</p>
+                                    </td>
                                     <td>{w.coin}</td>
-                                    <td className="truncate max-w-[180px]">{w.address}</td>
+                                    <td>
+                                        <input className="input-eregon w-28 py-1" value={drafts[w.id]?.network ?? w.network ?? "TRC20"} onChange={(e) => updateDraft(w.id, { network: e.target.value })} />
+                                    </td>
+                                    <td>
+                                        <input className="input-eregon min-w-[240px] py-1" value={drafts[w.id]?.address ?? w.address ?? ""} onChange={(e) => updateDraft(w.id, { address: e.target.value })} />
+                                    </td>
                                     <td><Badge color={w.status === "approved" ? "emerald" : w.status === "rejected" ? "rose" : "gold"}>{w.status}</Badge></td>
                                     <td>
-                                        <input className="input-eregon w-16 py-1" defaultValue={w.processing_hours} onBlur={(e) => decide(w.id, w.status, e.target.value)} />
+                                        <input className="input-eregon w-16 py-1" value={drafts[w.id]?.processing_hours ?? w.processing_hours ?? ""} onChange={(e) => updateDraft(w.id, { processing_hours: e.target.value })} onBlur={(e) => decide(w.id, w.status, e.target.value)} />
                                     </td>
                                     <td className="pr-5">
                                         <div className="flex flex-wrap gap-2 justify-end">
                                             <button onClick={() => decide(w.id, "approved")} className="btn-ghost text-xs py-1 px-2 hover:bg-emerald-500/10 hover:text-emerald-300" data-testid={`wd-approve-${w.id}`}>Approve</button>
                                             <button onClick={() => decide(w.id, "rejected")} className="btn-ghost text-xs py-1 px-2 hover:bg-rose-500/10 hover:text-rose-300">Reject</button>
+                                            <button onClick={() => saveDetails(w.id)} className="btn-ghost text-xs py-1 px-2">Save Details</button>
                                         </div>
                                     </td>
                                 </tr>

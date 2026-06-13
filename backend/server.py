@@ -35,6 +35,14 @@ ACCESS_TTL_MIN = 60 * 24  # 24h
 REFRESH_TTL_DAYS = 7
 FREE_WITHDRAWAL_PROCESSING_HOURS = 144
 PLAN_OWNER_DAILY_REWARD_PCT = 9.0
+DEFAULT_WITHDRAWAL_NETWORK_TAXES = [
+    {"coin": "USDT", "network": "TRC20", "tax_pct": 1.0},
+    {"coin": "USDT", "network": "BEP20", "tax_pct": 1.0},
+    {"coin": "USDT", "network": "ERC20", "tax_pct": 3.0},
+    {"coin": "BTC", "network": "Bitcoin", "tax_pct": 2.0},
+    {"coin": "ETH", "network": "ERC20", "tax_pct": 3.0},
+    {"coin": "BNB", "network": "BEP20", "tax_pct": 1.0},
+]
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -340,6 +348,7 @@ class WalletOut(WalletIn):
 class WithdrawIn(BaseModel):
     amount: float
     coin: str
+    network: str = "TRC20"
     address: str
 
 class WithdrawOut(BaseModel):
@@ -349,7 +358,11 @@ class WithdrawOut(BaseModel):
     user_name: str
     amount: float
     coin: str
+    network: str = "TRC20"
     address: str
+    network_tax_pct: float = 0.0
+    network_tax_amount: float = 0.0
+    receive_amount: float = 0.0
     status: str  # pending|reviewing|approved|processing|completed|rejected
     processing_hours: int
     created_at: str
@@ -361,6 +374,8 @@ class WithdrawDecisionIn(BaseModel):
     status: Literal["pending", "reviewing", "approved", "processing", "completed", "rejected"]
     processing_hours: Optional[int] = None
     admin_note: Optional[str] = None
+    address: Optional[str] = None
+    network: Optional[str] = None
 
 class DepositIn(BaseModel):
     amount: float
@@ -508,6 +523,45 @@ def user_withdrawal_processing_hours(user: dict) -> int:
     if not user.get("membership_id"):
         return FREE_WITHDRAWAL_PROCESSING_HOURS
     return int(user.get("withdrawal_processing_hours", FREE_WITHDRAWAL_PROCESSING_HOURS))
+
+async def withdrawal_network_taxes() -> list[dict]:
+    doc = await db.platform_settings.find_one({"key": "withdrawal_network_taxes"}, {"_id": 0})
+    configured = (doc or {}).get("value", {}).get("networks")
+    networks = configured if isinstance(configured, list) and configured else DEFAULT_WITHDRAWAL_NETWORK_TAXES
+    cleaned = []
+    for item in networks:
+        try:
+            coin = str(item.get("coin", "")).strip().upper()
+            network = str(item.get("network", "")).strip()
+            tax_pct = max(0.0, float(item.get("tax_pct", 0)))
+        except (AttributeError, TypeError, ValueError):
+            continue
+        if coin and network:
+            cleaned.append({"coin": coin, "network": network, "tax_pct": tax_pct})
+    return cleaned or DEFAULT_WITHDRAWAL_NETWORK_TAXES
+
+async def withdrawal_quote(amount: float, coin: str, network: str) -> dict:
+    coin_value = str(coin or "USDT").strip().upper()
+    network_value = str(network or "").strip()
+    taxes = await withdrawal_network_taxes()
+    match = next(
+        (item for item in taxes if item["coin"] == coin_value and item["network"].lower() == network_value.lower()),
+        None,
+    )
+    if not match:
+        match = next((item for item in taxes if item["coin"] == coin_value), None)
+    tax_pct = float((match or {}).get("tax_pct", 0.0))
+    clean_network = (match or {}).get("network") or network_value or "TRC20"
+    value = max(0.0, float(amount or 0))
+    tax_amount = round(value * tax_pct / 100.0, 2)
+    receive_amount = round(max(0.0, value - tax_amount), 2)
+    return {
+        "coin": coin_value,
+        "network": clean_network,
+        "network_tax_pct": tax_pct,
+        "network_tax_amount": tax_amount,
+        "receive_amount": receive_amount,
+    }
 
 def practice_users_enabled() -> bool:
     return os.environ.get("SEED_PRACTICE_USERS", "false").lower() in {"1", "true", "yes", "on"}
@@ -1164,6 +1218,7 @@ async def _withdrawal_eligibility(user: dict) -> dict:
         "locked_balance": locked_balance,
         "pending_withdrawal": pending_total,
         "withdrawable_balance": withdrawable,
+        "network_taxes": await withdrawal_network_taxes(),
         "failed": failed,
         "review": review,
     }
@@ -1178,6 +1233,7 @@ async def submit_withdrawal(body: WithdrawIn, user: dict = Depends(get_current_u
         raise HTTPException(status_code=400, detail="Amount must be positive")
     if not body.address or len(body.address.strip()) < 8:
         raise HTTPException(status_code=400, detail="Enter a valid destination address or payment identifier")
+    quote = await withdrawal_quote(body.amount, body.coin, body.network)
     eligibility = await _withdrawal_eligibility(user)
     if body.amount < eligibility["minimum_withdrawal"]:
         raise HTTPException(status_code=400, detail=f"Minimum withdrawal is {eligibility['minimum_withdrawal']:g} {body.coin}")
@@ -1191,8 +1247,12 @@ async def submit_withdrawal(body: WithdrawIn, user: dict = Depends(get_current_u
         "user_email": user["email"],
         "user_name": user["name"],
         "amount": float(body.amount),
-        "coin": body.coin,
+        "coin": quote["coin"],
+        "network": quote["network"],
         "address": body.address.strip(),
+        "network_tax_pct": quote["network_tax_pct"],
+        "network_tax_amount": quote["network_tax_amount"],
+        "receive_amount": quote["receive_amount"],
         "status": "pending",
         "processing_hours": user_withdrawal_processing_hours(user),
         "created_at": now_utc().isoformat(),
@@ -1489,6 +1549,7 @@ async def admin_delete_wallet(wid: str, admin: dict = Depends(require_perm("wall
 # Withdrawals
 @api.get("/admin/withdrawals", response_model=List[WithdrawOut])
 async def admin_list_withdrawals(admin: dict = Depends(admin_required), status_filter: Optional[str] = None):
+    require_wallet_manager(admin)
     q = {"status": status_filter} if status_filter else {}
     items = await db.withdrawals.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
     return items
@@ -1499,7 +1560,17 @@ async def admin_decide_withdrawal(wid: str, body: WithdrawDecisionIn, admin: dic
     wd = await db.withdrawals.find_one({"id": wid})
     if not wd:
         raise HTTPException(status_code=404, detail="Withdrawal not found")
+    corrected_address = body.address.strip() if body.address is not None else str(wd.get("address", "")).strip()
+    corrected_network = body.network.strip() if body.network is not None else str(wd.get("network", "TRC20")).strip()
+    if not corrected_address or len(corrected_address) < 8:
+        raise HTTPException(status_code=400, detail="Enter a valid destination address or payment identifier")
+    quote = await withdrawal_quote(float(wd["amount"]), wd.get("coin", "USDT"), corrected_network)
     update = {"status": body.status, "decided_at": now_utc().isoformat()}
+    update["address"] = corrected_address
+    update["network"] = quote["network"]
+    update["network_tax_pct"] = quote["network_tax_pct"]
+    update["network_tax_amount"] = quote["network_tax_amount"]
+    update["receive_amount"] = quote["receive_amount"]
     if body.processing_hours is not None:
         update["processing_hours"] = body.processing_hours
     if body.admin_note is not None:
@@ -1507,7 +1578,15 @@ async def admin_decide_withdrawal(wid: str, body: WithdrawDecisionIn, admin: dic
 
     # Append stage history
     stages_history = wd.get("stages", [])
-    stages_history.append({"stage": body.status, "at": now_utc().isoformat(), "by": admin["id"]})
+    stage = {"stage": body.status, "at": now_utc().isoformat(), "by": admin["id"]}
+    if corrected_address != str(wd.get("address", "")).strip() or corrected_network.lower() != str(wd.get("network", "TRC20")).strip().lower():
+        stage["correction"] = {
+            "previous_address": wd.get("address"),
+            "previous_network": wd.get("network"),
+            "address": corrected_address,
+            "network": quote["network"],
+        }
+    stages_history.append(stage)
     update["stages"] = stages_history
 
     prev_status = wd["status"]
@@ -1531,7 +1610,7 @@ async def admin_decide_withdrawal(wid: str, body: WithdrawDecisionIn, admin: dic
                 amount=float(wd["amount"]), coin=coin,
                 before_balance=before, after_balance=after,
                 admin_id=admin["id"], reference_id=wd["id"],
-                note=f"Withdrawal to {wd['address']}",
+                note=f"Withdrawal to {corrected_address} on {quote['network']}",
             )
         elif was_debited and body.status in refund_stages:
             after = before + float(wd["amount"])
