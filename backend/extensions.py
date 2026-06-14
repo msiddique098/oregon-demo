@@ -370,15 +370,17 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
         })
 
     async def _grant_bonus(user: dict, amount: float, source: str, note: str = ""):
-        before = float(user.get("bonus_balance", 0))
-        after_bonus = before + float(amount)
-        total_before = float(user.get("balance", 0))
-        total_after = total_before + float(amount)
-        await db.users.update_one({"id": user["id"]}, {"$set": {"bonus_balance": after_bonus, "balance": total_after}})
+        amount = round(float(amount), 2)
+        fresh_user = await db.users.find_one({"id": user["id"]}, {"_id": 0}) or user
+        before = float(fresh_user.get("bonus_balance", 0))
+        total_before = float(fresh_user.get("balance", 0))
+        after_bonus = round(before + amount, 2)
+        total_after = round(total_before + amount, 2)
+        await db.users.update_one({"id": user["id"]}, {"$inc": {"bonus_balance": amount, "balance": amount}})
         bonus = {"id": str(uuid.uuid4()), "user_id": user["id"], "amount": float(amount), "source": source, "note": note, "created_at": now_utc().isoformat()}
         await db.bonuses.insert_one(bonus)
         await _log_balance(user, "bonus_balance", amount, source, bonus["id"])
-        await record_tx(user["id"], source, float(amount), user.get("coin_symbol", "USDT"), total_before, total_after, reference_id=bonus["id"], note=note)
+        await record_tx(user["id"], source, float(amount), fresh_user.get("coin_symbol", user.get("coin_symbol", "USDT")), total_before, total_after, reference_id=bonus["id"], note=note)
         await ws_manager.emit_user(user["id"], "balance.updated", {"balance": total_after, "bonus_balance": after_bonus, "delta": float(amount), "source": source})
         return bonus
 

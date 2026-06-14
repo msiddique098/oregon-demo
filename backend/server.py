@@ -14,7 +14,7 @@ import json
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
-from reward_math import normalize_plan_spin_fields, build_signup_spin_rewards, SIGNUP_SPIN_REWARD_TOTAL
+from reward_math import normalize_plan_spin_fields, build_signup_spin_rewards
 
 import bcrypt
 import jwt
@@ -167,7 +167,7 @@ def gen_registration_code() -> str:
 
 # ---------------- Ledger ----------------
 # Transaction types: admin_credit, admin_debit, admin_user_reward, registration_code_reward, withdrawal_debit, withdrawal_refund,
-# deposit_credit, referral_commission, task_reward, membership_bonus, bulk_bonus, spin_reward
+# deposit_credit, referral_commission, referral_join_bonus, task_reward, membership_bonus, bulk_bonus, spin_reward
 async def record_tx(user_id: str, type_: str, amount: float, coin: str,
                     before_balance: float, after_balance: float,
                     admin_id: Optional[str] = None, reference_id: Optional[str] = None,
@@ -632,6 +632,7 @@ WALLET_BALANCE_TX_TYPES = {
     "deposit_bonus_30",
     "bulk_bonus",
     "referral_commission",
+    "referral_join_bonus",
     "task_reward",
     "membership_bonus",
     "daily_checkin",
@@ -920,8 +921,8 @@ async def register(body: RegisterIn, response: Response):
         "registration_code": registration_code or None,
         "registration_code_id": reg_code["id"] if reg_code else None,
         "coin_symbol": signup_reward_coin,
-        # Registration-code reward is credited immediately. The two welcome
-        # spins are additional deterministic rewards and still total 13.10 USDT.
+        # Registration-code reward is credited immediately. Welcome spins are
+        # additional stored rewards that credit only when the user spins.
         "balance": opening_balance,
         "daily_profit": 0.0,
         "total_earnings": 0.0,
