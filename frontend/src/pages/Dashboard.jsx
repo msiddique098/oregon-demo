@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Wallet, Crown, CheckSquare, Bell, ArrowUpRight } from "lucide-react";
+import { Wallet, Crown, CheckSquare, Bell, ArrowUpRight, Trophy } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import { StatCard, Badge } from "../components/ui-eregon";
 import AnimatedCounter from "../components/AnimatedCounter";
@@ -52,6 +52,7 @@ export default function Dashboard() {
     if (!data) return <DashboardLayout><CinematicLoader /></DashboardLayout>;
 
     const u = data.user;
+    const community = data.community_summary || {};
     const coin = u.coin_symbol;
     const sym = COIN_SYMBOLS[coin] || "";
 
@@ -76,7 +77,7 @@ export default function Dashboard() {
             </div>
 
             {/* Top stat cards */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="grid sm:grid-cols-2 xl:grid-cols-5 gap-5">
                 <Link to="/dashboard/transactions" className="dashboard-card-interactive glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(251,191,36,0.20)] focus:outline-none focus:ring-2 focus:ring-amber-400/40" data-testid="stat-balance">
                     <div className="absolute top-0 left-0 right-0 h-px bg-amber-500/40"></div>
                     <div className="flex items-start justify-between">
@@ -108,6 +109,15 @@ export default function Dashboard() {
                         <AnimatedCounter value={u.referral_earnings} decimals={2} prefix={sym} />
                     </p>
                     <p className="text-xs text-zinc-400 mt-2">Commission rate {u.commission_rate}%</p>
+                </Link>
+                <Link to="/dashboard/leaderboard" className="dashboard-card-interactive glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(251,191,36,0.16)] focus:outline-none focus:ring-2 focus:ring-amber-400/40" data-testid="stat-community">
+                    <div className="absolute top-0 left-0 right-0 h-px bg-amber-500/40"></div>
+                    <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Community</p>
+                    <p className="text-2xl sm:text-3xl font-display font-semibold gradient-text-gold">
+                        {Number(community.member_count || 115000).toLocaleString()}
+                    </p>
+                    <p className="text-xs text-zinc-400 mt-2">${Number(community.score || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} approved total</p>
+                    <div className="dashboard-card-icon absolute right-5 top-5 w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center"><Trophy className="w-5 h-5 text-amber-200" /></div>
                 </Link>
             </div>
 

@@ -33,6 +33,7 @@ REWARD_WHEEL_PRIZES = [
 DAILY_CHECKIN_MIN = 2.00
 DAILY_CHECKIN_MAX = 20.00
 DAILY_CHECKIN_STEP = 2.00
+PUBLIC_MEMBER_COUNT_BASE = 115_000
 
 def now_utc() -> datetime:
     return datetime.now(timezone.utc)
@@ -778,11 +779,14 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
             {"$group": {"_id": None, "score": {"$sum": {"$ifNull": ["$balance", 0]}}}},
         ]).to_list(1)
         total_users = await db.users.count_documents({"role": "user", "status": {"$ne": "banned"}})
+        display_users = PUBLIC_MEMBER_COUNT_BASE + int(total_users or 0)
         score = float(total_balance[0]["score"]) if total_balance else 0.0
         return [{
             "id": "community-approved-total",
             "name": "Community approved total",
-            "membership_name": f"{total_users} active member accounts",
+            "membership_name": f"{display_users:,} active member accounts",
+            "member_count": display_users,
+            "real_member_count": total_users,
             "score": score,
         }]
 

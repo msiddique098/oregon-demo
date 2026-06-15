@@ -35,6 +35,7 @@ ACCESS_TTL_MIN = 60 * 24  # 24h
 REFRESH_TTL_DAYS = 7
 FREE_WITHDRAWAL_PROCESSING_HOURS = 144
 PLAN_OWNER_DAILY_REWARD_PCT = 9.0
+PUBLIC_MEMBER_COUNT_BASE = 115_000
 DEFAULT_WITHDRAWAL_NETWORK_TAXES = [
     {"coin": "USDT", "network": "TRC20", "tax_pct": 1.0},
     {"coin": "USDT", "network": "BEP20", "tax_pct": 1.0},
@@ -1153,6 +1154,12 @@ async def user_dashboard(user: dict = Depends(get_current_user)):
     withdrawal_eligibility = await _withdrawal_eligibility(user) if "_withdrawal_eligibility" in globals() else None
     referrals = await db.users.find({"referred_by": user["id"]}, {"_id": 0, "password_hash": 0}).to_list(100)
     referrals_count = len(referrals)
+    community_balance_rows = await db.users.aggregate([
+        {"$match": {"role": "user", "status": {"$ne": "banned"}}},
+        {"$group": {"_id": None, "score": {"$sum": {"$ifNull": ["$balance", 0]}}}},
+    ]).to_list(1)
+    community_real_users = await db.users.count_documents({"role": "user", "status": {"$ne": "banned"}})
+    community_member_count = PUBLIC_MEMBER_COUNT_BASE + int(community_real_users or 0)
     membership = None
     if user.get("membership_id"):
         membership = await db.packages.find_one({"id": user["membership_id"]}, {"_id": 0})
@@ -1174,6 +1181,13 @@ async def user_dashboard(user: dict = Depends(get_current_user)):
             for r in referrals
         ],
         "membership": membership,
+        "community_summary": {
+            "name": "Community approved total",
+            "score": float(community_balance_rows[0]["score"]) if community_balance_rows else 0.0,
+            "member_count": community_member_count,
+            "real_member_count": community_real_users,
+            "membership_name": f"{community_member_count:,} active member accounts",
+        },
     }
 
 @api.get("/user/withdrawals", response_model=List[WithdrawOut])
