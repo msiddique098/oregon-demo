@@ -91,13 +91,14 @@ export function AdminFinancialLogs() {
                 <form onSubmit={grantUserReward} className="grid lg:grid-cols-[1.2fr_.6fr_.5fr_1.4fr_auto] gap-3 items-end">
                     <div>
                         <p className="text-xs uppercase tracking-widest text-amber-400/80 mb-2">Manual user reward</p>
+                        <p className="text-xs text-zinc-500 mb-2">Available to every admin. The user receives the message as a notification and ledger note.</p>
                         <input className="input-eregon" placeholder="User ID, email, exact name, or referral code" value={rewardForm.user_identifier} onChange={e => setRewardForm({ ...rewardForm, user_identifier: e.target.value })} required />
                     </div>
                     <input className="input-eregon" type="number" min="0.01" step="0.01" placeholder="Amount" value={rewardForm.amount} onChange={e => setRewardForm({ ...rewardForm, amount: e.target.value })} required />
                     <select className="input-eregon" value={rewardForm.coin} onChange={e => setRewardForm({ ...rewardForm, coin: e.target.value })}>
                         <option>USDT</option><option>BTC</option><option>ETH</option><option>BNB</option>
                     </select>
-                    <input className="input-eregon" placeholder="Message shown in user's ledger" value={rewardForm.message} onChange={e => setRewardForm({ ...rewardForm, message: e.target.value })} />
+                    <input className="input-eregon" placeholder="Notification and ledger message" value={rewardForm.message} onChange={e => setRewardForm({ ...rewardForm, message: e.target.value })} />
                     <button disabled={rewardSaving} className={`btn-gold ${rewardSaving ? "opacity-60" : ""}`}><Gift className="w-4 h-4" /> {rewardSaving ? "Crediting..." : "Credit Reward"}</button>
                 </form>
             </Card>

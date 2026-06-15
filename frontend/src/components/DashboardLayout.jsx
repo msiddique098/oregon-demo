@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink, useNavigate, Link, useLocation } from "react-router-dom";
 import { Crown, LayoutDashboard, CheckSquare, ArrowDownToLine, ArrowUpFromLine, Users, ShieldCheck, LogOut, Bell, History, MessageSquare, Trophy, Gift, Menu, X } from "lucide-react";
 import { useAuth } from "../lib/auth";
@@ -30,6 +30,38 @@ export default function DashboardLayout({ children }) {
     const nav = useNavigate();
     const location = useLocation();
     const [mobileOpen, setMobileOpen] = useState(false);
+    const [planPromptOpen, setPlanPromptOpen] = useState(false);
+
+    const planPromptKey = user?.id ? `eregon_plan_prompt_next_at_${user.id}` : null;
+    const planPromptSessionKey = user?.id ? `eregon_plan_prompt_seen_${user.id}` : null;
+    const canShowPlanPrompt =
+        user?.role === "user" &&
+        !user?.membership_id &&
+        !["/dashboard/active-plan", "/dashboard/deposit"].includes(location.pathname);
+
+    useEffect(() => {
+        if (!canShowPlanPrompt || !planPromptKey || !planPromptSessionKey) {
+            setPlanPromptOpen(false);
+            return undefined;
+        }
+        const nextAt = Number(localStorage.getItem(planPromptKey) || "0");
+        if (Date.now() < nextAt || sessionStorage.getItem(planPromptSessionKey)) return undefined;
+        const timer = window.setTimeout(() => {
+            sessionStorage.setItem(planPromptSessionKey, "1");
+            setPlanPromptOpen(true);
+        }, 45000);
+        return () => window.clearTimeout(timer);
+    }, [canShowPlanPrompt, planPromptKey, planPromptSessionKey]);
+
+    const closePlanPrompt = () => {
+        if (planPromptKey) localStorage.setItem(planPromptKey, String(Date.now() + 24 * 60 * 60 * 1000));
+        setPlanPromptOpen(false);
+    };
+
+    const openPlans = () => {
+        closePlanPrompt();
+        nav("/dashboard/active-plan");
+    };
 
     const handleLogout = async () => {
         await logout();
@@ -153,6 +185,26 @@ export default function DashboardLayout({ children }) {
                     {children}
                 </div>
             </main>
+
+            {planPromptOpen && (
+                <div className="fixed z-[60] left-3 right-3 bottom-20 sm:left-auto sm:right-6 sm:bottom-6 sm:w-[360px] rounded-2xl border border-amber-400/25 bg-[#09090d]/95 shadow-[0_18px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl p-4">
+                    <div className="flex items-start gap-3">
+                        <span className="w-10 h-10 rounded-xl bg-amber-400/15 border border-amber-400/25 text-amber-300 flex items-center justify-center shrink-0">
+                            <Crown className="w-5 h-5" strokeWidth={1.7} />
+                        </span>
+                        <div className="min-w-0">
+                            <p className="font-display text-base font-semibold">Plan perks are available</p>
+                            <p className="text-sm text-zinc-400 mt-1">
+                                When you are ready, plans can unlock daily plan rewards, extra spins, and faster withdrawal review.
+                            </p>
+                            <div className="flex items-center gap-2 mt-4">
+                                <button onClick={openPlans} className="btn-gold py-2 px-4 text-sm">View plans</button>
+                                <button onClick={closePlanPrompt} className="btn-ghost py-2 px-4 text-sm">Not now</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <BottomNav />
             <div className="hidden" data-dashboard-mobile-hotfix="phone-first-v2"></div>

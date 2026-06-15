@@ -5,6 +5,7 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
 import os
+import asyncio
 import uuid
 import logging
 import secrets
@@ -23,6 +24,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Respons
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import ReturnDocument
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -36,6 +38,10 @@ REFRESH_TTL_DAYS = 7
 FREE_WITHDRAWAL_PROCESSING_HOURS = 144
 PLAN_OWNER_DAILY_REWARD_PCT = 9.0
 PUBLIC_MEMBER_COUNT_BASE = 115_000
+PLAN_PROMO_OFFLINE_HOURS = 12
+PLAN_PROMO_COOLDOWN_HOURS = 72
+PLAN_PROMO_MAX_NOTIFICATIONS = 6
+PLAN_PROMO_LOOP_SECONDS = 6 * 60 * 60
 DEFAULT_WITHDRAWAL_NETWORK_TAXES = [
     {"coin": "USDT", "network": "TRC20", "tax_pct": 1.0},
     {"coin": "USDT", "network": "BEP20", "tax_pct": 1.0},
@@ -2244,11 +2250,84 @@ async def run_startup_task(name: str, task):
         logger.error("%s skipped during startup: %s", name, exc)
         return False
 
+async def send_plan_promo_reminders_once() -> int:
+    now = now_utc()
+    inactive_cutoff = (now - timedelta(hours=PLAN_PROMO_OFFLINE_HOURS)).isoformat()
+    reminder_cutoff = (now - timedelta(hours=PLAN_PROMO_COOLDOWN_HOURS)).isoformat()
+    query = {
+        "role": "user",
+        "membership_id": None,
+        "status": {"$nin": ["suspended", "banned"]},
+        "$and": [
+            {"$or": [
+                {"last_active": {"$lte": inactive_cutoff}},
+                {"last_active": {"$exists": False}, "created_at": {"$lte": inactive_cutoff}},
+            ]},
+            {"$or": [
+                {"plan_promo_last_notified_at": {"$exists": False}},
+                {"plan_promo_last_notified_at": {"$lte": reminder_cutoff}},
+            ]},
+            {"$or": [
+                {"plan_promo_notification_count": {"$exists": False}},
+                {"plan_promo_notification_count": {"$lt": PLAN_PROMO_MAX_NOTIFICATIONS}},
+            ]},
+        ],
+    }
+    users = await db.users.find(query, {"_id": 0, "id": 1}).limit(100).to_list(100)
+    sent = 0
+    for user_doc in users:
+        user_id = user_doc.get("id")
+        if not user_id:
+            continue
+        updated = await db.users.update_one(
+            {
+                "id": user_id,
+                "membership_id": None,
+                "$or": [
+                    {"plan_promo_last_notified_at": {"$exists": False}},
+                    {"plan_promo_last_notified_at": {"$lte": reminder_cutoff}},
+                ],
+            },
+            {
+                "$set": {"plan_promo_last_notified_at": now.isoformat()},
+                "$inc": {"plan_promo_notification_count": 1},
+            },
+        )
+        if updated.modified_count != 1:
+            continue
+        notification = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "title": "Plan perks are available",
+            "body": "When you are ready, plans can unlock daily plan rewards, extra spins, and faster withdrawal review.",
+            "category": "membership",
+            "read": False,
+            "created_at": now.isoformat(),
+        }
+        await db.notifications.insert_one(notification)
+        await _phase2_emit_user(user_id, "notification.created", notification)
+        sent += 1
+    return sent
+
+async def plan_promo_reminder_loop():
+    await asyncio.sleep(60)
+    while True:
+        try:
+            sent = await send_plan_promo_reminders_once()
+            if sent:
+                logger.info("Plan promo reminders queued: %s", sent)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("Plan promo reminder loop skipped cycle: %s", exc)
+        await asyncio.sleep(PLAN_PROMO_LOOP_SECONDS)
+
 @app.on_event("startup")
 async def on_start():
     if await run_startup_task("Core database seed", seed):
         logger.info("Eregon Marketing API ready")
         await run_startup_task("Legacy app data user import", import_legacy_app_data_users)
+        asyncio.create_task(plan_promo_reminder_loop())
     else:
         logger.warning("Eregon Marketing API started without database seed; MongoDB may be unavailable")
 
@@ -2617,20 +2696,24 @@ async def admin_bulk_commission(body: BulkCommissionIn, admin: dict = Depends(ad
 
 @api.post("/admin/user-rewards")
 async def admin_grant_user_reward(body: AdminUserRewardIn, admin: dict = Depends(admin_required)):
-    require_wallet_manager(admin)
     user_doc = await _resolve_single_user_identifier(body.user_identifier)
     amount = round(float(body.amount), 2)
     coin = (body.coin or user_doc.get("coin_symbol", "USDT")).upper()
-    note = body.message.strip()
-    before = float(user_doc.get("balance", 0))
-    after = round(before + amount, 2)
-    bonus_before = float(user_doc.get("bonus_balance", 0))
-    bonus_after = round(bonus_before + amount, 2)
+    note = body.message.strip() or "Manual reward from Eregon Admin"
     reference_id = str(uuid.uuid4())
-    await db.users.update_one(
+    updated_user = await db.users.find_one_and_update(
         {"id": user_doc["id"]},
-        {"$set": {"balance": after, "bonus_balance": bonus_after, "coin_symbol": coin, "last_active": now_utc().isoformat()}},
+        {
+            "$inc": {"balance": amount, "bonus_balance": amount, "total_earnings": amount},
+            "$set": {"coin_symbol": coin, "last_active": now_utc().isoformat()},
+        },
+        return_document=ReturnDocument.AFTER,
     )
+    if not updated_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    after = round(float(updated_user.get("balance", amount)), 2)
+    before = round(after - amount, 2)
+    bonus_after = round(float(updated_user.get("bonus_balance", amount)), 2)
     tx = await record_tx(
         user_id=user_doc["id"],
         type_="admin_user_reward",
