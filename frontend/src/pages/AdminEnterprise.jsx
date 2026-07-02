@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Activity, BarChart3, BellRing, Bot, Clock, MessageCircle, Plus, RefreshCw, ShieldAlert, SlidersHorizontal, Target, TrendingUp, WalletCards, Crown } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
@@ -27,6 +27,15 @@ export default function AdminEnterprise() {
     const [referralRewards, setReferralRewards] = useState({ enabled: true, referrer_reward: 5, referred_reward: 2, first_deposit_commission_pct: 5 });
     const [marketTarget, setMarketTarget] = useState({ symbol: "BTC", target_price: "", duration_seconds: 12 });
 
+    const loadOpenOptions = useCallback(async () => {
+        try {
+            const opt = await api.get("/admin/trading/options", { params: { status: "open", limit: 50 } });
+            setOptionOrders(opt.data || []);
+        } catch (e) {
+            void e;
+        }
+    }, []);
+
     const load = async () => {
         try {
             const [ov, set, wr, camp, fr, msg, mt, opt] = await Promise.all([
@@ -48,6 +57,11 @@ export default function AdminEnterprise() {
     };
 
     useEffect(() => { load(); }, []);
+
+    useEffect(() => {
+        const timer = window.setInterval(loadOpenOptions, 2000);
+        return () => window.clearInterval(timer);
+    }, [loadOpenOptions]);
 
     useEffect(() => {
         const event = lastEvent?.event;

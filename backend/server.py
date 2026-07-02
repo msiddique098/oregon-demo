@@ -3004,6 +3004,7 @@ async def place_options_trade(body: OptionsTradeIn, user: dict = Depends(get_cur
         "expires_at": expires_at.isoformat(),
     }
     await db.options_trades.insert_one(option)
+    option.pop("_id", None)
     await record_tx(
         user_id=user["id"],
         type_="options_stake",
@@ -3025,9 +3026,16 @@ async def place_options_trade(body: OptionsTradeIn, user: dict = Depends(get_cur
         f"{user.get('email') or user['id']} opened {base}/{quote} {body.direction.upper()} for {stake:g} USDT, expiring in {duration}s.",
         "trading",
     )
+    admin_option = {
+        **option,
+        "user": {
+            "id": user["id"],
+            "email": user.get("email"),
+            "name": user.get("name") or user.get("full_name"),
+        },
+    }
     await _phase2_emit_user(user["id"], "balance.updated", {"balance": after, "source": "options", "option": option})
-    await _phase2_emit_admin("options.opened", option)
-    option.pop("_id", None)
+    await _phase2_emit_admin("options.opened", admin_option)
     return {"ok": True, "option": option, "balance": after}
 
 # ====================================================================

@@ -29,11 +29,13 @@ function MiniOrderBook({ price }) {
     </div>;
 }
 
-function buildCandles(prices = []) {
+const TIMEFRAME_FACTORS = { "1m": 1, "5m": 2, "15m": 4, "1h": 8, "1d": 16 };
+
+function buildCandles(prices = [], timeframe = "1m") {
     const values = prices.map((p) => Number(p || 0)).filter((p) => p > 0);
     if (values.length < 2) return [];
-    const target = 34;
-    const step = Math.max(1, Math.floor(values.length / target));
+    const target = 42;
+    const step = Math.max(1, Math.floor(values.length / target) * (TIMEFRAME_FACTORS[timeframe] || 1));
     const candles = [];
     for (let i = 1; i < values.length; i += step) {
         const slice = values.slice(i, i + step);
@@ -42,52 +44,108 @@ function buildCandles(prices = []) {
         const spread = Math.max(open, close) * 0.0018;
         const high = Math.max(open, close, ...slice) + spread;
         const low = Math.max(0.00000001, Math.min(open, close, ...slice) - spread);
-        candles.push({ open, high, low, close });
+        const volume = Math.max(1, slice.reduce((sum, value) => sum + Math.abs(value - open), 0) + Math.abs(close - open)) * (i + 3);
+        candles.push({ open, high, low, close, volume });
     }
     return candles.slice(-target);
 }
 
-function CandleChart({ candles = [] }) {
+function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTimeframe }) {
+    const [hover, setHover] = useState(null);
     if (!candles.length) return <div className="h-full rounded-2xl bg-white/[0.03]" />;
     const width = 760;
     const height = 320;
-    const pad = { left: 58, right: 18, top: 18, bottom: 30 };
+    const pad = { left: 58, right: 62, top: 34, bottom: 42 };
     const hi = Math.max(...candles.map((c) => c.high));
     const lo = Math.min(...candles.map((c) => c.low));
+    const maxVol = Math.max(...candles.map((c) => c.volume || 1));
     const span = Math.max(0.00000001, hi - lo);
     const plotW = width - pad.left - pad.right;
     const plotH = height - pad.top - pad.bottom;
     const y = (value) => pad.top + ((hi - value) / span) * plotH;
+    const volY = height - pad.bottom;
+    const volH = 46;
     const candleW = Math.max(5, plotW / candles.length * 0.58);
     const ticks = Array.from({ length: 5 }).map((_, i) => lo + (span * i) / 4);
+    const last = candles[candles.length - 1];
+    const hoverCandle = hover ? candles[hover.index] : last;
+    const xFor = (i) => pad.left + (i + 0.5) * (plotW / candles.length);
+    const maPath = (period) => candles.map((_, i) => {
+        if (i < period - 1) return null;
+        const slice = candles.slice(i - period + 1, i + 1);
+        const avg = slice.reduce((sum, c) => sum + c.close, 0) / period;
+        return `${i === period - 1 ? "M" : "L"} ${xFor(i).toFixed(2)} ${y(avg).toFixed(2)}`;
+    }).filter(Boolean).join(" ");
+    const handleMove = (event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const relX = ((event.clientX - rect.left) / rect.width) * width;
+        const relY = ((event.clientY - rect.top) / rect.height) * height;
+        if (relX < pad.left || relX > width - pad.right || relY < pad.top || relY > height - pad.bottom) {
+            setHover(null);
+            return;
+        }
+        const index = Math.max(0, Math.min(candles.length - 1, Math.floor(((relX - pad.left) / plotW) * candles.length)));
+        const price = hi - ((relY - pad.top) / plotH) * span;
+        setHover({ index, x: xFor(index), y: relY, price });
+    };
     return (
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full rounded-2xl bg-black/30 border border-white/5">
-            <defs>
-                <linearGradient id="candleBg" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.10" />
-                    <stop offset="100%" stopColor="#9333ea" stopOpacity="0.02" />
-                </linearGradient>
-            </defs>
-            <rect x="0" y="0" width={width} height={height} fill="url(#candleBg)" />
-            {ticks.map((tick, i) => {
-                const ty = y(tick);
-                return <g key={tick}><line x1={pad.left} x2={width - pad.right} y1={ty} y2={ty} stroke="rgba(255,255,255,.07)" /><text x={pad.left - 10} y={ty + 4} textAnchor="end" fill="rgba(255,255,255,.42)" fontSize="11">{formatAmt(tick)}</text></g>;
-            })}
-            {candles.map((c, i) => {
-                const x = pad.left + (i + 0.5) * (plotW / candles.length);
-                const up = c.close >= c.open;
-                const color = up ? "#34d399" : "#fb7185";
-                const bodyTop = y(Math.max(c.open, c.close));
-                const bodyBottom = y(Math.min(c.open, c.close));
-                const bodyH = Math.max(2, bodyBottom - bodyTop);
-                return <g key={`${i}-${c.close}`}>
-                    <line x1={x} x2={x} y1={y(c.high)} y2={y(c.low)} stroke={color} strokeWidth="1.5" />
-                    <rect x={x - candleW / 2} y={bodyTop} width={candleW} height={bodyH} rx="2" fill={up ? "rgba(52,211,153,.86)" : "rgba(251,113,133,.86)"} />
-                </g>;
-            })}
-            <text x={pad.left} y={height - 10} fill="rgba(255,255,255,.38)" fontSize="11">Live candle view</text>
-            <text x={width - pad.right} y={height - 10} textAnchor="end" fill="rgba(251,191,36,.75)" fontSize="11">Auto-refreshing quotes</text>
-        </svg>
+        <div className="h-full rounded-2xl bg-black/30 border border-white/5 overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/5 bg-white/[0.02]">
+                <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Advanced chart</p>
+                    <p className="text-sm font-semibold text-zinc-200">{pair} <span className="text-zinc-500">OHLC</span></p>
+                </div>
+                <div className="flex shrink-0 rounded-lg border border-white/10 bg-white/[0.03] p-1">
+                    {Object.keys(TIMEFRAME_FACTORS).map((tf) => (
+                        <button key={tf} type="button" onClick={() => onTimeframe?.(tf)} className={`px-2.5 py-1 text-xs rounded-md ${timeframe === tf ? "bg-amber-400 text-black font-bold" : "text-zinc-400 hover:text-white"}`}>{tf}</button>
+                    ))}
+                </div>
+            </div>
+            <svg viewBox={`0 0 ${width} ${height}`} onMouseMove={handleMove} onMouseLeave={() => setHover(null)} className="w-full h-[calc(100%-49px)]">
+                <defs>
+                    <linearGradient id="candleBg" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.10" />
+                        <stop offset="100%" stopColor="#9333ea" stopOpacity="0.02" />
+                    </linearGradient>
+                </defs>
+                <rect x="0" y="0" width={width} height={height} fill="url(#candleBg)" />
+                <text x={pad.left} y="21" fill="rgba(255,255,255,.72)" fontSize="12">
+                    O {formatAmt(hoverCandle.open)}  H {formatAmt(hoverCandle.high)}  L {formatAmt(hoverCandle.low)}  C {formatAmt(hoverCandle.close)}
+                </text>
+                <text x={width - pad.right} y="21" textAnchor="end" fill="rgba(251,191,36,.78)" fontSize="12">MA 7 / MA 25</text>
+                {ticks.map((tick) => {
+                    const ty = y(tick);
+                    return <g key={tick}><line x1={pad.left} x2={width - pad.right} y1={ty} y2={ty} stroke="rgba(255,255,255,.07)" /><text x={width - pad.right + 8} y={ty + 4} fill="rgba(255,255,255,.42)" fontSize="11">{formatAmt(tick)}</text></g>;
+                })}
+                {candles.map((c, i) => {
+                    const x = xFor(i);
+                    const up = c.close >= c.open;
+                    const color = up ? "#34d399" : "#fb7185";
+                    const bodyTop = y(Math.max(c.open, c.close));
+                    const bodyBottom = y(Math.min(c.open, c.close));
+                    const bodyH = Math.max(2, bodyBottom - bodyTop);
+                    const vHeight = Math.max(3, ((c.volume || 1) / maxVol) * volH);
+                    return <g key={`${i}-${c.close}`}>
+                        <rect x={x - candleW / 2} y={volY - vHeight} width={candleW} height={vHeight} rx="2" fill={up ? "rgba(52,211,153,.16)" : "rgba(251,113,133,.16)"} />
+                        <line x1={x} x2={x} y1={y(c.high)} y2={y(c.low)} stroke={color} strokeWidth="1.5" />
+                        <rect x={x - candleW / 2} y={bodyTop} width={candleW} height={bodyH} rx="2" fill={up ? "rgba(52,211,153,.88)" : "rgba(251,113,133,.88)"} />
+                    </g>;
+                })}
+                <path d={maPath(7)} fill="none" stroke="#fbbf24" strokeWidth="1.5" opacity=".9" />
+                <path d={maPath(25)} fill="none" stroke="#a78bfa" strokeWidth="1.5" opacity=".82" />
+                <line x1={pad.left} x2={width - pad.right} y1={y(last.close)} y2={y(last.close)} stroke="#fbbf24" strokeDasharray="5 5" opacity=".55" />
+                <rect x={width - pad.right + 5} y={y(last.close) - 10} width="54" height="20" rx="5" fill="#fbbf24" />
+                <text x={width - pad.right + 32} y={y(last.close) + 4} textAnchor="middle" fill="#080808" fontSize="10" fontWeight="700">{formatAmt(last.close)}</text>
+                {hover && <>
+                    <line x1={hover.x} x2={hover.x} y1={pad.top} y2={height - pad.bottom} stroke="rgba(255,255,255,.28)" strokeDasharray="4 4" />
+                    <line x1={pad.left} x2={width - pad.right} y1={hover.y} y2={hover.y} stroke="rgba(255,255,255,.24)" strokeDasharray="4 4" />
+                    <rect x={width - pad.right + 5} y={hover.y - 10} width="54" height="20" rx="5" fill="rgba(255,255,255,.12)" />
+                    <text x={width - pad.right + 32} y={hover.y + 4} textAnchor="middle" fill="white" fontSize="10">{formatAmt(hover.price)}</text>
+                </>}
+                <text x={pad.left} y={height - 12} fill="rgba(255,255,255,.38)" fontSize="11">Crosshair, volume, moving averages</text>
+                <text x={width - pad.right} y={height - 12} textAnchor="end" fill="rgba(251,191,36,.75)" fontSize="11">Live auto-refreshing quotes</text>
+            </svg>
+        </div>
     );
 }
 
@@ -102,11 +160,12 @@ export default function Trading() {
     const [selectedPair, setSelectedPair] = useState(queryPair);
     const [side, setSide] = useState("buy");
     const [amount, setAmount] = useState("");
-    const [tradeMode, setTradeMode] = useState("spot");
+    const [tradeMode, setTradeMode] = useState("options");
     const [optionDirection, setOptionDirection] = useState("up");
     const [optionStake, setOptionStake] = useState("");
     const [optionDuration, setOptionDuration] = useState(60);
     const [search, setSearch] = useState("");
+    const [timeframe, setTimeframe] = useState("1m");
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
@@ -168,8 +227,8 @@ export default function Trading() {
 
     const candles = useMemo(() => {
         const prices = pairInfo.baseMarket?.sparkline_in_7d?.price || [];
-        return buildCandles([...prices.slice(-120), pairInfo.rate]);
-    }, [pairInfo.baseMarket, pairInfo.rate]);
+        return buildCandles([...prices.slice(-160), pairInfo.rate], timeframe);
+    }, [pairInfo.baseMarket, pairInfo.rate, timeframe]);
 
     const quoteBalance = Number(portfolio?.balances?.[pairInfo.quote] || 0);
     const baseBalance = Number(portfolio?.balances?.[pairInfo.base] || 0);
@@ -247,8 +306,8 @@ export default function Trading() {
                         </div>
                         <div className="text-right"><p className="text-3xl font-display gradient-text-gold">{formatAmt(pairInfo.rate)}</p><p className={up ? "text-emerald-300 text-sm" : "text-rose-300 text-sm"}>{up ? <ArrowUpRight className="w-4 h-4 inline" /> : <ArrowDownRight className="w-4 h-4 inline" />} {pct(pairInfo.baseMarket?.price_change_percentage_24h)}</p></div>
                     </div>
-                    <div className="h-[320px]">
-                        <CandleChart candles={candles} />
+                    <div className="h-[380px]">
+                        <CandleChart candles={candles} pair={pairInfo.pair} timeframe={timeframe} onTimeframe={setTimeframe} />
                     </div>
                 </Card>
 
