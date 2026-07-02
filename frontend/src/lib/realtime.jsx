@@ -9,6 +9,23 @@ function wsUrl() {
     return base.replace(/^http/i, "ws") + "/api/ws";
 }
 
+async function showBrowserNotification(title, body) {
+    if (!("Notification" in window)) return;
+    try {
+        let permission = Notification.permission;
+        if (permission === "default") permission = await Notification.requestPermission();
+        if (permission === "granted") {
+            new Notification(title || "Eregon notification", {
+                body: body || "",
+                icon: "/favicon.ico",
+                tag: `eregon-${title}-${body}`,
+            });
+        }
+    } catch (error) {
+        void error;
+    }
+}
+
 export function RealtimeProvider({ children }) {
     const { user, setUser, refresh } = useAuth();
     const [connected, setConnected] = useState(false);
@@ -42,7 +59,10 @@ export function RealtimeProvider({ children }) {
                         setUser((prev) => prev ? { ...prev, balance: payload.balance ?? prev.balance, bonus_balance: payload.bonus_balance ?? prev.bonus_balance } : prev);
                         toast.success(`Reward credited: +${payload.delta || 0} ${user.coin_symbol || "USDT"}`);
                     }
-                    if (event === "notification.created") toast(payload.title || "New notification", { description: payload.body });
+                    if (event === "notification.created") {
+                        toast(payload.title || "New notification", { description: payload.body });
+                        showBrowserNotification(payload.title || "New notification", payload.body);
+                    }
                     if (event === "deposit.updated") toast.success(`Deposit ${payload.status}`);
                     if (event === "withdrawal.updated") toast(`Withdrawal ${payload.status}`);
                     if (event === "task.completed") toast.success("Task reward unlocked", { description: `+${payload.reward} ${user.coin_symbol || "USDT"}` });

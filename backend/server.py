@@ -68,6 +68,7 @@ COINGECKO_API_KEY = os.environ.get("COINGECKO_API_KEY", "").strip()
 COINGECKO_API_KEY_HEADER = os.environ.get("COINGECKO_API_KEY_HEADER", "x-cg-demo-api-key").strip() or "x-cg-demo-api-key"
 MARKET_CACHE_SECONDS = int(os.environ.get("MARKET_CACHE_SECONDS", "25"))
 TRADING_DEFAULT_LIMIT = int(os.environ.get("TRADING_DEFAULT_MARKET_LIMIT", "200"))
+BINANCE_API_BASE = os.environ.get("BINANCE_API_BASE", "https://api.binance.com/api/v3").rstrip("/")
 OPTIONS_PAYOUT_RATE = float(os.environ.get("OPTIONS_PAYOUT_RATE", "0.8"))
 OPTIONS_DURATIONS_SECONDS = [30, 60, 120, 300]
 
@@ -1904,6 +1905,45 @@ async def admin_create_notification(body: NotificationIn, admin: dict = Depends(
     return rec
 
 
+async def create_user_notification(user_id: str, title: str, body: str, category: str = "system") -> dict:
+    rec = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "title": title,
+        "body": body,
+        "category": category,
+        "read": False,
+        "created_at": now_utc().isoformat(),
+    }
+    await db.notifications.insert_one(rec)
+    rec.pop("_id", None)
+    await _phase2_emit_user(user_id, "notification.created", rec)
+    return rec
+
+
+async def create_admin_notifications(title: str, body: str, category: str = "admin") -> list[dict]:
+    admins = await db.users.find({"role": "admin", "status": {"$ne": "suspended"}}, {"_id": 0, "id": 1}).to_list(100)
+    records = []
+    now_iso = now_utc().isoformat()
+    for admin_doc in admins:
+        rec = {
+            "id": str(uuid.uuid4()),
+            "user_id": admin_doc["id"],
+            "title": title,
+            "body": body,
+            "category": category,
+            "read": False,
+            "created_at": now_iso,
+        }
+        records.append(rec)
+    if records:
+        await db.notifications.insert_many(records)
+        for rec in records:
+            rec.pop("_id", None)
+            await _phase2_emit_user(rec["user_id"], "notification.created", rec)
+    return records
+
+
 def _practice_name_pool():
     first_names = [
         "James", "Mary", "Robert", "Patricia", "John", "Jennifer", "Michael", "Linda", "David", "Elizabeth",
@@ -2457,6 +2497,51 @@ def _fetch_markets_sync(limit: int, vs_currency: str) -> list[dict]:
     return data
 
 
+def _fetch_binance_markets_sync() -> list[dict]:
+    symbol_meta = {
+        "BTCUSDT": ("bitcoin", "btc", "Bitcoin", 1),
+        "ETHUSDT": ("ethereum", "eth", "Ethereum", 2),
+        "BNBUSDT": ("binancecoin", "bnb", "BNB", 4),
+        "SOLUSDT": ("solana", "sol", "Solana", 5),
+        "XRPUSDT": ("ripple", "xrp", "XRP", 6),
+        "ADAUSDT": ("cardano", "ada", "Cardano", 8),
+        "DOGEUSDT": ("dogecoin", "doge", "Dogecoin", 9),
+        "TRXUSDT": ("tron", "trx", "TRON", 10),
+    }
+    response = requests.get(f"{BINANCE_API_BASE}/ticker/24hr", timeout=6)
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, list):
+        raise ValueError("Binance ticker response was not a list")
+    by_symbol = {item.get("symbol"): item for item in data if item.get("symbol") in symbol_meta}
+    markets = []
+    for ticker, (coin_id, symbol, name, rank) in symbol_meta.items():
+        item = by_symbol.get(ticker)
+        if not item:
+            continue
+        price = float(item.get("lastPrice") or 0)
+        if price <= 0:
+            continue
+        volume = float(item.get("quoteVolume") or 0)
+        change = float(item.get("priceChangePercent") or 0)
+        markets.append({
+            "id": coin_id,
+            "symbol": symbol,
+            "name": name,
+            "image": None,
+            "current_price": price,
+            "market_cap": 0.0,
+            "market_cap_rank": rank,
+            "total_volume": volume,
+            "price_change_percentage_24h": change,
+            "sparkline_in_7d": {"price": []},
+            "source": "binance",
+        })
+    if len(markets) < 3:
+        raise ValueError("Binance returned too few usable markets")
+    return markets
+
+
 async def get_market_snapshot(limit: int = TRADING_DEFAULT_LIMIT, vs_currency: str = "usd", include_custom: bool = True, force: bool = False) -> dict:
     now = time.time()
     limit = max(1, min(250, int(limit or TRADING_DEFAULT_LIMIT)))
@@ -2472,10 +2557,16 @@ async def get_market_snapshot(limit: int = TRADING_DEFAULT_LIMIT, vs_currency: s
         live = await asyncio.to_thread(_fetch_markets_sync, limit, vs_currency)
         coins = merge_markets(live, include_custom=include_custom)
     except Exception as exc:
-        logger.warning("CoinGecko market fetch failed; using fallback markets: %s", exc)
-        coins = fallback_markets(limit)
-        source = "fallback"
         error = str(exc)[:180]
+        try:
+            live = await asyncio.to_thread(_fetch_binance_markets_sync)
+            coins = merge_markets(live, include_custom=include_custom)
+            source = "binance"
+        except Exception as binance_exc:
+            logger.warning("Market fetch failed; using static fallback. coingecko=%s binance=%s", exc, binance_exc)
+            coins = fallback_markets(limit)
+            source = "fallback"
+            error = f"{error}; Binance: {str(binance_exc)[:120]}"
 
     payload = {
         "coins": coins[:limit + (4 if include_custom else 0)],
@@ -2483,7 +2574,7 @@ async def get_market_snapshot(limit: int = TRADING_DEFAULT_LIMIT, vs_currency: s
         "vs_currency": vs_currency.upper(),
         "source": source,
         "source_error": error,
-        "provider": "CoinGecko" if source == "coingecko" else "Fallback cache",
+        "provider": "CoinGecko" if source == "coingecko" else "Binance" if source == "binance" else "Fallback cache",
         "fee_rate": TRADING_FEE_RATE,
         "updated_at": now_utc().isoformat(),
         "cache_seconds": MARKET_CACHE_SECONDS,
@@ -2742,9 +2833,12 @@ async def place_trading_order(body: TradingOrderIn, user: dict = Depends(get_cur
     return {"ok": True, "trade": trade, "portfolio": {"balances": after_balances, **portfolio}}
 
 
-async def _settle_expired_options(user_id: str) -> int:
+async def _settle_expired_options(user_id: Optional[str] = None) -> int:
     now_iso = now_utc().isoformat()
-    pending = await db.options_trades.find({"user_id": user_id, "status": "open", "expires_at": {"$lte": now_iso}}, {"_id": 0}).to_list(50)
+    q = {"status": "open", "expires_at": {"$lte": now_iso}}
+    if user_id:
+        q["user_id"] = user_id
+    pending = await db.options_trades.find(q, {"_id": 0}).to_list(100)
     if not pending:
         return 0
     snapshot = await get_market_snapshot(limit=TRADING_DEFAULT_LIMIT, include_custom=True, force=False)
@@ -2773,7 +2867,7 @@ async def _settle_expired_options(user_id: str) -> int:
         after = None
         if won and payout > 0:
             updated = await db.users.find_one_and_update(
-                {"id": user_id},
+                {"id": option["user_id"]},
                 {"$inc": {"balance": payout, "total_earnings": max(0.0, profit)}, "$set": {"last_active": now_iso}},
                 return_document=ReturnDocument.AFTER,
             )
@@ -2781,7 +2875,7 @@ async def _settle_expired_options(user_id: str) -> int:
                 after = round(float(updated.get("balance", 0)), 2)
                 before = round(after - payout, 2)
                 await record_tx(
-                    user_id=user_id,
+                    user_id=option["user_id"],
                     type_="options_payout",
                     amount=payout,
                     coin="USDT",
@@ -2802,12 +2896,26 @@ async def _settle_expired_options(user_id: str) -> int:
                 "settled_rule": "admin" if forced_outcome in {"win", "lose"} else "market",
             }},
         )
+        result_word = "won" if won else "lost"
+        user_body = (
+            f"Your {option.get('pair')} {str(direction).upper()} contract {result_word}. "
+            f"Entry {entry_rate:g}, exit {exit_rate:g}. "
+            f"{'Payout ' + str(payout) + ' USDT.' if won else 'Stake lost.'}"
+        )
+        admin_body = (
+            f"{option.get('pair')} {str(direction).upper()} options contract by user {option.get('user_id')} "
+            f"{result_word}. Stake {stake:g} USDT, profit {profit:g} USDT."
+        )
+        await create_user_notification(option["user_id"], "Options Contract Settled", user_body, "trading")
+        await create_admin_notifications("Options Contract Settled", admin_body, "trading")
+        await _phase2_emit_admin("options.settled", {"id": option["id"], "status": "won" if won else "lost", "user_id": option["user_id"], "pair": option.get("pair")})
         settled += 1
     return settled
 
 
 @api.get("/admin/trading/options")
 async def admin_options_trades(status: Optional[str] = None, limit: int = 100, admin: dict = Depends(admin_required)):
+    await _settle_expired_options()
     q = {}
     if status:
         q["status"] = status
@@ -2840,6 +2948,7 @@ async def admin_set_options_outcome(option_id: str, body: OptionsOutcomeIn, admi
     await db.options_trades.update_one({"id": option_id}, update)
     refreshed = await db.options_trades.find_one({"id": option_id}, {"_id": 0})
     await db.admin_logs.insert_one({"id": str(uuid.uuid4()), "admin_id": admin["id"], "action": "options.outcome.set", "target_id": option_id, "metadata": {"outcome": body.outcome}, "created_at": now_utc().isoformat()})
+    await _phase2_emit_admin("options.outcome_updated", refreshed)
     return {"ok": True, "option": refreshed}
 
 
@@ -2905,7 +3014,19 @@ async def place_options_trade(body: OptionsTradeIn, user: dict = Depends(get_cur
         reference_id=option_id,
         note=f"Options {body.direction.upper()} contract on {base}/{quote} for {duration}s",
     )
+    await create_user_notification(
+        user["id"],
+        "Options Contract Opened",
+        f"Your {base}/{quote} {body.direction.upper()} contract is open for {duration}s with a {stake:g} USDT stake.",
+        "trading",
+    )
+    await create_admin_notifications(
+        "New Options Contract",
+        f"{user.get('email') or user['id']} opened {base}/{quote} {body.direction.upper()} for {stake:g} USDT, expiring in {duration}s.",
+        "trading",
+    )
     await _phase2_emit_user(user["id"], "balance.updated", {"balance": after, "source": "options", "option": option})
+    await _phase2_emit_admin("options.opened", option)
     option.pop("_id", None)
     return {"ok": True, "option": option, "balance": after}
 

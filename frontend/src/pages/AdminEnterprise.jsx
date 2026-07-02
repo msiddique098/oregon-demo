@@ -3,12 +3,14 @@ import { toast } from "sonner";
 import { Activity, BarChart3, BellRing, Bot, Clock, MessageCircle, Plus, RefreshCw, ShieldAlert, SlidersHorizontal, Target, TrendingUp, WalletCards, Crown } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import { api, formatApiError } from "../lib/api";
+import { useRealtime } from "../lib/realtime";
 import AnimatedCounter from "../components/AnimatedCounter";
 
 const emptyRule = { name: "Minimum withdrawable balance", rule_type: "minimum_balance", enabled: true, value: { amount: 25 }, message: "Reach 25 USDT withdrawable balance before requesting withdrawal.", priority: 10 };
 const emptyCampaign = { name: "Weekend Eregon Boost", campaign_type: "countdown", active: true, starts_at: "", ends_at: "", content: { message: "Complete tasks before the event ends." } };
 
 export default function AdminEnterprise() {
+    const { lastEvent } = useRealtime();
     const [overview, setOverview] = useState(null);
     const [settings, setSettings] = useState([]);
     const [rules, setRules] = useState([]);
@@ -46,6 +48,20 @@ export default function AdminEnterprise() {
     };
 
     useEffect(() => { load(); }, []);
+
+    useEffect(() => {
+        const event = lastEvent?.event;
+        const payload = lastEvent?.payload || {};
+        if (event === "options.opened") {
+            setOptionOrders((prev) => [payload, ...prev.filter((item) => item.id !== payload.id)]);
+        }
+        if (event === "options.outcome_updated") {
+            setOptionOrders((prev) => prev.map((item) => item.id === payload.id ? { ...item, ...payload } : item));
+        }
+        if (event === "options.settled") {
+            setOptionOrders((prev) => prev.filter((item) => item.id !== payload.id));
+        }
+    }, [lastEvent]);
 
     const stats = useMemo(() => overview || {}, [overview]);
 

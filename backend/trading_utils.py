@@ -47,7 +47,7 @@ CUSTOM_COINS: List[Dict[str, Any]] = [
 ]
 
 FALLBACK_MAJOR_MARKETS: List[Dict[str, Any]] = [
-    {"id": "bitcoin", "symbol": "btc", "name": "Bitcoin", "current_price": 65000.0, "market_cap_rank": 1, "price_change_percentage_24h": 0.0},
+    {"id": "bitcoin", "symbol": "btc", "name": "Bitcoin", "current_price": 62000.0, "market_cap_rank": 1, "price_change_percentage_24h": 0.0},
     {"id": "ethereum", "symbol": "eth", "name": "Ethereum", "current_price": 3500.0, "market_cap_rank": 2, "price_change_percentage_24h": 0.0},
     {"id": "tether", "symbol": "usdt", "name": "Tether", "current_price": 1.0, "market_cap_rank": 3, "price_change_percentage_24h": 0.0},
     {"id": "binancecoin", "symbol": "bnb", "name": "BNB", "current_price": 600.0, "market_cap_rank": 4, "price_change_percentage_24h": 0.0},
@@ -91,7 +91,7 @@ def _motion_factor(symbol: str, epoch: float, custom: bool = False) -> float:
     if normalize_symbol(symbol) in {"USDT", "USDC", "USD"}:
         amplitude = 0.00008
     else:
-        amplitude = 0.012 if custom else 0.0018
+        amplitude = 0.012 if custom else 0.00045
     phase = epoch / (2.4 + (seed % 11) * 0.17) + seed * 0.013
     wave = math.sin(phase) * amplitude + math.cos(phase * 0.43) * amplitude * 0.55
     pulse = math.sin(epoch / (7.0 + (seed % 5)) + seed) * amplitude * 0.35
