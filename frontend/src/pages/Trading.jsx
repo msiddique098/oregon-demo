@@ -35,9 +35,7 @@ const TIMEFRAME_CONFIG = {
     "5m": { label: "5m", window: 110, bucket: 2 },
     "15m": { label: "15m", window: 170, bucket: 3 },
     "1h": { label: "1h", window: 260, bucket: 6 },
-    "4h": { label: "4h", window: 420, bucket: 8 },
     "1d": { label: "1d", window: 9999, bucket: 10 },
-    "1w": { label: "1w", window: 9999, bucket: 12 },
 };
 
 function buildCandles(prices = [], timeframe = "1m") {
@@ -182,146 +180,6 @@ function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTime
                 <text x={width - pad.right} y={height - 12} textAnchor="end" fill="rgba(251,191,36,.75)" fontSize="11">Live quotes</text>
             </svg>
         </div>
-    );
-}
-
-function MobileExchangeChart({ candles = [], pairInfo, timeframe, onTimeframe, onOpenUp, onOpenDown }) {
-    const [zoom, setZoom] = useState(1);
-    if (!candles.length) return null;
-    const pair = pairInfo.pair;
-    const last = candles[candles.length - 1];
-    const change = Number(pairInfo.baseMarket?.price_change_percentage_24h || 0);
-    const up = change >= 0;
-    const visibleCount = Math.min(candles.length, Math.max(12, Math.round(52 / zoom)));
-    const visible = candles.slice(-visibleCount);
-    const width = 390;
-    const priceH = 355;
-    const rsiH = 105;
-    const pad = { left: 0, right: 58, top: 22, bottom: 18 };
-    const hi = Math.max(...visible.map((c) => c.high));
-    const lo = Math.min(...visible.map((c) => c.low));
-    const span = Math.max(0.00000001, hi - lo);
-    const plotW = width - pad.left - pad.right;
-    const x = (i) => pad.left + (i + 0.5) * (plotW / visible.length);
-    const y = (value) => pad.top + ((hi - value) / span) * (priceH - pad.top - pad.bottom);
-    const candleW = Math.max(3, (plotW / visible.length) * 0.55);
-    const ticks = Array.from({ length: 5 }).map((_, i) => lo + ((hi - lo) * i) / 4).reverse();
-    const maxVol = Math.max(...visible.map((c) => c.volume || 1));
-    const maPath = (period) => visible.map((_, i) => {
-        if (i < period - 1) return null;
-        const slice = visible.slice(i - period + 1, i + 1);
-        const avg = slice.reduce((sum, c) => sum + c.close, 0) / period;
-        return `${i === period - 1 ? "M" : "L"} ${x(i).toFixed(2)} ${y(avg).toFixed(2)}`;
-    }).filter(Boolean).join(" ");
-    const rsiPoints = visible.map((c, i) => {
-        const prev = visible[Math.max(0, i - 1)]?.close || c.open;
-        const delta = c.close - prev;
-        const rsi = Math.max(8, Math.min(92, 50 + (delta / Math.max(c.close * 0.002, 0.000001)) * 18));
-        const ry = priceH + 10 + ((90 - rsi) / 80) * (rsiH - 22);
-        return `${i === 0 ? "M" : "L"} ${x(i).toFixed(2)} ${ry.toFixed(2)}`;
-    }).join(" ");
-    const zoomBy = (delta) => setZoom((value) => Math.max(0.75, Math.min(2.4, Number((value + delta).toFixed(2)))));
-    const wheelZoom = (event) => {
-        event.preventDefault();
-        zoomBy(event.deltaY > 0 ? -0.15 : 0.15);
-    };
-
-    return (
-        <section className="bg-[#202832] -mx-3 sm:mx-0 text-zinc-100">
-            <div className="px-4 pt-3">
-                <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-3xl leading-none">←</span>
-                        <h2 className="text-2xl font-bold truncate">{pair}</h2>
-                        <span className="text-zinc-400">▼</span>
-                    </div>
-                    <div className="flex items-center gap-4 text-2xl text-zinc-200">
-                        <span className="text-purple-300 font-bold">Ai</span>
-                        <span>☆</span>
-                        <span>♢</span>
-                    </div>
-                </div>
-                <div className="flex gap-7 mt-5 border-b border-white/10 text-lg font-semibold text-zinc-400 overflow-x-auto">
-                    {["Price", "Info", "Trading Data", "Square", "Trade-X"].map((tab) => (
-                        <button key={tab} className={`pb-3 shrink-0 ${tab === "Price" ? "text-white border-b-4 border-amber-400" : ""}`}>{tab}</button>
-                    ))}
-                </div>
-                <div className="grid grid-cols-[1.15fr_1fr] gap-4 py-5">
-                    <div>
-                        <p className={`text-5xl font-display font-semibold ${up ? "text-emerald-400" : "text-rose-400"}`}>{formatChartPrice(last.close)}</p>
-                        <p className="text-xl mt-2">Rs{(last.close * 280).toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className={up ? "text-emerald-400" : "text-rose-400"}>{pct(change)}</span></p>
-                        <p className="text-amber-300 mt-2 font-semibold">Payments · Vol · Price Protection ›</p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-                        <span className="text-zinc-400">24h High</span><span>{formatChartPrice(hi)}</span>
-                        <span className="text-zinc-400">24h Vol({pairInfo.base})</span><span>{formatAmt(maxVol)}</span>
-                        <span className="text-zinc-400">24h Low</span><span>{formatChartPrice(lo)}</span>
-                        <span className="text-zinc-400">24h Vol(USDT)</span><span>{formatUsd(maxVol * last.close, 2).replace("$", "")}</span>
-                    </div>
-                </div>
-                <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-3">
-                    <div className="flex gap-5 text-lg text-zinc-400 overflow-x-auto">
-                        {["Time", "15m", "1h", "4h", "1D", "1w"].map((tf) => (
-                            <button key={tf} onClick={() => onTimeframe?.(tf === "Time" ? "1m" : tf === "1D" ? "1d" : tf)} className={`${(tf === "Time" && timeframe === "1m") || (tf === "1D" && timeframe === "1d") || tf === timeframe ? "text-white font-bold" : ""}`}>{tf}</button>
-                        ))}
-                    </div>
-                    <div className="flex gap-2 text-xl">
-                        <button onClick={() => zoomBy(0.2)} className="w-8 h-8 rounded border border-white/15">+</button>
-                        <button onClick={() => zoomBy(-0.2)} className="w-8 h-8 rounded border border-white/15">−</button>
-                    </div>
-                </div>
-            </div>
-            <div className="relative" onWheel={wheelZoom} style={{ touchAction: "none" }}>
-                <svg viewBox={`0 0 ${width} ${priceH + rsiH}`} className="w-full h-[560px] block bg-[#202832]">
-                    <defs>
-                        <pattern id="chartGrid" width="130" height="72" patternUnits="userSpaceOnUse">
-                            <path d="M 130 0 L 0 0 0 72" fill="none" stroke="rgba(255,255,255,.07)" strokeWidth="1" />
-                        </pattern>
-                    </defs>
-                    <rect width={width} height={priceH + rsiH} fill="url(#chartGrid)" />
-                    <text x="132" y="178" fill="rgba(255,255,255,.08)" fontSize="24" fontWeight="700">BINANCE</text>
-                    {ticks.map((tick) => <text key={tick} x={width - 5} y={y(tick) + 4} textAnchor="end" fill="rgba(229,231,235,.62)" fontSize="12">{formatChartPrice(tick)}</text>)}
-                    {visible.map((c, i) => {
-                        const cx = x(i);
-                        const isUp = c.close >= c.open;
-                        const color = isUp ? "#34d399" : "#f43f5e";
-                        const top = y(Math.max(c.open, c.close));
-                        const bottom = y(Math.min(c.open, c.close));
-                        const bodyH = Math.max(2, bottom - top);
-                        const volH = Math.max(2, ((c.volume || 1) / maxVol) * 34);
-                        return <g key={`${i}-${c.close}`}>
-                            <line x1={cx} x2={cx} y1={y(c.high)} y2={y(c.low)} stroke={color} strokeWidth="1.2" />
-                            <rect x={cx - candleW / 2} y={top} width={candleW} height={bodyH} fill={color} />
-                            <rect x={cx - candleW / 2} y={priceH - 38 - volH} width={candleW} height={volH} fill={isUp ? "rgba(52,211,153,.28)" : "rgba(244,63,94,.28)"} />
-                        </g>;
-                    })}
-                    <path d={maPath(7)} fill="none" stroke="#facc15" strokeWidth="1.2" />
-                    <path d={maPath(25)} fill="none" stroke="#8b5cf6" strokeWidth="1.2" />
-                    <line x1={0} x2={width - 64} y1={y(last.close)} y2={y(last.close)} stroke="rgba(255,255,255,.7)" strokeDasharray="4 4" />
-                    <rect x={width - 68} y={y(last.close) - 13} width="68" height="26" rx="6" fill="#202832" stroke="rgba(255,255,255,.85)" />
-                    <text x={width - 34} y={y(last.close) + 5} textAnchor="middle" fill="white" fontSize="13">{formatChartPrice(last.close)}</text>
-                    <text x="18" y={priceH + 22} fill="#facc15" fontSize="14">RSI(6): {(32.47 + zoom).toFixed(2)}</text>
-                    <line x1="0" x2={width} y1={priceH + 42} y2={priceH + 42} stroke="rgba(255,255,255,.6)" strokeDasharray="5 5" />
-                    <line x1="0" x2={width} y1={priceH + 78} y2={priceH + 78} stroke="rgba(255,255,255,.6)" strokeDasharray="5 5" />
-                    <path d={rsiPoints} fill="none" stroke="#facc15" strokeWidth="1.6" />
-                    <text x={width - 6} y={priceH + 40} textAnchor="end" fill="rgba(229,231,235,.7)" fontSize="12">70.0</text>
-                    <text x={width - 6} y={priceH + 76} textAnchor="end" fill="rgba(229,231,235,.7)" fontSize="12">40.0</text>
-                </svg>
-            </div>
-            <div className="px-4 py-3 border-t border-white/10 flex justify-between text-zinc-400 text-base">
-                {["MA", "EMA", "BOLL", "SAR", "AVL", "SUPER", "VOL"].map((item) => <button key={item}>{item}</button>)}
-            </div>
-            <div className="px-4 pb-4 flex justify-between text-zinc-400">
-                {["Today", "7 Days", "30 Days", "90 Days", "180 Days", "1 Year"].map((item) => <button key={item}>{item}</button>)}
-            </div>
-            <div className="px-4 pb-5 grid grid-cols-[1fr_1fr_1fr_2fr_2fr] gap-3 items-center">
-                <button className="text-sm text-zinc-200">More</button>
-                <button className="text-sm text-zinc-200">Hub</button>
-                <button className="text-sm text-zinc-200">Margin</button>
-                <button onClick={onOpenUp} className="min-h-14 rounded-xl bg-emerald-500 text-white text-xl font-semibold">Buy</button>
-                <button onClick={onOpenDown} className="min-h-14 rounded-xl bg-rose-500 text-white text-xl font-semibold">Sell</button>
-            </div>
-        </section>
     );
 }
 
@@ -487,14 +345,6 @@ export default function Trading() {
                 <span className="truncate">Hot Campaign: Eregon precision trading rewards are live</span>
                 <span className="text-zinc-400">×</span>
             </div>
-            <MobileExchangeChart
-                candles={candles}
-                pairInfo={pairInfo}
-                timeframe={timeframe}
-                onTimeframe={setTimeframe}
-                onOpenUp={() => { setTradeMode("options"); setOptionDirection("up"); }}
-                onOpenDown={() => { setTradeMode("options"); setOptionDirection("down"); }}
-            />
 
             <div className="px-3 py-4">
                 <div className="flex items-start justify-between gap-3 mb-4">
@@ -590,7 +440,15 @@ export default function Trading() {
                     </div>
                 </div>
 
-                
+                <div className="rounded-xl border border-white/10 bg-[#0f151d] overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                        <p className="font-semibold">{pairInfo.pair} Chart</p>
+                        <button onClick={() => setChartFullscreen(true)} className="text-zinc-400">▲</button>
+                    </div>
+                    <div className="h-[260px]">
+                        <CandleChart candles={candles} pair={pairInfo.pair} timeframe={timeframe} onTimeframe={setTimeframe} chartType={chartType} onChartType={setChartType} fullscreen={chartFullscreen} onToggleFullscreen={() => setChartFullscreen((value) => !value)} />
+                    </div>
+                </div>
             </div>
         </div>
 
