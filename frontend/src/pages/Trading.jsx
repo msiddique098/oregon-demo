@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ArrowDownRight, ArrowUpDown, ArrowUpRight, Clock, RefreshCcw, Search, ShieldCheck, Target, Wallet } from "lucide-react";
+import { ArrowDownRight, ArrowUpDown, ArrowUpRight, BarChart3, Clock, LineChart, Maximize2, Minimize2, RefreshCcw, Search, ShieldCheck, Target, Wallet } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import CinematicLoader from "../components/CinematicLoader";
 import { Badge, Card } from "../components/ui-eregon";
@@ -9,6 +9,7 @@ import { toast } from "sonner";
 
 const formatUsd = (value, max = 6) => Number(value || 0).toLocaleString(undefined, { style: "currency", currency: "USD", maximumFractionDigits: Number(value || 0) >= 1 ? 2 : max });
 const formatAmt = (value) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: 10 });
+const formatChartPrice = (value) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: Number(value || 0) >= 1 ? 2 : 6 });
 const pct = (value) => `${Number(value || 0) >= 0 ? "+" : ""}${Number(value || 0).toFixed(2)}%`;
 
 function useQueryPair() {
@@ -29,17 +30,26 @@ function MiniOrderBook({ price }) {
     </div>;
 }
 
-const TIMEFRAME_FACTORS = { "1m": 1, "5m": 2, "15m": 4, "1h": 8, "1d": 16 };
+const TIMEFRAME_CONFIG = {
+    "1m": { label: "1m", window: 64, bucket: 1 },
+    "5m": { label: "5m", window: 110, bucket: 2 },
+    "15m": { label: "15m", window: 170, bucket: 3 },
+    "1h": { label: "1h", window: 260, bucket: 6 },
+    "1d": { label: "1d", window: 9999, bucket: 10 },
+};
 
 function buildCandles(prices = [], timeframe = "1m") {
-    const values = prices.map((p) => Number(p || 0)).filter((p) => p > 0);
-    if (values.length < 2) return [];
-    const target = 42;
-    const step = Math.max(1, Math.floor(values.length / target) * (TIMEFRAME_FACTORS[timeframe] || 1));
+    const allValues = prices.map((p) => Number(p || 0)).filter((p) => p > 0);
+    if (allValues.length < 2) return [];
+    const config = TIMEFRAME_CONFIG[timeframe] || TIMEFRAME_CONFIG["1m"];
+    const values = allValues.slice(-Math.min(allValues.length, config.window));
+    const target = timeframe === "1m" ? 46 : 42;
+    const step = Math.max(config.bucket, Math.floor(values.length / target));
     const candles = [];
-    for (let i = 1; i < values.length; i += step) {
+    for (let i = 0; i < values.length; i += step) {
         const slice = values.slice(i, i + step);
-        const open = values[i - 1];
+        if (!slice.length) continue;
+        const open = i === 0 ? slice[0] : values[i - 1];
         const close = slice[slice.length - 1] || open;
         const spread = Math.max(open, close) * 0.0018;
         const high = Math.max(open, close, ...slice) + spread;
@@ -50,11 +60,11 @@ function buildCandles(prices = [], timeframe = "1m") {
     return candles.slice(-target);
 }
 
-function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTimeframe }) {
+function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTimeframe, chartType = "candles", onChartType, fullscreen = false, onToggleFullscreen }) {
     const [hover, setHover] = useState(null);
     if (!candles.length) return <div className="h-full rounded-2xl bg-white/[0.03]" />;
-    const width = 760;
-    const height = 320;
+    const width = fullscreen ? 1180 : 760;
+    const height = fullscreen ? 620 : 320;
     const pad = { left: 58, right: 62, top: 34, bottom: 42 };
     const hi = Math.max(...candles.map((c) => c.high));
     const lo = Math.min(...candles.map((c) => c.low));
@@ -76,6 +86,8 @@ function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTime
         const avg = slice.reduce((sum, c) => sum + c.close, 0) / period;
         return `${i === period - 1 ? "M" : "L"} ${xFor(i).toFixed(2)} ${y(avg).toFixed(2)}`;
     }).filter(Boolean).join(" ");
+    const closePath = candles.map((c, i) => `${i === 0 ? "M" : "L"} ${xFor(i).toFixed(2)} ${y(c.close).toFixed(2)}`).join(" ");
+    const areaPath = `${closePath} L ${xFor(candles.length - 1).toFixed(2)} ${volY} L ${xFor(0).toFixed(2)} ${volY} Z`;
     const handleMove = (event) => {
         const rect = event.currentTarget.getBoundingClientRect();
         const relX = ((event.clientX - rect.left) / rect.width) * width;
@@ -89,16 +101,26 @@ function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTime
         setHover({ index, x: xFor(index), y: relY, price });
     };
     return (
-        <div className="h-full rounded-2xl bg-black/30 border border-white/5 overflow-hidden">
+        <div className={`${fullscreen ? "fixed inset-3 sm:inset-6 z-[90] h-auto rounded-2xl shadow-2xl shadow-black/70" : "h-full rounded-2xl"} bg-black/90 border border-white/10 overflow-hidden`}>
+            {fullscreen && <div className="absolute inset-0 -z-10 bg-black/80 backdrop-blur-xl" />}
             <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/5 bg-white/[0.02]">
                 <div className="min-w-0">
                     <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Advanced chart</p>
                     <p className="text-sm font-semibold text-zinc-200">{pair} <span className="text-zinc-500">OHLC</span></p>
                 </div>
-                <div className="flex shrink-0 rounded-lg border border-white/10 bg-white/[0.03] p-1">
-                    {Object.keys(TIMEFRAME_FACTORS).map((tf) => (
-                        <button key={tf} type="button" onClick={() => onTimeframe?.(tf)} className={`px-2.5 py-1 text-xs rounded-md ${timeframe === tf ? "bg-amber-400 text-black font-bold" : "text-zinc-400 hover:text-white"}`}>{tf}</button>
-                    ))}
+                <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex rounded-lg border border-white/10 bg-white/[0.03] p-1">
+                        {Object.keys(TIMEFRAME_CONFIG).map((tf) => (
+                            <button key={tf} type="button" onClick={() => onTimeframe?.(tf)} className={`px-2.5 py-1 text-xs rounded-md ${timeframe === tf ? "bg-amber-400 text-black font-bold" : "text-zinc-400 hover:text-white"}`}>{tf}</button>
+                        ))}
+                    </div>
+                    <div className="flex rounded-lg border border-white/10 bg-white/[0.03] p-1">
+                        <button type="button" title="Candles" onClick={() => onChartType?.("candles")} className={`p-1.5 rounded-md ${chartType === "candles" ? "bg-purple-500/25 text-purple-100" : "text-zinc-400 hover:text-white"}`}><BarChart3 className="w-4 h-4" /></button>
+                        <button type="button" title="Line" onClick={() => onChartType?.("line")} className={`p-1.5 rounded-md ${chartType === "line" ? "bg-purple-500/25 text-purple-100" : "text-zinc-400 hover:text-white"}`}><LineChart className="w-4 h-4" /></button>
+                    </div>
+                    <button type="button" title={fullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={onToggleFullscreen} className="p-2 rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 hover:text-white">
+                        {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                    </button>
                 </div>
             </div>
             <svg viewBox={`0 0 ${width} ${height}`} onMouseMove={handleMove} onMouseLeave={() => setHover(null)} className="w-full h-[calc(100%-49px)]">
@@ -110,7 +132,7 @@ function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTime
                 </defs>
                 <rect x="0" y="0" width={width} height={height} fill="url(#candleBg)" />
                 <text x={pad.left} y="21" fill="rgba(255,255,255,.72)" fontSize="12">
-                    O {formatAmt(hoverCandle.open)}  H {formatAmt(hoverCandle.high)}  L {formatAmt(hoverCandle.low)}  C {formatAmt(hoverCandle.close)}
+                    O {formatChartPrice(hoverCandle.open)} H {formatChartPrice(hoverCandle.high)} L {formatChartPrice(hoverCandle.low)} C {formatChartPrice(hoverCandle.close)}
                 </text>
                 <text x={width - pad.right} y="21" textAnchor="end" fill="rgba(251,191,36,.78)" fontSize="12">MA 7 / MA 25</text>
                 {ticks.map((tick) => {
@@ -120,13 +142,23 @@ function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTime
                 {candles.map((c, i) => {
                     const x = xFor(i);
                     const up = c.close >= c.open;
+                    const vHeight = Math.max(3, ((c.volume || 1) / maxVol) * volH);
+                    return <g key={`${i}-${c.close}`}>
+                        <rect x={x - candleW / 2} y={volY - vHeight} width={candleW} height={vHeight} rx="2" fill={up ? "rgba(52,211,153,.16)" : "rgba(251,113,133,.16)"} />
+                    </g>;
+                })}
+                {chartType === "line" && <>
+                    <path d={areaPath} fill="rgba(251,191,36,.10)" />
+                    <path d={closePath} fill="none" stroke="#fbbf24" strokeWidth="2.4" />
+                </>}
+                {chartType === "candles" && candles.map((c, i) => {
+                    const x = xFor(i);
+                    const up = c.close >= c.open;
                     const color = up ? "#34d399" : "#fb7185";
                     const bodyTop = y(Math.max(c.open, c.close));
                     const bodyBottom = y(Math.min(c.open, c.close));
                     const bodyH = Math.max(2, bodyBottom - bodyTop);
-                    const vHeight = Math.max(3, ((c.volume || 1) / maxVol) * volH);
-                    return <g key={`${i}-${c.close}`}>
-                        <rect x={x - candleW / 2} y={volY - vHeight} width={candleW} height={vHeight} rx="2" fill={up ? "rgba(52,211,153,.16)" : "rgba(251,113,133,.16)"} />
+                    return <g key={`candle-${i}-${c.close}`}>
                         <line x1={x} x2={x} y1={y(c.high)} y2={y(c.low)} stroke={color} strokeWidth="1.5" />
                         <rect x={x - candleW / 2} y={bodyTop} width={candleW} height={bodyH} rx="2" fill={up ? "rgba(52,211,153,.88)" : "rgba(251,113,133,.88)"} />
                     </g>;
@@ -142,7 +174,7 @@ function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTime
                     <rect x={width - pad.right + 5} y={hover.y - 10} width="54" height="20" rx="5" fill="rgba(255,255,255,.12)" />
                     <text x={width - pad.right + 32} y={hover.y + 4} textAnchor="middle" fill="white" fontSize="10">{formatAmt(hover.price)}</text>
                 </>}
-                <text x={pad.left} y={height - 12} fill="rgba(255,255,255,.38)" fontSize="11">Crosshair, volume, moving averages</text>
+                <text x={pad.left} y={height - 12} fill="rgba(255,255,255,.38)" fontSize="11">{TIMEFRAME_CONFIG[timeframe]?.label || timeframe} view, crosshair, volume, moving averages</text>
                 <text x={width - pad.right} y={height - 12} textAnchor="end" fill="rgba(251,191,36,.75)" fontSize="11">Live auto-refreshing quotes</text>
             </svg>
         </div>
@@ -166,6 +198,8 @@ export default function Trading() {
     const [optionDuration, setOptionDuration] = useState(60);
     const [search, setSearch] = useState("");
     const [timeframe, setTimeframe] = useState("1m");
+    const [chartType, setChartType] = useState("candles");
+    const [chartFullscreen, setChartFullscreen] = useState(false);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
@@ -227,7 +261,7 @@ export default function Trading() {
 
     const candles = useMemo(() => {
         const prices = pairInfo.baseMarket?.sparkline_in_7d?.price || [];
-        return buildCandles([...prices.slice(-160), pairInfo.rate], timeframe);
+        return buildCandles([...prices, pairInfo.rate], timeframe);
     }, [pairInfo.baseMarket, pairInfo.rate, timeframe]);
 
     const quoteBalance = Number(portfolio?.balances?.[pairInfo.quote] || 0);
@@ -307,7 +341,7 @@ export default function Trading() {
                         <div className="text-right"><p className="text-3xl font-display gradient-text-gold">{formatAmt(pairInfo.rate)}</p><p className={up ? "text-emerald-300 text-sm" : "text-rose-300 text-sm"}>{up ? <ArrowUpRight className="w-4 h-4 inline" /> : <ArrowDownRight className="w-4 h-4 inline" />} {pct(pairInfo.baseMarket?.price_change_percentage_24h)}</p></div>
                     </div>
                     <div className="h-[380px]">
-                        <CandleChart candles={candles} pair={pairInfo.pair} timeframe={timeframe} onTimeframe={setTimeframe} />
+                        <CandleChart candles={candles} pair={pairInfo.pair} timeframe={timeframe} onTimeframe={setTimeframe} chartType={chartType} onChartType={setChartType} fullscreen={chartFullscreen} onToggleFullscreen={() => setChartFullscreen((value) => !value)} />
                     </div>
                 </Card>
 
