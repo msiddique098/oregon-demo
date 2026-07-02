@@ -267,6 +267,18 @@ export default function Trading() {
     const quoteBalance = Number(portfolio?.balances?.[pairInfo.quote] || 0);
     const baseBalance = Number(portfolio?.balances?.[pairInfo.base] || 0);
     const estimated = side === "buy" ? (Number(amount || 0) / Math.max(pairInfo.rate, 0.00000001)) * (1 - Number(portfolio?.fee_rate || 0.001)) : (Number(amount || 0) * pairInfo.rate) * (1 - Number(portfolio?.fee_rate || 0.001));
+    const mobileBookRows = useMemo(() => {
+        const p = Number(pairInfo.rate || 0);
+        return Array.from({ length: 5 }).map((_, i) => {
+            const spread = (i + 1) * 0.000005;
+            return {
+                ask: p * (1 + spread),
+                bid: p * (1 - spread),
+                askSize: ((Math.sin(p + i) + 1.4) * (i + 1) * 0.18),
+                bidSize: ((Math.cos(p + i) + 1.4) * (i + 1) * 0.18),
+            };
+        });
+    }, [pairInfo.rate]);
 
     const submit = async () => {
         if (!amount || Number(amount) <= 0) return toast.error("Enter a valid order amount");
@@ -303,7 +315,7 @@ export default function Trading() {
     const up = Number(pairInfo.baseMarket?.price_change_percentage_24h || 0) >= 0;
 
     return <DashboardLayout>
-        <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4 mb-6">
+        <div className="hidden xl:flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4 mb-6">
             <div>
                 <p className="text-xs uppercase tracking-[0.28em] text-amber-400/80">Eregon Exchange</p>
                 <h1 className="text-3xl sm:text-4xl font-display font-semibold mt-1">Spot Trading</h1>
@@ -316,7 +328,129 @@ export default function Trading() {
             </div>
         </div>
 
-        <div className="grid xl:grid-cols-[280px_minmax(0,1fr)_360px] gap-5">
+        <div className="xl:hidden -mx-3 sm:mx-0 pb-4">
+            <div className="px-3 pb-3 border-b border-white/10">
+                <div className="flex items-center justify-between gap-4 overflow-x-auto text-2xl font-display font-semibold text-zinc-500">
+                    {["Convert", "Spot", "Stocks", "P2P", "Alpha"].map((tab) => (
+                        <button key={tab} className={tab === "Spot" ? "text-white" : "text-zinc-500"}>{tab}</button>
+                    ))}
+                    <button className="ml-auto text-zinc-300 text-3xl leading-none">≡</button>
+                </div>
+            </div>
+
+            <div className="flex items-center gap-2 px-3 py-3 border-b border-white/10 text-sm text-zinc-300">
+                <span className="text-amber-300">■</span>
+                <span className="truncate">Hot Campaign: Eregon precision trading rewards are live</span>
+                <span className="text-zinc-400">×</span>
+            </div>
+
+            <div className="px-3 py-4">
+                <div className="flex items-start justify-between gap-3 mb-4">
+                    <div>
+                        <button className="flex items-center gap-2 text-3xl font-display font-semibold">
+                            {pairInfo.pair} <span className="text-base text-zinc-400">▼</span>
+                        </button>
+                        <p className={up ? "text-emerald-400 text-lg mt-1" : "text-rose-400 text-lg mt-1"}>{pct(pairInfo.baseMarket?.price_change_percentage_24h)}</p>
+                    </div>
+                    <div className="flex items-center gap-4 text-zinc-300">
+                        <button onClick={() => setChartFullscreen(true)} className="text-2xl leading-none">▥</button>
+                        <button className="text-3xl leading-none text-amber-300">...</button>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-[minmax(0,1.08fr)_minmax(118px,0.92fr)] gap-3">
+                    <div className="space-y-3 min-w-0">
+                        <div className="grid grid-cols-2 rounded-xl border border-white/10 bg-[#151b24] p-1">
+                            <button onClick={() => { setTradeMode("spot"); setSide("buy"); }} className={`rounded-lg py-2.5 text-base font-semibold ${tradeMode === "spot" && side === "buy" ? "bg-emerald-500 text-white" : "text-zinc-400"}`}>Buy</button>
+                            <button onClick={() => { setTradeMode("spot"); setSide("sell"); }} className={`rounded-lg py-2.5 text-base font-semibold ${tradeMode === "spot" && side === "sell" ? "bg-rose-500 text-white" : "text-zinc-400"}`}>Sell</button>
+                        </div>
+                        <div className="grid grid-cols-2 rounded-xl border border-white/10 bg-[#151b24] p-1">
+                            <button onClick={() => setTradeMode("spot")} className={`rounded-lg py-2 text-sm font-semibold ${tradeMode === "spot" ? "bg-white/10 text-white" : "text-zinc-500"}`}>Spot</button>
+                            <button onClick={() => setTradeMode("options")} className={`rounded-lg py-2 text-sm font-semibold ${tradeMode === "options" ? "bg-purple-500/30 text-purple-100" : "text-zinc-500"}`}>Options</button>
+                        </div>
+                        <select className="input-eregon h-12 bg-[#151b24] border-white/10" value={pairInfo.pair} onChange={(e) => setSelectedPair(e.target.value)}>{orderPairs.map((p) => <option key={p.pair}>{p.pair}</option>)}</select>
+
+                        {tradeMode === "options" ? (
+                            <>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => setOptionDirection("up")} className={`rounded-xl py-3 font-semibold border ${optionDirection === "up" ? "bg-emerald-500 text-white border-emerald-400" : "bg-[#151b24] border-white/10 text-zinc-400"}`}>↗ Up</button>
+                                    <button onClick={() => setOptionDirection("down")} className={`rounded-xl py-3 font-semibold border ${optionDirection === "down" ? "bg-rose-500 text-white border-rose-400" : "bg-[#151b24] border-white/10 text-zinc-400"}`}>↘ Down</button>
+                                </div>
+                                <input className="input-eregon h-12 bg-[#151b24] border-white/10" value={optionStake} onChange={(e) => setOptionStake(e.target.value)} type="number" min="0" step="any" placeholder="Stake USDT" />
+                                <select className="input-eregon h-12 bg-[#151b24] border-white/10" value={optionDuration} onChange={(e) => setOptionDuration(Number(e.target.value))}>{optionMeta.durations.map((d) => <option key={d} value={d}>{d < 60 ? `${d}s` : `${d / 60}m`}</option>)}</select>
+                                <div className="text-sm space-y-1">
+                                    <div className="flex justify-between text-zinc-400"><span>Avbl</span><span>{formatAmt(quoteBalance)} USDT</span></div>
+                                    <div className="flex justify-between text-zinc-400"><span>Win payout</span><span>{formatUsd(Number(optionStake || 0) * (1 + Number(optionMeta.payout_rate || 0.8)))}</span></div>
+                                </div>
+                                <button disabled={submitting} onClick={submitOption} className="w-full min-h-14 rounded-xl gradient-gold text-black font-bold text-base">{submitting ? "Opening..." : `Open ${optionDirection.toUpperCase()} Contract`}</button>
+                            </>
+                        ) : (
+                            <>
+                                <div className="input-eregon h-12 bg-[#151b24] border-white/10 flex items-center justify-between">
+                                    <span className="text-zinc-500">{side === "buy" ? "Total" : "Amount"}</span>
+                                    <span className="font-semibold">{side === "buy" ? pairInfo.quote : pairInfo.base}</span>
+                                </div>
+                                <input className="input-eregon h-12 bg-[#151b24] border-white/10" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" min="0" step="any" placeholder={side === "buy" ? "Total" : "Amount"} />
+                                <div className="text-sm space-y-1">
+                                    <div className="flex justify-between text-zinc-400"><span>Avbl</span><span>{formatAmt(side === "buy" ? quoteBalance : baseBalance)} {side === "buy" ? pairInfo.quote : pairInfo.base}</span></div>
+                                    <div className="flex justify-between text-zinc-400"><span>Est. Fee</span><span>{(Number(portfolio?.fee_rate || 0.001) * 100).toFixed(2)}%</span></div>
+                                </div>
+                                <button disabled={submitting} onClick={submit} className={`w-full min-h-14 rounded-xl font-bold text-base ${side === "buy" ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"}`}>{submitting ? "Filling..." : `${side === "buy" ? "Buy" : "Sell"} ${pairInfo.base}`}</button>
+                            </>
+                        )}
+                    </div>
+
+                    <div className="min-w-0">
+                        <div className="grid grid-cols-2 gap-1 text-xs text-zinc-400 mb-2">
+                            <span>Price</span><span className="text-right">Amount</span>
+                        </div>
+                        <div className="space-y-1">
+                            {mobileBookRows.slice().reverse().map((r, i) => <div key={`m-ask-${i}`} className="grid grid-cols-2 gap-1 text-sm">
+                                <span className="text-rose-400 bg-rose-500/10 px-1">{formatChartPrice(r.ask)}</span>
+                                <span className="text-right text-zinc-100">{r.askSize.toFixed(5)}</span>
+                            </div>)}
+                        </div>
+                        <div className="py-2">
+                            <p className={up ? "text-3xl font-display text-emerald-400" : "text-3xl font-display text-rose-400"}>{formatChartPrice(pairInfo.rate)}</p>
+                            <p className="text-xs text-zinc-500">≈ Rs{(pairInfo.rate * 280).toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                        </div>
+                        <div className="space-y-1">
+                            {mobileBookRows.map((r, i) => <div key={`m-bid-${i}`} className="grid grid-cols-2 gap-1 text-sm">
+                                <span className="text-emerald-400 bg-emerald-500/10 px-1">{formatChartPrice(r.bid)}</span>
+                                <span className="text-right text-zinc-100">{r.bidSize.toFixed(5)}</span>
+                            </div>)}
+                        </div>
+                        <div className="mt-2 flex items-center justify-between text-xs">
+                            <span className="text-emerald-400">42.64%</span>
+                            <span className="text-rose-400">57.36%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="mt-5 border-t border-white/10 pt-4">
+                    <div className="flex items-center gap-5 text-lg font-display font-semibold">
+                        <button className="text-white border-b-4 border-amber-400 pb-2">Open Orders (0)</button>
+                        <button className="text-zinc-500 pb-2">Holdings ({portfolio?.positions?.length || 0})</button>
+                    </div>
+                    <div className="py-8 text-center text-zinc-300">
+                        <div className="mx-auto mb-3 w-14 h-14 rounded-full border border-white/20 flex items-center justify-center text-2xl">◇</div>
+                        <p className="font-semibold">Available Funds: {formatAmt(quoteBalance)} {pairInfo.quote}</p>
+                    </div>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-[#0f151d] overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                        <p className="font-semibold">{pairInfo.pair} Chart</p>
+                        <button onClick={() => setChartFullscreen(true)} className="text-zinc-400">▲</button>
+                    </div>
+                    <div className="h-[260px]">
+                        <CandleChart candles={candles} pair={pairInfo.pair} timeframe={timeframe} onTimeframe={setTimeframe} chartType={chartType} onChartType={setChartType} fullscreen={chartFullscreen} onToggleFullscreen={() => setChartFullscreen((value) => !value)} />
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div className="hidden xl:grid xl:grid-cols-[280px_minmax(0,1fr)_360px] gap-5">
             <Card hover={false} className="order-3 xl:order-none xl:min-h-[720px]">
                 <div className="flex items-center justify-between mb-4"><h2 className="font-display text-xl">Pairs</h2><Badge>{pairs.length}</Badge></div>
                 <div className="relative mb-3"><Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" /><input className="input-eregon pl-10 py-2" placeholder="Search pair..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
