@@ -60,28 +60,31 @@ export default function NotificationBell() {
                 )}
             </button>
             {open && (
-                <div className="absolute right-0 mt-2 w-[340px] max-w-[90vw] glass-strong p-4 z-50 animate-fade-up" data-testid="notification-dropdown">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
-                        <p className="text-xs uppercase tracking-widest text-zinc-500">Eregon Inbox</p>
-                        <div className="flex items-center gap-2">
-                            <button onClick={markAll} className="text-[11px] text-amber-300 hover:underline">Mark all read</button>
-                            <button onClick={() => setOpen(false)}><X className="w-4 h-4 text-zinc-500" /></button>
+                <div className="fixed left-3 right-3 top-[68px] max-h-[min(520px,calc(100vh-152px))] rounded-2xl border border-white/10 bg-[#09090d]/98 shadow-[0_22px_70px_rgba(0,0,0,0.65)] backdrop-blur-2xl p-3 z-[80] animate-fade-up sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[360px] sm:max-w-[90vw] sm:max-h-none sm:p-4" data-testid="notification-dropdown">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                        <div className="min-w-0">
+                            <p className="text-xs uppercase tracking-widest text-zinc-500">Eregon Inbox</p>
+                            <p className="text-[11px] text-zinc-600 sm:hidden">{count} unread</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                            <button onClick={markAll} className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-1.5 text-[11px] font-semibold text-amber-200">Mark read</button>
+                            <button onClick={() => setOpen(false)} className="w-8 h-8 rounded-lg border border-white/10 bg-white/[0.04] flex items-center justify-center"><X className="w-4 h-4 text-zinc-400" /></button>
                         </div>
                     </div>
-                    <div className="max-h-[400px] overflow-y-auto space-y-2">
+                    <div className="max-h-[min(400px,calc(100vh-244px))] overflow-y-auto overscroll-contain space-y-2 pr-1 sm:max-h-[400px]">
                         {items.length === 0 && <p className="text-sm text-zinc-500 py-5 sm:py-6 lg:py-8 text-center">No notifications yet.</p>}
                         {items.slice(0, 12).map(n => {
                             const Icon = ICONS[n.category] || Sparkles;
                             const color = COLORS[n.category] || COLORS.system;
                             return (
                                 <div key={n.id} className={`p-3 rounded-xl border ${n.read ? "border-white/5 bg-black/30" : "border-purple-500/20 bg-purple-500/[0.04]"}`}>
-                                    <div className="flex flex-wrap gap-3">
+                                    <div className="flex gap-3">
                                         <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
                                             <Icon className="w-4 h-4" strokeWidth={1.6} />
                                         </span>
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-semibold truncate">{n.title}</p>
-                                            <p className="text-xs text-zinc-400 mt-0.5">{n.body}</p>
+                                            <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed break-words">{n.body}</p>
                                             <p className="text-[10px] text-zinc-600 mt-1 uppercase tracking-widest">{n.category}</p>
                                         </div>
                                     </div>

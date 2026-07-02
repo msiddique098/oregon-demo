@@ -103,9 +103,9 @@ export default function EnterpriseWidgets() {
 
 export function StickyMobileCTA() {
     return (
-        <div className="lg:hidden fixed left-3 right-3 bottom-20 z-40 flex gap-2">
-            <a href="/dashboard/tasks" className="flex-1 btn-gold justify-center"><Zap className="w-4 h-4" /> Earn</a>
-            <a href="/dashboard/deposit" className="flex-1 btn-ghost justify-center"><TrendingUp className="w-4 h-4" /> Deposit</a>
+        <div className="lg:hidden fixed left-3 right-3 bottom-[5.9rem] z-40 grid grid-cols-2 gap-2 rounded-2xl border border-white/10 bg-black/70 p-1.5 shadow-[0_18px_44px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+            <a href="/dashboard/tasks" className="btn-gold min-h-11 justify-center rounded-xl text-sm"><Zap className="w-4 h-4" /> Earn</a>
+            <a href="/dashboard/deposit" className="btn-ghost min-h-11 justify-center rounded-xl text-sm"><TrendingUp className="w-4 h-4" /> Deposit</a>
         </div>
     );
 }
