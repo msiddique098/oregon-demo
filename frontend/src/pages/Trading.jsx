@@ -63,9 +63,9 @@ function buildCandles(prices = [], timeframe = "1m") {
 function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTimeframe, chartType = "candles", onChartType, fullscreen = false, onToggleFullscreen }) {
     const [hover, setHover] = useState(null);
     if (!candles.length) return <div className="h-full rounded-2xl bg-white/[0.03]" />;
-    const width = fullscreen ? 1180 : 760;
-    const height = fullscreen ? 620 : 320;
-    const pad = { left: 58, right: 62, top: 34, bottom: 42 };
+    const width = fullscreen ? 900 : 760;
+    const height = fullscreen ? 720 : 320;
+    const pad = { left: 54, right: 68, top: 42, bottom: 46 };
     const hi = Math.max(...candles.map((c) => c.high));
     const lo = Math.min(...candles.map((c) => c.low));
     const maxVol = Math.max(...candles.map((c) => c.volume || 1));
@@ -101,29 +101,31 @@ function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTime
         setHover({ index, x: xFor(index), y: relY, price });
     };
     return (
-        <div className={`${fullscreen ? "fixed inset-3 sm:inset-6 z-[90] h-auto rounded-2xl shadow-2xl shadow-black/70" : "h-full rounded-2xl"} bg-black/90 border border-white/10 overflow-hidden`}>
+        <div className={`${fullscreen ? "fixed inset-0 sm:inset-6 z-[90] h-screen sm:h-auto rounded-none sm:rounded-2xl shadow-2xl shadow-black/70 bg-[#202832]" : "h-full rounded-2xl bg-black/90"} flex flex-col border border-white/10 overflow-hidden`}>
             {fullscreen && <div className="absolute inset-0 -z-10 bg-black/80 backdrop-blur-xl" />}
-            <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-white/5 bg-white/[0.02]">
-                <div className="min-w-0">
-                    <p className="text-xs uppercase tracking-[0.22em] text-zinc-500">Advanced chart</p>
-                    <p className="text-sm font-semibold text-zinc-200">{pair} <span className="text-zinc-500">OHLC</span></p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                    <div className="flex rounded-lg border border-white/10 bg-white/[0.03] p-1">
-                        {Object.keys(TIMEFRAME_CONFIG).map((tf) => (
-                            <button key={tf} type="button" onClick={() => onTimeframe?.(tf)} className={`px-2.5 py-1 text-xs rounded-md ${timeframe === tf ? "bg-amber-400 text-black font-bold" : "text-zinc-400 hover:text-white"}`}>{tf}</button>
-                        ))}
-                    </div>
-                    <div className="flex rounded-lg border border-white/10 bg-white/[0.03] p-1">
-                        <button type="button" title="Candles" onClick={() => onChartType?.("candles")} className={`p-1.5 rounded-md ${chartType === "candles" ? "bg-purple-500/25 text-purple-100" : "text-zinc-400 hover:text-white"}`}><BarChart3 className="w-4 h-4" /></button>
-                        <button type="button" title="Line" onClick={() => onChartType?.("line")} className={`p-1.5 rounded-md ${chartType === "line" ? "bg-purple-500/25 text-purple-100" : "text-zinc-400 hover:text-white"}`}><LineChart className="w-4 h-4" /></button>
+            <div className="shrink-0 border-b border-white/10 bg-white/[0.02] px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <p className="text-lg sm:text-sm font-semibold text-zinc-100">{pair} <span className="text-zinc-500">Chart</span></p>
+                        <p className="hidden sm:block text-xs uppercase tracking-[0.22em] text-zinc-500">Advanced chart</p>
                     </div>
                     <button type="button" title={fullscreen ? "Exit fullscreen" : "Fullscreen"} onClick={onToggleFullscreen} className="p-2 rounded-lg border border-white/10 bg-white/[0.03] text-zinc-300 hover:text-white">
                         {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
                     </button>
                 </div>
+                <div className="mt-3 flex items-center justify-between gap-2 overflow-x-auto">
+                    <div className="flex shrink-0 rounded-lg border border-white/10 bg-white/[0.03] p-1">
+                        {Object.keys(TIMEFRAME_CONFIG).map((tf) => (
+                            <button key={tf} type="button" onClick={() => onTimeframe?.(tf)} className={`px-3 py-1.5 text-sm sm:text-xs rounded-md ${timeframe === tf ? "bg-amber-400 text-black font-bold" : "text-zinc-400 hover:text-white"}`}>{tf}</button>
+                        ))}
+                    </div>
+                    <div className="flex shrink-0 rounded-lg border border-white/10 bg-white/[0.03] p-1">
+                        <button type="button" title="Candles" onClick={() => onChartType?.("candles")} className={`p-1.5 rounded-md ${chartType === "candles" ? "bg-purple-500/25 text-purple-100" : "text-zinc-400 hover:text-white"}`}><BarChart3 className="w-4 h-4" /></button>
+                        <button type="button" title="Line" onClick={() => onChartType?.("line")} className={`p-1.5 rounded-md ${chartType === "line" ? "bg-purple-500/25 text-purple-100" : "text-zinc-400 hover:text-white"}`}><LineChart className="w-4 h-4" /></button>
+                    </div>
+                </div>
             </div>
-            <svg viewBox={`0 0 ${width} ${height}`} onMouseMove={handleMove} onMouseLeave={() => setHover(null)} className="w-full h-[calc(100%-49px)]">
+            <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" onMouseMove={handleMove} onMouseLeave={() => setHover(null)} className="w-full flex-1 min-h-0">
                 <defs>
                     <linearGradient id="candleBg" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.10" />
@@ -131,10 +133,10 @@ function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTime
                     </linearGradient>
                 </defs>
                 <rect x="0" y="0" width={width} height={height} fill="url(#candleBg)" />
-                <text x={pad.left} y="21" fill="rgba(255,255,255,.72)" fontSize="12">
-                    O {formatChartPrice(hoverCandle.open)} H {formatChartPrice(hoverCandle.high)} L {formatChartPrice(hoverCandle.low)} C {formatChartPrice(hoverCandle.close)}
+                <text x={pad.left} y="24" fill="rgba(52,211,153,.86)" fontSize={fullscreen ? "14" : "12"}>
+                    O {formatChartPrice(hoverCandle.open)}  H {formatChartPrice(hoverCandle.high)}  L {formatChartPrice(hoverCandle.low)}  C {formatChartPrice(hoverCandle.close)}
                 </text>
-                <text x={width - pad.right} y="21" textAnchor="end" fill="rgba(251,191,36,.78)" fontSize="12">MA 7 / MA 25</text>
+                <text x={width - pad.right} y="24" textAnchor="end" fill="rgba(251,191,36,.78)" fontSize="12">MA 7 / MA 25</text>
                 {ticks.map((tick) => {
                     const ty = y(tick);
                     return <g key={tick}><line x1={pad.left} x2={width - pad.right} y1={ty} y2={ty} stroke="rgba(255,255,255,.07)" /><text x={width - pad.right + 8} y={ty + 4} fill="rgba(255,255,255,.42)" fontSize="11">{formatAmt(tick)}</text></g>;
@@ -174,8 +176,8 @@ function CandleChart({ candles = [], pair = "BTC/USDT", timeframe = "1m", onTime
                     <rect x={width - pad.right + 5} y={hover.y - 10} width="54" height="20" rx="5" fill="rgba(255,255,255,.12)" />
                     <text x={width - pad.right + 32} y={hover.y + 4} textAnchor="middle" fill="white" fontSize="10">{formatAmt(hover.price)}</text>
                 </>}
-                <text x={pad.left} y={height - 12} fill="rgba(255,255,255,.38)" fontSize="11">{TIMEFRAME_CONFIG[timeframe]?.label || timeframe} view, crosshair, volume, moving averages</text>
-                <text x={width - pad.right} y={height - 12} textAnchor="end" fill="rgba(251,191,36,.75)" fontSize="11">Live auto-refreshing quotes</text>
+                <text x={pad.left} y={height - 12} fill="rgba(255,255,255,.38)" fontSize="11">{TIMEFRAME_CONFIG[timeframe]?.label || timeframe} view</text>
+                <text x={width - pad.right} y={height - 12} textAnchor="end" fill="rgba(251,191,36,.75)" fontSize="11">Live quotes</text>
             </svg>
         </div>
     );
