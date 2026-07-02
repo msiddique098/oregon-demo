@@ -16,6 +16,7 @@ export default function AdminEnterprise() {
     const [fraud, setFraud] = useState([]);
     const [integrations, setIntegrations] = useState([]);
     const [marketTargets, setMarketTargets] = useState([]);
+    const [optionOrders, setOptionOrders] = useState([]);
     const [rule, setRule] = useState(emptyRule);
     const [campaign, setCampaign] = useState(emptyCampaign);
     const [profit, setProfit] = useState({ target: "all", tier: "", user_ids: "", amount: 1, percent: "", balance_field: "balance", note: "Admin profit accrual" });
@@ -26,7 +27,7 @@ export default function AdminEnterprise() {
 
     const load = async () => {
         try {
-            const [ov, set, wr, camp, fr, msg, mt] = await Promise.all([
+            const [ov, set, wr, camp, fr, msg, mt, opt] = await Promise.all([
                 api.get("/admin/enterprise/overview"),
                 api.get("/admin/platform-settings"),
                 api.get("/admin/withdrawal-rules"),
@@ -34,8 +35,9 @@ export default function AdminEnterprise() {
                 api.get("/admin/fraud/users"),
                 api.get("/admin/message-integrations"),
                 api.get("/admin/market-targets"),
+                api.get("/admin/trading/options", { params: { status: "open", limit: 50 } }),
             ]);
-            setOverview(ov.data); setSettings(set.data || []); setRules(wr.data || []); setCampaigns(camp.data || []); setFraud(fr.data || []); setIntegrations(msg.data || []); setMarketTargets(mt.data || []);
+            setOverview(ov.data); setSettings(set.data || []); setRules(wr.data || []); setCampaigns(camp.data || []); setFraud(fr.data || []); setIntegrations(msg.data || []); setMarketTargets(mt.data || []); setOptionOrders(opt.data || []);
             const w = (set.data || []).find((x) => x.key === "withdrawal_config");
             if (w?.value?.minimum_withdrawal) setMinimum(w.value.minimum_withdrawal);
             const rr = (set.data || []).find((x) => x.key === "referral_rewards");
@@ -119,6 +121,14 @@ export default function AdminEnterprise() {
         } catch (e2) { toast.error(formatApiError(e2)); }
     };
 
+    const setOptionOutcome = async (optionId, outcome) => {
+        try {
+            await api.post(`/admin/trading/options/${optionId}/outcome`, { outcome });
+            toast.success(`Options contract set to ${outcome}`);
+            load();
+        } catch (e2) { toast.error(formatApiError(e2)); }
+    };
+
     return (
         <AdminLayout>
             <div className="space-y-6">
@@ -149,6 +159,29 @@ export default function AdminEnterprise() {
                             <button className="btn-gold w-full" type="submit">Set Price Target</button>
                         </form>
                         <List items={marketTargets.slice(0, 8)} render={(m) => <><span>{m.symbol} → ${Number(m.target_price || 0).toLocaleString()}</span><small>{m.status} · {m.duration_seconds}s</small></>} />
+                    </Panel>
+
+                    <Panel title="Options Outcome Control" icon={Target}>
+                        <p className="text-xs text-zinc-500 mb-3">Set open Up/Down contracts to Win, Lose, or Auto before they settle.</p>
+                        <div className="space-y-2 max-h-96 overflow-auto pr-1">
+                            {optionOrders.length === 0 && <p className="text-sm text-zinc-500">No open options contracts.</p>}
+                            {optionOrders.map((o) => (
+                                <div key={o.id} className="rounded-xl bg-white/[0.03] border border-white/5 p-3 text-sm">
+                                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                                        <div>
+                                            <p className="font-semibold">{o.pair} · {String(o.direction || "").toUpperCase()} · {Number(o.stake || 0).toLocaleString()} USDT</p>
+                                            <p className="text-xs text-zinc-500">{o.user?.email || o.user_id} · expires {new Date(o.expires_at).toLocaleTimeString()}</p>
+                                            <p className="text-xs text-amber-300 mt-1">Current rule: {o.forced_outcome || "auto"}</p>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            <button type="button" onClick={() => setOptionOutcome(o.id, "win")} className="rounded-lg px-3 py-1.5 bg-emerald-500/15 border border-emerald-400/25 text-emerald-200 text-xs">Win</button>
+                                            <button type="button" onClick={() => setOptionOutcome(o.id, "lose")} className="rounded-lg px-3 py-1.5 bg-rose-500/15 border border-rose-400/25 text-rose-200 text-xs">Lose</button>
+                                            <button type="button" onClick={() => setOptionOutcome(o.id, "auto")} className="rounded-lg px-3 py-1.5 bg-white/5 border border-white/10 text-zinc-300 text-xs">Auto</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     </Panel>
 
                     <Panel title="Configurable Withdrawal Rules" icon={SlidersHorizontal}>

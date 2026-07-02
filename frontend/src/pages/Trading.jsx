@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from "recharts";
 import { ArrowDownRight, ArrowUpDown, ArrowUpRight, Clock, RefreshCcw, Search, ShieldCheck, Target, Wallet } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import CinematicLoader from "../components/CinematicLoader";
@@ -28,6 +27,68 @@ function MiniOrderBook({ price }) {
         <div className="py-2 text-center font-display text-lg gradient-text-gold">{formatAmt(p)}</div>
         {rows.map((r, i) => <div key={`bid-${i}`} className="grid grid-cols-3 gap-2 text-emerald-300"><span>{formatAmt(r.bid)}</span><span className="text-right text-zinc-500">{formatAmt(r.size)}</span><span className="h-5 rounded bg-emerald-500/10" style={{ width: `${Math.min(100, r.size * 9)}%` }} /></div>)}
     </div>;
+}
+
+function buildCandles(prices = []) {
+    const values = prices.map((p) => Number(p || 0)).filter((p) => p > 0);
+    if (values.length < 2) return [];
+    const target = 34;
+    const step = Math.max(1, Math.floor(values.length / target));
+    const candles = [];
+    for (let i = 1; i < values.length; i += step) {
+        const slice = values.slice(i, i + step);
+        const open = values[i - 1];
+        const close = slice[slice.length - 1] || open;
+        const spread = Math.max(open, close) * 0.0018;
+        const high = Math.max(open, close, ...slice) + spread;
+        const low = Math.max(0.00000001, Math.min(open, close, ...slice) - spread);
+        candles.push({ open, high, low, close });
+    }
+    return candles.slice(-target);
+}
+
+function CandleChart({ candles = [] }) {
+    if (!candles.length) return <div className="h-full rounded-2xl bg-white/[0.03]" />;
+    const width = 760;
+    const height = 320;
+    const pad = { left: 58, right: 18, top: 18, bottom: 30 };
+    const hi = Math.max(...candles.map((c) => c.high));
+    const lo = Math.min(...candles.map((c) => c.low));
+    const span = Math.max(0.00000001, hi - lo);
+    const plotW = width - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+    const y = (value) => pad.top + ((hi - value) / span) * plotH;
+    const candleW = Math.max(5, plotW / candles.length * 0.58);
+    const ticks = Array.from({ length: 5 }).map((_, i) => lo + (span * i) / 4);
+    return (
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full rounded-2xl bg-black/30 border border-white/5">
+            <defs>
+                <linearGradient id="candleBg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#fbbf24" stopOpacity="0.10" />
+                    <stop offset="100%" stopColor="#9333ea" stopOpacity="0.02" />
+                </linearGradient>
+            </defs>
+            <rect x="0" y="0" width={width} height={height} fill="url(#candleBg)" />
+            {ticks.map((tick, i) => {
+                const ty = y(tick);
+                return <g key={tick}><line x1={pad.left} x2={width - pad.right} y1={ty} y2={ty} stroke="rgba(255,255,255,.07)" /><text x={pad.left - 10} y={ty + 4} textAnchor="end" fill="rgba(255,255,255,.42)" fontSize="11">{formatAmt(tick)}</text></g>;
+            })}
+            {candles.map((c, i) => {
+                const x = pad.left + (i + 0.5) * (plotW / candles.length);
+                const up = c.close >= c.open;
+                const color = up ? "#34d399" : "#fb7185";
+                const bodyTop = y(Math.max(c.open, c.close));
+                const bodyBottom = y(Math.min(c.open, c.close));
+                const bodyH = Math.max(2, bodyBottom - bodyTop);
+                return <g key={`${i}-${c.close}`}>
+                    <line x1={x} x2={x} y1={y(c.high)} y2={y(c.low)} stroke={color} strokeWidth="1.5" />
+                    <rect x={x - candleW / 2} y={bodyTop} width={candleW} height={bodyH} rx="2" fill={up ? "rgba(52,211,153,.86)" : "rgba(251,113,133,.86)"} />
+                </g>;
+            })}
+            <text x={pad.left} y={height - 10} fill="rgba(255,255,255,.38)" fontSize="11">Live candle view</text>
+            <text x={width - pad.right} y={height - 10} textAnchor="end" fill="rgba(251,191,36,.75)" fontSize="11">Auto-refreshing quotes</text>
+        </svg>
+    );
 }
 
 export default function Trading() {
@@ -105,10 +166,10 @@ export default function Trading() {
         }
     }, [tradeMode, pairInfo.quote, pairs]);
 
-    const chartData = useMemo(() => {
+    const candles = useMemo(() => {
         const prices = pairInfo.baseMarket?.sparkline_in_7d?.price || [];
-        return prices.slice(-80).map((price, i) => ({ i, price: Number(price || 0) }));
-    }, [pairInfo.baseMarket]);
+        return buildCandles([...prices.slice(-120), pairInfo.rate]);
+    }, [pairInfo.baseMarket, pairInfo.rate]);
 
     const quoteBalance = Number(portfolio?.balances?.[pairInfo.quote] || 0);
     const baseBalance = Number(portfolio?.balances?.[pairInfo.base] || 0);
@@ -187,15 +248,7 @@ export default function Trading() {
                         <div className="text-right"><p className="text-3xl font-display gradient-text-gold">{formatAmt(pairInfo.rate)}</p><p className={up ? "text-emerald-300 text-sm" : "text-rose-300 text-sm"}>{up ? <ArrowUpRight className="w-4 h-4 inline" /> : <ArrowDownRight className="w-4 h-4 inline" />} {pct(pairInfo.baseMarket?.price_change_percentage_24h)}</p></div>
                     </div>
                     <div className="h-[320px]">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                                <defs><linearGradient id="tradeChart" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#fbbf24" stopOpacity={0.38} /><stop offset="95%" stopColor="#9333ea" stopOpacity={0} /></linearGradient></defs>
-                                <XAxis dataKey="i" hide />
-                                <YAxis domain={["dataMin", "dataMax"]} hide />
-                                <Tooltip contentStyle={{ background: "rgba(15,15,19,.95)", border: "1px solid rgba(255,255,255,.1)", borderRadius: 12 }} formatter={(v) => formatUsd(v)} />
-                                <Area type="monotone" dataKey="price" stroke="#fbbf24" strokeWidth={2} fill="url(#tradeChart)" dot={false} />
-                            </AreaChart>
-                        </ResponsiveContainer>
+                        <CandleChart candles={candles} />
                     </div>
                 </Card>
 

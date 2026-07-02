@@ -516,6 +516,10 @@ class OptionsTradeIn(BaseModel):
     duration_seconds: int = Field(default=60)
 
 
+class OptionsOutcomeIn(BaseModel):
+    outcome: Literal["win", "lose", "auto"]
+
+
 class TradingOrderOut(BaseModel):
     id: str
     user_id: str
@@ -2754,7 +2758,13 @@ async def _settle_expired_options(user_id: str) -> int:
             continue
         entry_rate = float(option.get("entry_rate") or 0)
         direction = option.get("direction")
-        won = (exit_rate > entry_rate and direction == "up") or (exit_rate < entry_rate and direction == "down")
+        forced_outcome = option.get("forced_outcome")
+        if forced_outcome == "win":
+            won = True
+        elif forced_outcome == "lose":
+            won = False
+        else:
+            won = (exit_rate > entry_rate and direction == "up") or (exit_rate < entry_rate and direction == "down")
         stake = round(float(option.get("stake") or 0), 2)
         payout_rate = float(option.get("payout_rate") or OPTIONS_PAYOUT_RATE)
         payout = round(stake * (1 + payout_rate), 2) if won else 0.0
@@ -2789,10 +2799,48 @@ async def _settle_expired_options(user_id: str) -> int:
                 "profit": profit,
                 "settled_at": now_iso,
                 "market_source": snapshot["source"],
+                "settled_rule": "admin" if forced_outcome in {"win", "lose"} else "market",
             }},
         )
         settled += 1
     return settled
+
+
+@api.get("/admin/trading/options")
+async def admin_options_trades(status: Optional[str] = None, limit: int = 100, admin: dict = Depends(admin_required)):
+    q = {}
+    if status:
+        q["status"] = status
+    items = await db.options_trades.find(q, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(500, limit)))
+    user_ids = [item.get("user_id") for item in items if item.get("user_id")]
+    users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "email": 1, "name": 1}).to_list(len(user_ids) or 1)
+    by_id = {u["id"]: u for u in users}
+    for item in items:
+        item["user"] = by_id.get(item.get("user_id"))
+    return items
+
+
+@api.post("/admin/trading/options/{option_id}/outcome")
+async def admin_set_options_outcome(option_id: str, body: OptionsOutcomeIn, admin: dict = Depends(admin_required)):
+    option = await db.options_trades.find_one({"id": option_id}, {"_id": 0})
+    if not option:
+        raise HTTPException(status_code=404, detail="Options contract not found")
+    if option.get("status") != "open":
+        raise HTTPException(status_code=400, detail="Only open options contracts can be controlled")
+    update: dict = {
+        "$set": {
+            "admin_outcome_updated_by": admin["id"],
+            "admin_outcome_updated_at": now_utc().isoformat(),
+        }
+    }
+    if body.outcome == "auto":
+        update["$unset"] = {"forced_outcome": ""}
+    else:
+        update["$set"]["forced_outcome"] = body.outcome
+    await db.options_trades.update_one({"id": option_id}, update)
+    refreshed = await db.options_trades.find_one({"id": option_id}, {"_id": 0})
+    await db.admin_logs.insert_one({"id": str(uuid.uuid4()), "admin_id": admin["id"], "action": "options.outcome.set", "target_id": option_id, "metadata": {"outcome": body.outcome}, "created_at": now_utc().isoformat()})
+    return {"ok": True, "option": refreshed}
 
 
 @api.get("/trading/options")
