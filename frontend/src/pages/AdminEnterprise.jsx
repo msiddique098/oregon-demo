@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Activity, BarChart3, BellRing, Bot, Clock, MessageCircle, Plus, RefreshCw, ShieldAlert, SlidersHorizontal, Target, WalletCards, Crown } from "lucide-react";
+import { Activity, BarChart3, BellRing, Bot, Clock, MessageCircle, Plus, RefreshCw, ShieldAlert, SlidersHorizontal, Target, TrendingUp, WalletCards, Crown } from "lucide-react";
 import AdminLayout from "../components/AdminLayout";
 import { api, formatApiError } from "../lib/api";
 import AnimatedCounter from "../components/AnimatedCounter";
@@ -15,24 +15,27 @@ export default function AdminEnterprise() {
     const [campaigns, setCampaigns] = useState([]);
     const [fraud, setFraud] = useState([]);
     const [integrations, setIntegrations] = useState([]);
+    const [marketTargets, setMarketTargets] = useState([]);
     const [rule, setRule] = useState(emptyRule);
     const [campaign, setCampaign] = useState(emptyCampaign);
     const [profit, setProfit] = useState({ target: "all", tier: "", user_ids: "", amount: 1, percent: "", balance_field: "balance", note: "Admin profit accrual" });
     const [integration, setIntegration] = useState({ provider: "whatsapp", enabled: false, display_name: "WhatsApp Support", public_link: "", webhook_url: "", settings: {} });
     const [minimum, setMinimum] = useState(25);
     const [referralRewards, setReferralRewards] = useState({ enabled: true, referrer_reward: 5, referred_reward: 2, first_deposit_commission_pct: 5 });
+    const [marketTarget, setMarketTarget] = useState({ symbol: "BTC", target_price: "", duration_seconds: 12 });
 
     const load = async () => {
         try {
-            const [ov, set, wr, camp, fr, msg] = await Promise.all([
+            const [ov, set, wr, camp, fr, msg, mt] = await Promise.all([
                 api.get("/admin/enterprise/overview"),
                 api.get("/admin/platform-settings"),
                 api.get("/admin/withdrawal-rules"),
                 api.get("/admin/campaigns"),
                 api.get("/admin/fraud/users"),
                 api.get("/admin/message-integrations"),
+                api.get("/admin/market-targets"),
             ]);
-            setOverview(ov.data); setSettings(set.data || []); setRules(wr.data || []); setCampaigns(camp.data || []); setFraud(fr.data || []); setIntegrations(msg.data || []);
+            setOverview(ov.data); setSettings(set.data || []); setRules(wr.data || []); setCampaigns(camp.data || []); setFraud(fr.data || []); setIntegrations(msg.data || []); setMarketTargets(mt.data || []);
             const w = (set.data || []).find((x) => x.key === "withdrawal_config");
             if (w?.value?.minimum_withdrawal) setMinimum(w.value.minimum_withdrawal);
             const rr = (set.data || []).find((x) => x.key === "referral_rewards");
@@ -102,6 +105,20 @@ export default function AdminEnterprise() {
         } catch (e2) { toast.error(formatApiError(e2)); }
     };
 
+    const saveMarketTarget = async (e) => {
+        e.preventDefault();
+        try {
+            const { data } = await api.post("/admin/market-targets", {
+                symbol: marketTarget.symbol,
+                target_price: Number(marketTarget.target_price),
+                duration_seconds: Number(marketTarget.duration_seconds || 12),
+            });
+            toast.success(`${data.target.symbol} will reach ${data.target.target_price} in ${data.target.duration_seconds}s`);
+            setMarketTarget({ ...marketTarget, target_price: "" });
+            load();
+        } catch (e2) { toast.error(formatApiError(e2)); }
+    };
+
     return (
         <AdminLayout>
             <div className="space-y-6">
@@ -123,6 +140,17 @@ export default function AdminEnterprise() {
                 </div>
 
                 <div className="grid xl:grid-cols-3 gap-4 sm:gap-6 items-start">
+                    <Panel title="Market Price Controls" icon={TrendingUp}>
+                        <form onSubmit={saveMarketTarget} className="space-y-3">
+                            <Input label="Coin Symbol" value={marketTarget.symbol} onChange={(v) => setMarketTarget({ ...marketTarget, symbol: v.toUpperCase() })} placeholder="BTC, ETH, ERGN" />
+                            <Input label="Target Price (USD)" type="number" value={marketTarget.target_price} onChange={(v) => setMarketTarget({ ...marketTarget, target_price: v })} />
+                            <Select label="Ease Duration" value={marketTarget.duration_seconds} onChange={(v) => setMarketTarget({ ...marketTarget, duration_seconds: Number(v) })} options={[10, 11, 12, 13, 14, 15]} />
+                            <p className="text-xs text-zinc-500">The visible price moves gradually to the target instead of jumping immediately.</p>
+                            <button className="btn-gold w-full" type="submit">Set Price Target</button>
+                        </form>
+                        <List items={marketTargets.slice(0, 8)} render={(m) => <><span>{m.symbol} → ${Number(m.target_price || 0).toLocaleString()}</span><small>{m.status} · {m.duration_seconds}s</small></>} />
+                    </Panel>
+
                     <Panel title="Configurable Withdrawal Rules" icon={SlidersHorizontal}>
                         <div className="grid grid-cols-[1fr_auto] gap-2 mb-4">
                             <Input label="Minimum Withdrawal" type="number" value={minimum} onChange={setMinimum} />

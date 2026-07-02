@@ -23,6 +23,8 @@ const TYPE_LABELS = {
     spin_reward: { label: "Spin Reward", color: "gold", up: true },
     trading_buy: { label: "Trading Buy", color: "rose", up: false },
     trading_sell: { label: "Trading Sell", color: "emerald", up: true },
+    options_stake: { label: "Options Stake", color: "rose", up: false },
+    options_payout: { label: "Options Payout", color: "emerald", up: true },
     achievement_reward: { label: "Achievement Reward", color: "gold", up: true },
     first_task_reward: { label: "First Task Reward", color: "gold", up: true },
 };

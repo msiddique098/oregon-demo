@@ -86,13 +86,51 @@ def _sparkline(price: float, phase: float, points: int = 28) -> List[float]:
     return values
 
 
+def _motion_factor(symbol: str, epoch: float, custom: bool = False) -> float:
+    seed = sum((idx + 1) * ord(ch) for idx, ch in enumerate(normalize_symbol(symbol)))
+    if normalize_symbol(symbol) in {"USDT", "USDC", "USD"}:
+        amplitude = 0.00008
+    else:
+        amplitude = 0.012 if custom else 0.0018
+    phase = epoch / (2.4 + (seed % 11) * 0.17) + seed * 0.013
+    wave = math.sin(phase) * amplitude + math.cos(phase * 0.43) * amplitude * 0.55
+    pulse = math.sin(epoch / (7.0 + (seed % 5)) + seed) * amplitude * 0.35
+    return max(0.85, 1.0 + wave + pulse)
+
+
+def animate_market_prices(markets: Iterable[Dict[str, Any]], epoch_seconds: float | None = None) -> List[Dict[str, Any]]:
+    """Add small second-by-second movement to quoted prices without mutating input rows."""
+    epoch = float(epoch_seconds if epoch_seconds is not None else datetime.now(timezone.utc).timestamp())
+    animated = []
+    for raw in markets:
+        item = dict(raw)
+        symbol = item.get("symbol") or item.get("id")
+        factor = _motion_factor(symbol, epoch, bool(item.get("custom")))
+        base_price = max(0.00000001, float(item.get("current_price") or 0.0))
+        price = max(0.00000001, base_price * factor)
+        prior_price = max(0.00000001, base_price / max(factor, 0.00000001))
+        item["current_price"] = round(price, 10)
+        item["market_cap"] = round(float(item.get("market_cap") or 0.0) * factor, 2)
+        item["total_volume"] = round(float(item.get("total_volume") or 0.0) * (1 + abs(factor - 1) * 18), 2)
+        item["price_change_percentage_24h"] = round(float(item.get("price_change_percentage_24h") or 0.0) + ((price - prior_price) / prior_price * 100), 4)
+        spark = list((item.get("sparkline_in_7d") or {}).get("price") or [])
+        if spark:
+            spark = spark[-39:] + [round(price, 8)]
+        else:
+            spark = _sparkline(price, epoch / 40.0)
+        item["sparkline_in_7d"] = {"price": spark}
+        item["updated_at"] = utc_now_iso()
+        animated.append(item)
+    return animated
+
+
 def build_custom_markets(epoch_seconds: float | None = None) -> List[Dict[str, Any]]:
     """Return deterministic custom coins with small time-based fluctuations."""
     epoch = float(epoch_seconds if epoch_seconds is not None else datetime.now(timezone.utc).timestamp())
     markets = []
     for idx, coin in enumerate(CUSTOM_COINS):
         phase = epoch / (210 + idx * 35) + idx * 1.618
-        drift = math.sin(phase) * 0.035 + math.cos(phase / 2.0) * 0.018
+        drift = math.sin(phase) * 0.055 + math.cos(phase / 2.0) * 0.028 + math.sin(epoch / (17 + idx * 3)) * 0.014
         price = max(0.00000001, float(coin["base_price"]) * (1 + drift))
         change = drift * 100
         volume = price * (400000 + idx * 125000)

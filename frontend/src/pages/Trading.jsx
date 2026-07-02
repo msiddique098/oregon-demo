@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from "recharts";
-import { ArrowDownRight, ArrowUpDown, ArrowUpRight, RefreshCcw, Search, ShieldCheck, Wallet } from "lucide-react";
+import { ArrowDownRight, ArrowUpDown, ArrowUpRight, Clock, RefreshCcw, Search, ShieldCheck, Target, Wallet } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import CinematicLoader from "../components/CinematicLoader";
 import { Badge, Card } from "../components/ui-eregon";
@@ -36,25 +36,34 @@ export default function Trading() {
     const [pairs, setPairs] = useState([]);
     const [portfolio, setPortfolio] = useState(null);
     const [orders, setOrders] = useState([]);
+    const [options, setOptions] = useState([]);
+    const [optionMeta, setOptionMeta] = useState({ payout_rate: 0.8, durations: [30, 60, 120, 300] });
     const [selectedPair, setSelectedPair] = useState(queryPair);
     const [side, setSide] = useState("buy");
     const [amount, setAmount] = useState("");
+    const [tradeMode, setTradeMode] = useState("spot");
+    const [optionDirection, setOptionDirection] = useState("up");
+    const [optionStake, setOptionStake] = useState("");
+    const [optionDuration, setOptionDuration] = useState(60);
     const [search, setSearch] = useState("");
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
 
     const load = async (force = false) => {
         try {
-            const [m, p, port, o] = await Promise.all([
+            const [m, p, port, o, opt] = await Promise.all([
                 api.get("/markets", { params: { limit: 200, include_custom: true, force } }),
                 api.get("/trading/pairs"),
                 api.get("/trading/portfolio"),
                 api.get("/trading/orders", { params: { limit: 25 } }),
+                api.get("/trading/options", { params: { limit: 25 } }),
             ]);
             setMarketPayload(m.data);
             setPairs(p.data.pairs || []);
             setPortfolio(port.data);
             setOrders(o.data || []);
+            setOptions(opt.data.items || []);
+            setOptionMeta({ payout_rate: opt.data.payout_rate ?? 0.8, durations: opt.data.durations || [30, 60, 120, 300] });
         } catch (e) {
             toast.error(formatApiError(e));
         } finally {
@@ -68,11 +77,11 @@ export default function Trading() {
 
     useEffect(() => {
         load();
-        const timer = window.setInterval(() => load(false), 15000);
+        const timer = window.setInterval(() => load(false), 3000);
         return () => window.clearInterval(timer);
     }, []);
 
-    const markets = marketPayload?.coins || [];
+    const markets = useMemo(() => marketPayload?.coins || [], [marketPayload]);
     const marketBySymbol = useMemo(() => Object.fromEntries(markets.map((c) => [String(c.symbol || "").toUpperCase(), c])), [markets]);
     const pairInfo = useMemo(() => {
         const raw = selectedPair.toUpperCase().replace("-", "/");
@@ -87,6 +96,14 @@ export default function Trading() {
         const s = search.toLowerCase().trim();
         return pairs.filter((p) => !s || p.pair.toLowerCase().includes(s));
     }, [pairs, search]);
+    const orderPairs = useMemo(() => tradeMode === "options" ? pairs.filter((p) => p.quote === "USDT") : pairs, [pairs, tradeMode]);
+
+    useEffect(() => {
+        if (tradeMode === "options" && pairInfo.quote !== "USDT") {
+            const firstUsdt = pairs.find((p) => p.quote === "USDT");
+            if (firstUsdt) setSelectedPair(firstUsdt.pair);
+        }
+    }, [tradeMode, pairInfo.quote, pairs]);
 
     const chartData = useMemo(() => {
         const prices = pairInfo.baseMarket?.sparkline_in_7d?.price || [];
@@ -112,6 +129,21 @@ export default function Trading() {
         }
     };
 
+    const submitOption = async () => {
+        if (!optionStake || Number(optionStake) <= 0) return toast.error("Enter a valid contract stake");
+        setSubmitting(true);
+        try {
+            const { data } = await api.post("/trading/options", { pair: pairInfo.pair, direction: optionDirection, stake: Number(optionStake), duration_seconds: Number(optionDuration) });
+            toast.success(`${optionDirection.toUpperCase()} contract opened at ${formatAmt(data.option.entry_rate)}`);
+            setOptionStake("");
+            await load(true);
+        } catch (e) {
+            toast.error(formatApiError(e));
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     if (loading) return <DashboardLayout><CinematicLoader /></DashboardLayout>;
 
     const up = Number(pairInfo.baseMarket?.price_change_percentage_24h || 0) >= 0;
@@ -121,7 +153,7 @@ export default function Trading() {
             <div>
                 <p className="text-xs uppercase tracking-[0.28em] text-amber-400/80">Eregon Exchange</p>
                 <h1 className="text-3xl sm:text-4xl font-display font-semibold mt-1">Spot Trading</h1>
-                <p className="text-zinc-400 mt-2 max-w-2xl">Trade live market pairs and Eregon custom coins inside the platform wallet. Orders are filled as internal market conversions using the latest quoted rate.</p>
+                <p className="text-zinc-400 mt-2 max-w-2xl">Trade live market pairs inside the platform wallet or open short Up/Down contracts with clear win/loss settlement.</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
                 <Badge color={marketPayload?.source === "coingecko" ? "emerald" : "gold"}>{marketPayload?.provider || "Market source"}</Badge>
@@ -187,22 +219,48 @@ export default function Trading() {
 
             <div className="space-y-5">
                 <Card hover={false}>
-                    <div className="flex items-center justify-between gap-3 mb-5"><h2 className="font-display text-xl">Place Order</h2><Badge color={side === "buy" ? "emerald" : "rose"}>{side.toUpperCase()}</Badge></div>
+                    <div className="flex items-center justify-between gap-3 mb-5"><h2 className="font-display text-xl">Place Order</h2><Badge color={tradeMode === "spot" ? (side === "buy" ? "emerald" : "rose") : "purple"}>{tradeMode === "spot" ? side.toUpperCase() : "OPTIONS"}</Badge></div>
                     <div className="grid grid-cols-2 gap-2 mb-4">
-                        <button onClick={() => setSide("buy")} className={`rounded-xl py-3 font-semibold border ${side === "buy" ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}>Buy</button>
-                        <button onClick={() => setSide("sell")} className={`rounded-xl py-3 font-semibold border ${side === "sell" ? "bg-rose-500/15 text-rose-200 border-rose-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}>Sell</button>
+                        <button onClick={() => setTradeMode("spot")} className={`rounded-xl py-3 font-semibold border ${tradeMode === "spot" ? "bg-amber-500/15 text-amber-200 border-amber-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}>Spot</button>
+                        <button onClick={() => setTradeMode("options")} className={`rounded-xl py-3 font-semibold border ${tradeMode === "options" ? "bg-purple-500/15 text-purple-200 border-purple-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}>Options</button>
                     </div>
                     <label className="text-xs uppercase tracking-widest text-zinc-500">Pair</label>
-                    <select className="input-eregon mt-2 mb-4" value={pairInfo.pair} onChange={(e) => setSelectedPair(e.target.value)}>{pairs.map((p) => <option key={p.pair}>{p.pair}</option>)}</select>
-                    <label className="text-xs uppercase tracking-widest text-zinc-500">{side === "buy" ? `Spend amount (${pairInfo.quote})` : `Sell amount (${pairInfo.base})`}</label>
-                    <input className="input-eregon mt-2" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" min="0" step="any" placeholder={side === "buy" ? `Available ${formatAmt(quoteBalance)} ${pairInfo.quote}` : `Available ${formatAmt(baseBalance)} ${pairInfo.base}`} />
-                    <div className="rounded-2xl bg-black/35 border border-white/5 p-4 my-4 space-y-2 text-sm">
-                        <div className="flex justify-between"><span className="text-zinc-500">Market rate</span><span>{formatAmt(pairInfo.rate)} {pairInfo.quote}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Estimated receive</span><span>{formatAmt(estimated)} {side === "buy" ? pairInfo.base : pairInfo.quote}</span></div>
-                        <div className="flex justify-between"><span className="text-zinc-500">Fee</span><span>{(Number(portfolio?.fee_rate || 0.001) * 100).toFixed(2)}%</span></div>
-                    </div>
-                    <button disabled={submitting} onClick={submit} className={side === "buy" ? "btn-gold w-full" : "btn-eregon w-full"}>{submitting ? "Filling order..." : `${side === "buy" ? "Buy" : "Sell"} ${pairInfo.base}`}</button>
-                    <p className="text-xs text-zinc-500 mt-3 flex gap-2"><ShieldCheck className="w-4 h-4 shrink-0" /> Internal wallet conversion. This is not an external exchange withdrawal or real broker order.</p>
+                    <select className="input-eregon mt-2 mb-4" value={pairInfo.pair} onChange={(e) => setSelectedPair(e.target.value)}>{orderPairs.map((p) => <option key={p.pair}>{p.pair}</option>)}</select>
+                    {tradeMode === "spot" ? (
+                        <>
+                            <div className="grid grid-cols-2 gap-2 mb-4">
+                                <button onClick={() => setSide("buy")} className={`rounded-xl py-3 font-semibold border ${side === "buy" ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}>Buy</button>
+                                <button onClick={() => setSide("sell")} className={`rounded-xl py-3 font-semibold border ${side === "sell" ? "bg-rose-500/15 text-rose-200 border-rose-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}>Sell</button>
+                            </div>
+                            <label className="text-xs uppercase tracking-widest text-zinc-500">{side === "buy" ? `Spend amount (${pairInfo.quote})` : `Sell amount (${pairInfo.base})`}</label>
+                            <input className="input-eregon mt-2" value={amount} onChange={(e) => setAmount(e.target.value)} type="number" min="0" step="any" placeholder={side === "buy" ? `Available ${formatAmt(quoteBalance)} ${pairInfo.quote}` : `Available ${formatAmt(baseBalance)} ${pairInfo.base}`} />
+                            <div className="rounded-2xl bg-black/35 border border-white/5 p-4 my-4 space-y-2 text-sm">
+                                <div className="flex justify-between"><span className="text-zinc-500">Market rate</span><span>{formatAmt(pairInfo.rate)} {pairInfo.quote}</span></div>
+                                <div className="flex justify-between"><span className="text-zinc-500">Estimated receive</span><span>{formatAmt(estimated)} {side === "buy" ? pairInfo.base : pairInfo.quote}</span></div>
+                                <div className="flex justify-between"><span className="text-zinc-500">Fee</span><span>{(Number(portfolio?.fee_rate || 0.001) * 100).toFixed(2)}%</span></div>
+                            </div>
+                            <button disabled={submitting} onClick={submit} className={side === "buy" ? "btn-gold w-full" : "btn-eregon w-full"}>{submitting ? "Filling order..." : `${side === "buy" ? "Buy" : "Sell"} ${pairInfo.base}`}</button>
+                            <p className="text-xs text-zinc-500 mt-3 flex gap-2"><ShieldCheck className="w-4 h-4 shrink-0" /> Internal wallet conversion. This is not an external exchange withdrawal or real broker order.</p>
+                        </>
+                    ) : (
+                        <>
+                            <div className="grid grid-cols-2 gap-2 mb-4">
+                                <button onClick={() => setOptionDirection("up")} className={`rounded-xl py-3 font-semibold border ${optionDirection === "up" ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}><ArrowUpRight className="w-4 h-4 inline" /> Up</button>
+                                <button onClick={() => setOptionDirection("down")} className={`rounded-xl py-3 font-semibold border ${optionDirection === "down" ? "bg-rose-500/15 text-rose-200 border-rose-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}><ArrowDownRight className="w-4 h-4 inline" /> Down</button>
+                            </div>
+                            <label className="text-xs uppercase tracking-widest text-zinc-500">Stake (USDT)</label>
+                            <input className="input-eregon mt-2 mb-4" value={optionStake} onChange={(e) => setOptionStake(e.target.value)} type="number" min="0" step="any" placeholder={`Available ${formatAmt(quoteBalance)} USDT`} />
+                            <label className="text-xs uppercase tracking-widest text-zinc-500">Duration</label>
+                            <select className="input-eregon mt-2" value={optionDuration} onChange={(e) => setOptionDuration(Number(e.target.value))}>{optionMeta.durations.map((d) => <option key={d} value={d}>{d < 60 ? `${d}s` : `${d / 60}m`}</option>)}</select>
+                            <div className="rounded-2xl bg-black/35 border border-white/5 p-4 my-4 space-y-2 text-sm">
+                                <div className="flex justify-between"><span className="text-zinc-500">Entry rate</span><span>{formatAmt(pairInfo.rate)} {pairInfo.quote}</span></div>
+                                <div className="flex justify-between"><span className="text-zinc-500">Win payout</span><span>{formatUsd(Number(optionStake || 0) * (1 + Number(optionMeta.payout_rate || 0.8)))}</span></div>
+                                <div className="flex justify-between"><span className="text-zinc-500">Profit on win</span><span>{formatUsd(Number(optionStake || 0) * Number(optionMeta.payout_rate || 0.8))}</span></div>
+                            </div>
+                            <button disabled={submitting} onClick={submitOption} className={optionDirection === "up" ? "btn-gold w-full" : "btn-eregon w-full"}>{submitting ? "Opening contract..." : `Open ${optionDirection.toUpperCase()} Contract`}</button>
+                            <p className="text-xs text-zinc-500 mt-3 flex gap-2"><Target className="w-4 h-4 shrink-0" /> Win if the expiry rate is {optionDirection === "up" ? "above" : "below"} your entry rate. Loss forfeits the stake.</p>
+                        </>
+                    )}
                 </Card>
 
                 <Card hover={false}>
@@ -213,6 +271,23 @@ export default function Trading() {
                             <div className="flex justify-between gap-3"><span className="font-semibold">{order.pair}</span><Badge color={order.side === "buy" ? "emerald" : "rose"}>{order.side}</Badge></div>
                             <p className="text-xs text-zinc-500 mt-1">{new Date(order.created_at).toLocaleString()}</p>
                             <div className="grid grid-cols-2 gap-2 text-xs mt-3"><span className="text-zinc-500">Filled</span><span className="text-right">{formatAmt(order.executed_base)} {order.base_symbol}</span><span className="text-zinc-500">Rate</span><span className="text-right">{formatAmt(order.rate)}</span></div>
+                        </div>)}
+                    </div>
+                </Card>
+                <Card hover={false}>
+                    <h2 className="font-display text-xl mb-4">Options Contracts</h2>
+                    <div className="space-y-2 max-h-[360px] overflow-y-auto">
+                        {options.length === 0 && <p className="text-sm text-zinc-500">No options contracts yet.</p>}
+                        {options.map((option) => <div key={option.id} className="rounded-xl bg-black/35 border border-white/5 px-3 py-3">
+                            <div className="flex justify-between gap-3"><span className="font-semibold">{option.pair}</span><Badge color={option.status === "won" ? "emerald" : option.status === "lost" ? "rose" : "purple"}>{option.status}</Badge></div>
+                            <p className="text-xs text-zinc-500 mt-1"><Clock className="w-3 h-3 inline mr-1" /> {option.status === "open" ? `Expires ${new Date(option.expires_at).toLocaleTimeString()}` : `Settled ${new Date(option.settled_at || option.expires_at).toLocaleString()}`}</p>
+                            <div className="grid grid-cols-2 gap-2 text-xs mt-3">
+                                <span className="text-zinc-500">Direction</span><span className="text-right uppercase">{option.direction}</span>
+                                <span className="text-zinc-500">Stake</span><span className="text-right">{formatUsd(option.stake)}</span>
+                                <span className="text-zinc-500">Entry</span><span className="text-right">{formatAmt(option.entry_rate)}</span>
+                                {option.exit_rate && <><span className="text-zinc-500">Exit</span><span className="text-right">{formatAmt(option.exit_rate)}</span></>}
+                                {option.profit !== undefined && <><span className="text-zinc-500">P/L</span><span className={Number(option.profit) >= 0 ? "text-right text-emerald-300" : "text-right text-rose-300"}>{formatUsd(option.profit)}</span></>}
+                            </div>
                         </div>)}
                     </div>
                 </Card>
