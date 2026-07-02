@@ -317,7 +317,7 @@ export default function Trading() {
         </div>
 
         <div className="grid xl:grid-cols-[280px_minmax(0,1fr)_360px] gap-5">
-            <Card hover={false} className="xl:min-h-[720px]">
+            <Card hover={false} className="order-3 xl:order-none xl:min-h-[720px]">
                 <div className="flex items-center justify-between mb-4"><h2 className="font-display text-xl">Pairs</h2><Badge>{pairs.length}</Badge></div>
                 <div className="relative mb-3"><Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" /><input className="input-eregon pl-10 py-2" placeholder="Search pair..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
                 <div className="space-y-2 max-h-[620px] overflow-y-auto pr-1">
@@ -331,7 +331,7 @@ export default function Trading() {
                 </div>
             </Card>
 
-            <div className="space-y-5 min-w-0">
+            <div className="order-1 xl:order-none space-y-5 min-w-0">
                 <Card hover={false} className="min-h-[420px]">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-5">
                         <div className="flex items-center gap-3 min-w-0">
@@ -363,7 +363,7 @@ export default function Trading() {
                 </div>
             </div>
 
-            <div className="space-y-5">
+            <div className="order-2 xl:order-none space-y-5">
                 <Card hover={false}>
                     <div className="flex items-center justify-between gap-3 mb-5"><h2 className="font-display text-xl">Place Order</h2><Badge color={tradeMode === "spot" ? (side === "buy" ? "emerald" : "rose") : "purple"}>{tradeMode === "spot" ? side.toUpperCase() : "OPTIONS"}</Badge></div>
                     <div className="grid grid-cols-2 gap-2 mb-4">
