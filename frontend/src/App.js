@@ -21,6 +21,8 @@ import Tickets from "@/pages/Tickets";
 import Rewards from "@/pages/Rewards";
 import Leaderboard from "@/pages/Leaderboard";
 import ActivePlan from "@/pages/ActivePlan";
+import Markets from "@/pages/Markets";
+import Trading from "@/pages/Trading";
 
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminUsers from "@/pages/AdminUsers";
@@ -68,6 +70,8 @@ function App() {
                     <Route path="/dashboard/tickets" element={<Protected><Tickets /></Protected>} />
                     <Route path="/dashboard/rewards" element={<Protected><Rewards /></Protected>} />
                     <Route path="/dashboard/leaderboard" element={<Protected><Leaderboard /></Protected>} />
+                    <Route path="/dashboard/markets" element={<Protected><Markets /></Protected>} />
+                    <Route path="/dashboard/trading" element={<Protected><Trading /></Protected>} />
 
                     <Route path="/admin" element={<Protected role="admin"><AdminDashboard /></Protected>} />
                     <Route path="/admin/users" element={<Protected role="admin"><AdminUsers /></Protected>} />

@@ -1,13 +1,13 @@
 import React from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, Gift, Users } from "lucide-react";
+import { LayoutDashboard, ArrowDownToLine, ArrowUpFromLine, RefreshCcw, TrendingUp } from "lucide-react";
 
 const items = [
     { to: "/dashboard", label: "Home", icon: LayoutDashboard, end: true },
-    { to: "/dashboard/rewards", label: "Rewards", icon: Gift },
+    { to: "/dashboard/trading", label: "Trade", icon: RefreshCcw },
+    { to: "/dashboard/markets", label: "Markets", icon: TrendingUp },
     { to: "/dashboard/deposit", label: "Deposit", icon: ArrowDownToLine },
     { to: "/dashboard/withdraw", label: "Withdraw", icon: ArrowUpFromLine },
-    { to: "/dashboard/referral", label: "Team", icon: Users },
 ];
 
 export default function BottomNav() {

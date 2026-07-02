@@ -12,10 +12,22 @@ import secrets
 import random
 import re
 import json
+import time
+import requests
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Literal
 
 from reward_math import normalize_plan_spin_fields, build_signup_spin_rewards
+from trading_utils import (
+    TRADING_FEE_RATE,
+    apply_trade_balances,
+    fallback_markets,
+    market_price_map,
+    merge_markets,
+    normalize_symbol,
+    pair_rate,
+    split_pair,
+)
 
 import bcrypt
 import jwt
@@ -50,6 +62,12 @@ DEFAULT_WITHDRAWAL_NETWORK_TAXES = [
     {"coin": "ETH", "network": "ERC20", "tax_pct": 3.0},
     {"coin": "BNB", "network": "BEP20", "tax_pct": 1.0},
 ]
+COINGECKO_API_BASE = os.environ.get("COINGECKO_API_BASE", "https://api.coingecko.com/api/v3").rstrip("/")
+COINGECKO_API_KEY = os.environ.get("COINGECKO_API_KEY", "").strip()
+COINGECKO_API_KEY_HEADER = os.environ.get("COINGECKO_API_KEY_HEADER", "x-cg-demo-api-key").strip() or "x-cg-demo-api-key"
+MARKET_CACHE_SECONDS = int(os.environ.get("MARKET_CACHE_SECONDS", "25"))
+TRADING_DEFAULT_LIMIT = int(os.environ.get("TRADING_DEFAULT_MARKET_LIMIT", "200"))
+
 
 mongo_url = os.environ["MONGO_URL"]
 client = AsyncIOMotorClient(mongo_url)
@@ -265,6 +283,7 @@ class UserOut(BaseModel):
     membership_name: Optional[str] = None
     coin_symbol: str = "USDT"
     balance: float = 0.0
+    crypto_balances: dict = Field(default_factory=dict)
     daily_profit: float = 0.0
     total_earnings: float = 0.0
     referral_earnings: float = 0.0
@@ -458,6 +477,46 @@ class RegistrationCodeStatusIn(BaseModel):
     status: Literal["active", "inactive"]
 
 
+class MarketCoinOut(BaseModel):
+    id: str
+    symbol: str
+    name: str
+    image: Optional[str] = None
+    current_price: float
+    market_cap: float = 0.0
+    market_cap_rank: Optional[int] = None
+    total_volume: float = 0.0
+    price_change_percentage_24h: float = 0.0
+    sparkline_in_7d: dict = Field(default_factory=dict)
+    source: str = "coingecko"
+    custom: bool = False
+    updated_at: Optional[str] = None
+
+
+class TradingOrderIn(BaseModel):
+    pair: str = Field(min_length=3, max_length=24)
+    side: Literal["buy", "sell"]
+    amount: float = Field(gt=0)
+    order_type: Literal["market"] = "market"
+
+
+class TradingOrderOut(BaseModel):
+    id: str
+    user_id: str
+    pair: str
+    side: str
+    base_symbol: str
+    quote_symbol: str
+    amount: float
+    rate: float
+    executed_base: float
+    executed_quote: float
+    fee_amount: float
+    fee_coin: str
+    status: str
+    created_at: str
+
+
 class PracticeSeedIn(BaseModel):
     count: int = Field(default=1500, ge=1, le=5000)
     password: str = Field(default="Practice@123", min_length=6, max_length=128)
@@ -601,6 +660,7 @@ def user_to_out(u: dict) -> dict:
         "membership_name": u.get("membership_name"),
         "coin_symbol": u.get("coin_symbol", "USDT"),
         "balance": float(u.get("balance", 0)),
+        "crypto_balances": u.get("crypto_balances", {}),
         "daily_profit": float(u.get("daily_profit", 0)),
         "total_earnings": float(u.get("total_earnings", 0)),
         "referral_earnings": float(u.get("referral_earnings", 0)),
@@ -2158,6 +2218,8 @@ async def seed():
     # Indexes for new collections
     await db.transactions.create_index([("user_id", 1), ("created_at", -1)])
     await db.transactions.create_index("type")
+    await db.trades.create_index([("user_id", 1), ("created_at", -1)])
+    await db.trades.create_index("pair")
     await db.activity_logs.create_index([("user_id", 1), ("created_at", -1)])
     await db.tickets.create_index([("user_id", 1), ("last_message_at", -1)])
     await db.ticket_messages.create_index([("ticket_id", 1), ("created_at", 1)])
@@ -2338,6 +2400,240 @@ async def on_shutdown():
 @api.get("/")
 async def health():
     return {"status": "ok", "service": "Eregon Marketing"}
+
+# ---------------- Markets + Internal Trading ----------------
+_market_cache: dict = {"expires_at": 0.0, "payload": None}
+
+
+def _coingecko_headers() -> dict:
+    headers = {"accept": "application/json", "user-agent": "EregonMarketing/1.0"}
+    if COINGECKO_API_KEY:
+        headers[COINGECKO_API_KEY_HEADER] = COINGECKO_API_KEY
+    return headers
+
+
+def _fetch_markets_sync(limit: int, vs_currency: str) -> list[dict]:
+    params = {
+        "vs_currency": vs_currency.lower(),
+        "order": "market_cap_desc",
+        "per_page": max(1, min(250, int(limit))),
+        "page": 1,
+        "sparkline": "true",
+        "price_change_percentage": "1h,24h,7d",
+    }
+    response = requests.get(
+        f"{COINGECKO_API_BASE}/coins/markets",
+        params=params,
+        headers=_coingecko_headers(),
+        timeout=8,
+    )
+    response.raise_for_status()
+    data = response.json()
+    if not isinstance(data, list):
+        raise ValueError("CoinGecko response was not a list")
+    return data
+
+
+async def get_market_snapshot(limit: int = TRADING_DEFAULT_LIMIT, vs_currency: str = "usd", include_custom: bool = True, force: bool = False) -> dict:
+    now = time.time()
+    limit = max(1, min(250, int(limit or TRADING_DEFAULT_LIMIT)))
+    vs_currency = (vs_currency or "usd").lower()
+    cache_key = f"{vs_currency}:{limit}:{include_custom}"
+    cached = _market_cache.get("payload")
+    if not force and cached and _market_cache.get("key") == cache_key and now < float(_market_cache.get("expires_at", 0)):
+        return cached
+
+    source = "coingecko"
+    error = None
+    try:
+        live = await asyncio.to_thread(_fetch_markets_sync, limit, vs_currency)
+        coins = merge_markets(live, include_custom=include_custom)
+    except Exception as exc:
+        logger.warning("CoinGecko market fetch failed; using fallback markets: %s", exc)
+        coins = fallback_markets(limit)
+        source = "fallback"
+        error = str(exc)[:180]
+
+    payload = {
+        "coins": coins[:limit + (4 if include_custom else 0)],
+        "count": len(coins[:limit + (4 if include_custom else 0)]),
+        "vs_currency": vs_currency.upper(),
+        "source": source,
+        "source_error": error,
+        "provider": "CoinGecko" if source == "coingecko" else "Fallback cache",
+        "fee_rate": TRADING_FEE_RATE,
+        "updated_at": now_utc().isoformat(),
+        "cache_seconds": MARKET_CACHE_SECONDS,
+    }
+    _market_cache.update({"key": cache_key, "expires_at": now + MARKET_CACHE_SECONDS, "payload": payload})
+    return payload
+
+
+def _build_pair_payload(base: str, quote: str, prices: dict) -> Optional[dict]:
+    try:
+        rate = pair_rate(base, quote, prices)
+    except ValueError:
+        return None
+    return {"pair": f"{normalize_symbol(base)}/{normalize_symbol(quote)}", "base": normalize_symbol(base), "quote": normalize_symbol(quote), "rate": round(rate, 12)}
+
+
+def _user_balance_map(user: dict) -> dict:
+    balances = {"USDT": round(float(user.get("balance", 0) or 0), 12)}
+    for symbol, amount in (user.get("crypto_balances") or {}).items():
+        sym = normalize_symbol(symbol)
+        if sym and sym != "USDT":
+            try:
+                balances[sym] = round(float(amount or 0), 12)
+            except (TypeError, ValueError):
+                continue
+    return balances
+
+
+def _portfolio_from_balances(balances: dict, markets: list[dict]) -> dict:
+    prices = market_price_map(markets)
+    by_symbol = {normalize_symbol(item.get("symbol")): item for item in markets}
+    positions = []
+    total_usd = 0.0
+    for symbol, amount in sorted(balances.items()):
+        amount = float(amount or 0)
+        if abs(amount) < 0.0000000001:
+            continue
+        price = float(prices.get(symbol, 1.0 if symbol in {"USDT", "USDC", "USD"} else 0.0) or 0.0)
+        usd_value = amount * price
+        total_usd += usd_value
+        market = by_symbol.get(symbol, {})
+        positions.append({
+            "symbol": symbol,
+            "name": market.get("name") or ("Tether" if symbol == "USDT" else symbol),
+            "amount": round(amount, 12),
+            "price_usd": round(price, 10),
+            "usd_value": round(usd_value, 6),
+            "change_24h": float(market.get("price_change_percentage_24h") or 0.0),
+            "image": market.get("image"),
+            "custom": bool(market.get("custom", False)),
+        })
+    return {"positions": positions, "total_usd": round(total_usd, 6)}
+
+
+@api.get("/markets")
+async def public_markets(limit: int = TRADING_DEFAULT_LIMIT, vs_currency: str = "usd", include_custom: bool = True, force: bool = False):
+    """Top crypto markets plus Eregon custom coins. Uses CoinGecko when available."""
+    return await get_market_snapshot(limit=limit, vs_currency=vs_currency, include_custom=include_custom, force=force)
+
+
+@api.get("/trading/pairs")
+async def trading_pairs():
+    snapshot = await get_market_snapshot(limit=TRADING_DEFAULT_LIMIT, include_custom=True)
+    prices = market_price_map(snapshot["coins"])
+    preferred = ["BTC", "ETH", "BNB", "SOL", "XRP", "DOGE", "ADA", "TRX", "ERGN", "RYL", "MRKT", "BTD"]
+    symbols = [normalize_symbol(c.get("symbol")) for c in snapshot["coins"] if c.get("symbol")]
+    tradable = []
+    for sym in preferred + symbols:
+        if sym and sym not in {"USDT", "USDC", "USD"} and sym not in tradable and sym in prices:
+            tradable.append(sym)
+        if len(tradable) >= 60:
+            break
+
+    pairs = []
+    for sym in tradable:
+        pair = _build_pair_payload(sym, "USDT", prices)
+        if pair:
+            pairs.append(pair)
+    for base, quote in [("ETH", "BTC"), ("BNB", "BTC"), ("SOL", "BTC"), ("ERGN", "USDT"), ("RYL", "USDT"), ("MRKT", "USDT"), ("BTD", "USDT")]:
+        pair = _build_pair_payload(base, quote, prices)
+        if pair and all(existing["pair"] != pair["pair"] for existing in pairs):
+            pairs.insert(0, pair)
+    return {"pairs": pairs, "fee_rate": TRADING_FEE_RATE, "updated_at": snapshot["updated_at"], "source": snapshot["source"]}
+
+
+@api.get("/trading/portfolio")
+async def trading_portfolio(user: dict = Depends(get_current_user)):
+    snapshot = await get_market_snapshot(limit=TRADING_DEFAULT_LIMIT, include_custom=True)
+    balances = _user_balance_map(user)
+    portfolio = _portfolio_from_balances(balances, snapshot["coins"])
+    return {
+        "balances": balances,
+        "positions": portfolio["positions"],
+        "total_usd": portfolio["total_usd"],
+        "fee_rate": TRADING_FEE_RATE,
+        "market_source": snapshot["source"],
+        "updated_at": snapshot["updated_at"],
+    }
+
+
+@api.get("/trading/orders", response_model=List[TradingOrderOut])
+async def trading_order_history(limit: int = 50, user: dict = Depends(get_current_user)):
+    items = await db.trades.find({"user_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(max(1, min(200, limit)))
+    return items
+
+
+@api.post("/trading/orders")
+async def place_trading_order(body: TradingOrderIn, user: dict = Depends(get_current_user)):
+    snapshot = await get_market_snapshot(limit=TRADING_DEFAULT_LIMIT, include_custom=True, force=False)
+    prices = market_price_map(snapshot["coins"])
+    pair = body.pair.strip().upper().replace("-", "/")
+    try:
+        fill = apply_trade_balances(_user_balance_map(user), pair, body.side, float(body.amount), prices, fee_rate=TRADING_FEE_RATE)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    before_balances = fill["before"]
+    after_balances = fill["after"]
+    before_usdt = float(before_balances.get("USDT", 0.0))
+    after_usdt = float(after_balances.get("USDT", 0.0))
+    crypto_after = {sym: amt for sym, amt in after_balances.items() if sym != "USDT" and abs(float(amt or 0)) >= 0.0000000001}
+    now_iso = now_utc().isoformat()
+
+    updated = await db.users.find_one_and_update(
+        {"id": user["id"], "status": {"$ne": "suspended"}},
+        {"$set": {"balance": round(after_usdt, 12), "crypto_balances": crypto_after, "last_active": now_iso}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not updated:
+        raise HTTPException(status_code=400, detail="Trading is unavailable for this account")
+
+    trade_id = str(uuid.uuid4())
+    trade = {
+        "id": trade_id,
+        "user_id": user["id"],
+        "pair": f"{fill['base_symbol']}/{fill['quote_symbol']}",
+        "side": fill["side"],
+        "base_symbol": fill["base_symbol"],
+        "quote_symbol": fill["quote_symbol"],
+        "amount": round(float(body.amount), 12),
+        "rate": fill["rate"],
+        "executed_base": fill["executed_base"],
+        "executed_quote": fill["executed_quote"],
+        "fee_amount": fill["fee_amount"],
+        "fee_coin": fill["fee_coin"],
+        "before_balances": before_balances,
+        "after_balances": after_balances,
+        "market_source": snapshot["source"],
+        "status": "filled",
+        "created_at": now_iso,
+    }
+    await db.trades.insert_one(trade)
+
+    usdt_delta = round(after_usdt - before_usdt, 12)
+    note = (
+        f"{fill['side'].title()} {fill['executed_base']:g} {fill['base_symbol']} "
+        f"on {fill['base_symbol']}/{fill['quote_symbol']} at {fill['rate']:g}; "
+        f"fee {fill['fee_amount']:g} {fill['fee_coin']}"
+    )
+    await record_tx(
+        user_id=user["id"],
+        type_="trading_buy" if fill["side"] == "buy" else "trading_sell",
+        amount=usdt_delta,
+        coin="USDT",
+        before_balance=before_usdt,
+        after_balance=after_usdt,
+        reference_id=trade_id,
+        note=note,
+    )
+    await _phase2_emit_user(user["id"], "balance.updated", {"balance": after_usdt, "crypto_balances": crypto_after, "source": "trading", "trade": trade})
+    trade.pop("_id", None)
+    portfolio = _portfolio_from_balances(after_balances, snapshot["coins"])
+    return {"ok": True, "trade": trade, "portfolio": {"balances": after_balances, **portfolio}}
 
 # ====================================================================
 # PHASE 1 ENTERPRISE EXTENSIONS

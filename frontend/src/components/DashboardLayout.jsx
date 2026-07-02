@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { NavLink, useNavigate, Link, useLocation } from "react-router-dom";
-import { Crown, LayoutDashboard, CheckSquare, ArrowDownToLine, ArrowUpFromLine, Users, ShieldCheck, LogOut, Bell, History, MessageSquare, Trophy, Gift, Menu, X } from "lucide-react";
+import { Crown, LayoutDashboard, CheckSquare, ArrowDownToLine, ArrowUpFromLine, Users, ShieldCheck, LogOut, Bell, History, MessageSquare, Trophy, Gift, Menu, X, TrendingUp, RefreshCcw } from "lucide-react";
 import { useAuth } from "../lib/auth";
 import BottomNav from "./BottomNav";
 import NotificationBell from "./NotificationBell";
@@ -12,6 +12,8 @@ const items = [
     { to: "/dashboard/transactions", label: "Ledger", icon: History },
     { to: "/dashboard/tasks", label: "Tasks", icon: CheckSquare },
     { to: "/dashboard/rewards", label: "Rewards", icon: Gift },
+    { to: "/dashboard/markets", label: "Markets", icon: TrendingUp },
+    { to: "/dashboard/trading", label: "Trading", icon: RefreshCcw },
     { to: "/dashboard/leaderboard", label: "Leaderboard", icon: Trophy },
     { to: "/dashboard/deposit", label: "Deposit", icon: ArrowDownToLine },
     { to: "/dashboard/withdraw", label: "Withdraw", icon: ArrowUpFromLine },
