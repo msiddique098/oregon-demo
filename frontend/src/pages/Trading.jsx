@@ -9,7 +9,6 @@ import {
     ChevronDown,
     LineChart,
     Maximize2,
-    Menu,
     Minimize2,
     Minus,
     Plus,
@@ -123,13 +122,13 @@ function OrderBookRows({ price, compactMode = false }) {
 
     return (
         <div className="min-w-0">
-            <div className={`grid grid-cols-2 gap-2 ${compactMode ? "text-[11px]" : "text-xs"} text-zinc-500 mb-2`}>
+            <div className={`grid grid-cols-2 gap-1.5 ${compactMode ? "text-[10px]" : "text-xs"} text-zinc-500 mb-2`}>
                 <span>Price</span>
                 <span className="text-right">Amount</span>
             </div>
             <div className="space-y-1">
                 {rows.slice().reverse().map((row, index) => (
-                    <div key={`ask-${index}`} className={`grid grid-cols-2 gap-1 ${compactMode ? "text-[10px]" : "text-sm"}`}>
+                    <div key={`ask-${index}`} className={`grid grid-cols-2 gap-1 ${compactMode ? "text-[9.5px]" : "text-sm"}`}>
                         <span className="relative overflow-hidden rounded-sm px-1 text-rose-400">
                             <span className="absolute inset-y-0 right-0 bg-rose-500/10" style={{ width: `${Math.min(94, row.askSize * 10)}%` }} />
                             <span className="relative">{formatPrice(row.ask)}</span>
@@ -139,12 +138,12 @@ function OrderBookRows({ price, compactMode = false }) {
                 ))}
             </div>
             <div className="py-2">
-                <p className="font-display text-[22px] leading-none text-rose-400">{formatPrice(p)}</p>
+                <p className="font-display text-[18px] leading-none text-rose-400">{formatPrice(p)}</p>
                 <p className="text-[11px] text-zinc-500">≈ Rs{(p * FX_PKR).toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
             </div>
             <div className="space-y-1">
                 {rows.map((row, index) => (
-                    <div key={`bid-${index}`} className={`grid grid-cols-2 gap-1 ${compactMode ? "text-[10px]" : "text-sm"}`}>
+                    <div key={`bid-${index}`} className={`grid grid-cols-2 gap-1 ${compactMode ? "text-[9.5px]" : "text-sm"}`}>
                         <span className="relative overflow-hidden rounded-sm px-1 text-emerald-400">
                             <span className="absolute inset-y-0 right-0 bg-emerald-500/10" style={{ width: `${Math.min(94, row.bidSize * 10)}%` }} />
                             <span className="relative">{formatPrice(row.bid)}</span>
@@ -174,17 +173,35 @@ function CandleChart({
     onToggleFullscreen,
 }) {
     const [hover, setHover] = useState(null);
-    const [zoom, setZoom] = useState(variant === "analysis" ? 2.05 : 1.15);
+    const chartStorageKey = `eregon-chart-zoom-${variant}`;
+    const [zoom, setZoom] = useState(() => {
+        if (typeof window === "undefined") return 1;
+        const saved = Number(window.localStorage?.getItem(chartStorageKey));
+        return Number.isFinite(saved) && saved >= MIN_ZOOM && saved <= MAX_ZOOM ? saved : 1;
+    });
     const [offset, setOffset] = useState(0);
     const [drag, setDrag] = useState(null);
     const wrapRef = useRef(null);
     const pointerCache = useRef(new Map());
     const pinchStart = useRef(null);
+    const touchStart = useRef(null);
 
     const clampZoom = (value) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value || MIN_ZOOM)));
     const visibleCountForZoom = (zoomValue) => Math.max(14, Math.min(candles.length || 14, Math.round((candles.length || 14) / clampZoom(zoomValue))));
     const maxOffsetForZoom = (zoomValue) => Math.max(0, (candles.length || 0) - visibleCountForZoom(zoomValue));
     const clampOffset = (value, zoomValue = zoom) => Math.max(0, Math.min(maxOffsetForZoom(zoomValue), Number(value || 0)));
+
+    useEffect(() => {
+        if (typeof window !== "undefined") window.localStorage?.setItem(chartStorageKey, String(zoom));
+    }, [chartStorageKey, zoom]);
+
+    const setZoomSafely = (nextZoom) => {
+        setZoom((current) => {
+            const next = clampZoom(Number(nextZoom ?? current));
+            setOffset((currentOffset) => clampOffset(currentOffset, next));
+            return next;
+        });
+    };
 
     const changeZoom = (direction) => {
         setZoom((current) => {
@@ -219,8 +236,8 @@ function CandleChart({
     const height = variant === "analysis" ? 560 : fullscreen ? 520 : 286;
     const rsiHeight = variant === "analysis" ? 104 : 68;
     const pad = variant === "analysis"
-        ? { left: 34, right: 92, top: 24, bottom: 32 }
-        : { left: 24, right: 74, top: 28, bottom: 30 };
+        ? { left: 26, right: 76, top: 20, bottom: 26 }
+        : { left: 20, right: 62, top: 24, bottom: 26 };
     const chartBottom = height - pad.bottom - rsiHeight;
     const plotH = chartBottom - pad.top;
     const hi = Math.max(...visible.map((c) => c.high));
@@ -230,7 +247,7 @@ function CandleChart({
     const plotW = width - pad.left - pad.right;
     const y = (value) => pad.top + ((hi - value) / span) * plotH;
     const xFor = (index) => pad.left + (index + 0.5) * (plotW / visible.length);
-    const candleW = Math.max(3, Math.min(12, (plotW / visible.length) * 0.58));
+    const candleW = Math.max(2.2, Math.min(14, (plotW / visible.length) * 0.62));
     const ticks = Array.from({ length: variant === "analysis" ? 6 : 5 }).map((_, i) => lo + (span * i) / (variant === "analysis" ? 5 : 4));
     const last = visible[visible.length - 1];
     const hoverCandle = hover ? visible[hover.index] : last;
@@ -290,7 +307,56 @@ function CandleChart({
 
     const handleWheel = (event) => {
         event.preventDefault();
-        changeZoom(event.deltaY > 0 ? -0.3 : 0.3);
+        changeZoom(event.deltaY > 0 ? -0.28 : 0.28);
+    };
+
+    const distanceBetweenTouches = (touches) => {
+        if (!touches || touches.length < 2) return 0;
+        return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+    };
+
+    const handleTouchStart = (event) => {
+        if (event.touches.length >= 2) {
+            const distance = distanceBetweenTouches(event.touches);
+            touchStart.current = { mode: "pinch", distance, zoom };
+            setDrag(null);
+            setHover(null);
+            return;
+        }
+        if (event.touches.length === 1) {
+            touchStart.current = { mode: "pan", x: event.touches[0].clientX };
+        }
+    };
+
+    const handleTouchMove = (event) => {
+        if (!touchStart.current) return;
+        if (event.cancelable) event.preventDefault();
+
+        if (event.touches.length >= 2 && touchStart.current.mode === "pinch") {
+            const distance = distanceBetweenTouches(event.touches);
+            if (touchStart.current.distance > 0) {
+                setZoomSafely(touchStart.current.zoom * (distance / touchStart.current.distance));
+            }
+            return;
+        }
+
+        if (event.touches.length === 1 && touchStart.current.mode === "pan") {
+            const rect = wrapRef.current?.getBoundingClientRect();
+            const currentX = event.touches[0].clientX;
+            const dx = currentX - touchStart.current.x;
+            const candlePixels = (rect?.width || 1) / Math.max(1, visible.length);
+            if (Math.abs(dx) > Math.max(6, candlePixels * 0.55)) {
+                const shift = Math.round(-dx / candlePixels);
+                setOffset((current) => clampOffset(current + shift));
+                touchStart.current = { ...touchStart.current, x: currentX };
+            }
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (!wrapRef.current) return;
+        touchStart.current = null;
+        setDrag(null);
     };
 
     const handlePointerDown = (event) => {
@@ -312,9 +378,11 @@ function CandleChart({
         setDrag(null);
     };
 
+    const showChrome = variant !== "analysis";
+
     return (
         <div className={`${fullscreen ? "fixed inset-0 z-[90] bg-[#111923]" : "h-full bg-[#111923]"} flex flex-col overflow-hidden`}>
-            <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/5 bg-[#111923]">
+            {showChrome && <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/5 bg-[#111923]">
                 <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-zinc-200 truncate">{pair} Chart</p>
                     <p className="text-[9px] uppercase tracking-[0.16em] text-zinc-600">Pinch/scroll to zoom · drag to pan</p>
@@ -328,8 +396,16 @@ function CandleChart({
                         </button>
                     )}
                 </div>
-            </div>
-            <div ref={wrapRef} className="relative flex-1 min-h-0 touch-none">
+            </div>}
+            <div
+                ref={wrapRef}
+                className="relative flex-1 min-h-0 touch-none"
+                style={{ touchAction: "none", overscrollBehavior: "contain" }}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                onTouchCancel={handleTouchEnd}
+            >
                 <svg
                     viewBox={`0 0 ${width} ${height}`}
                     preserveAspectRatio="none"
@@ -352,10 +428,10 @@ function CandleChart({
                     {ticks.map((tick) => (
                         <g key={tick}>
                             <line x1={pad.left} x2={width - pad.right} y1={y(tick)} y2={y(tick)} stroke="rgba(255,255,255,.075)" />
-                            <text x={width - pad.right + 8} y={y(tick) + 5} fill="rgba(255,255,255,.48)" fontSize={variant === "analysis" ? "14" : "11"}>{formatPrice(tick)}</text>
+                            <text x={width - pad.right + 8} y={y(tick) + 5} fill="rgba(255,255,255,.48)" fontSize={variant === "analysis" ? "11" : "10"}>{formatPrice(tick)}</text>
                         </g>
                     ))}
-                    <text x={pad.left} y={variant === "analysis" ? 20 : 18} fill="rgba(255,255,255,.76)" fontSize={variant === "analysis" ? "13" : "10"}>
+                    <text x={pad.left} y={variant === "analysis" ? 20 : 18} fill="rgba(255,255,255,.76)" fontSize={variant === "analysis" ? "10" : "9"}>
                         O {formatPrice(hoverCandle.open)}  H {formatPrice(hoverCandle.high)}  L {formatPrice(hoverCandle.low)}  C {formatPrice(hoverCandle.close)}
                     </text>
                     {visible.map((candle, index) => {
@@ -371,7 +447,7 @@ function CandleChart({
                                 <rect x={x - candleW / 2} y={chartBottom - vHeight} width={candleW} height={vHeight} fill={up ? "rgba(53,201,139,.18)" : "rgba(246,70,93,.18)"} rx="1" />
                                 {chartType === "candles" ? (
                                     <>
-                                        <line x1={x} x2={x} y1={y(candle.high)} y2={y(candle.low)} stroke={color} strokeWidth={variant === "analysis" ? 2 : 1.4} />
+                                        <line x1={x} x2={x} y1={y(candle.high)} y2={y(candle.low)} stroke={color} strokeWidth={variant === "analysis" ? 1.35 : 1.15} />
                                         <rect x={x - candleW / 2} y={bodyTop} width={candleW} height={bodyH} fill={color} rx="1.4" />
                                     </>
                                 ) : null}
@@ -385,7 +461,7 @@ function CandleChart({
                     </>}
                     <line x1={pad.left} x2={width - pad.right} y1={y(last.close)} y2={y(last.close)} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4" />
                     <rect x={width - pad.right + 8} y={y(last.close) - 14} width={pad.right - 10} height="28" rx="6" fill="#1f2937" stroke="rgba(255,255,255,.55)" />
-                    <text x={width - pad.right + 8 + (pad.right - 10) / 2} y={y(last.close) + 5} textAnchor="middle" fill="white" fontSize={variant === "analysis" ? "16" : "11"}>{formatPrice(last.close)}</text>
+                    <text x={width - pad.right + 8 + (pad.right - 10) / 2} y={y(last.close) + 5} textAnchor="middle" fill="white" fontSize={variant === "analysis" ? "11" : "10"}>{formatPrice(last.close)}</text>
                     {hover && (
                         <>
                             <line x1={hover.x} x2={hover.x} y1={pad.top} y2={chartBottom} stroke="rgba(255,255,255,.28)" strokeDasharray="5 5" />
@@ -393,20 +469,16 @@ function CandleChart({
                         </>
                     )}
                     <line x1="0" x2={width} y1={chartBottom} y2={chartBottom} stroke="rgba(255,255,255,.09)" />
-                    <text x={pad.left} y={chartBottom + 22} fill="#f0b90b" fontSize={variant === "analysis" ? "16" : "12"}>RSI(6): {rsi.length ? rsi[rsi.length - 1].rsi.toFixed(2) : "--"}</text>
+                    <text x={pad.left} y={chartBottom + 22} fill="#f0b90b" fontSize={variant === "analysis" ? "11" : "10"}>RSI(6): {rsi.length ? rsi[rsi.length - 1].rsi.toFixed(2) : "--"}</text>
                     <line x1={pad.left} x2={width - pad.right} y1={rsiY(70)} y2={rsiY(70)} stroke="rgba(255,255,255,.45)" strokeDasharray="7 7" />
                     <line x1={pad.left} x2={width - pad.right} y1={rsiY(40)} y2={rsiY(40)} stroke="rgba(255,255,255,.32)" strokeDasharray="7 7" />
-                    <path d={rsiPath} fill="none" stroke="#f0b90b" strokeWidth={variant === "analysis" ? 2 : 1.5} />
-                    <text x={width - pad.right + 8} y={rsiY(70) + 5} fill="rgba(255,255,255,.55)" fontSize="12">70.0</text>
-                    <text x={width - pad.right + 8} y={rsiY(40) + 5} fill="rgba(255,255,255,.55)" fontSize="12">40.0</text>
+                    <path d={rsiPath} fill="none" stroke="#f0b90b" strokeWidth={variant === "analysis" ? 1.35 : 1.2} />
+                    <text x={width - pad.right + 8} y={rsiY(70) + 5} fill="rgba(255,255,255,.55)" fontSize="10">70.0</text>
+                    <text x={width - pad.right + 8} y={rsiY(40) + 5} fill="rgba(255,255,255,.55)" fontSize="10">40.0</text>
                 </svg>
-                <div className="absolute left-3 bottom-3 flex items-center gap-2 rounded-full bg-black/35 px-2 py-1 text-[10px] text-zinc-400 backdrop-blur">
-                    <span>Zoom {zoom.toFixed(1)}x</span>
-                    <span className="text-zinc-600">•</span>
-                    <span>Drag to pan</span>
-                </div>
+                {showChrome && <div className="absolute left-2 bottom-2 rounded-md bg-black/35 px-1.5 py-0.5 text-[9px] text-zinc-400 backdrop-blur">{zoom.toFixed(1)}x</div>}
             </div>
-            <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-t border-white/5 bg-[#111923] overflow-x-auto">
+            {showChrome && <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-t border-white/5 bg-[#111923] overflow-x-auto">
                 <div className="flex items-center gap-1">
                     {TIMEFRAMES.map((tf) => (
                         <button key={tf.key} type="button" onClick={() => onTimeframe?.(tf.key)} className={`px-3 py-1.5 text-[12px] rounded-lg font-medium ${timeframe === tf.key ? "text-[#f0b90b] border-b-2 border-[#f0b90b]" : "text-zinc-500"}`}>{tf.label}</button>
@@ -416,29 +488,29 @@ function CandleChart({
                     <button type="button" onClick={() => onChartType?.("candles")} className={`w-8 h-8 rounded-lg flex items-center justify-center ${chartType === "candles" ? "text-[#f0b90b] bg-white/5" : "text-zinc-500"}`}><BarChart3 className="w-4 h-4" /></button>
                     <button type="button" onClick={() => onChartType?.("line")} className={`w-8 h-8 rounded-lg flex items-center justify-center ${chartType === "line" ? "text-[#f0b90b] bg-white/5" : "text-zinc-500"}`}><LineChart className="w-4 h-4" /></button>
                 </div>
-            </div>
+            </div>}
         </div>
     );
 }
 
 function MobileChartView({ pairInfo, candles, timeframe, setTimeframe, chartType, setChartType, up, onBack, side, setSide, setTradeMode }) {
     return (
-        <div className="fixed inset-0 z-[90] bg-[#1f2732] text-zinc-100 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+        <div className="fixed inset-0 z-[90] bg-[#1f2732] text-zinc-100 overflow-y-auto pb-[env(safe-area-inset-bottom)] text-[12px]">
             <div className="sticky top-0 z-10 bg-[#1f2732]/95 backdrop-blur-xl border-b border-white/5">
-                <div className="flex items-center justify-between px-4 h-14">
+                <div className="flex items-center justify-between px-3 h-11">
                     <div className="flex items-center gap-4 min-w-0">
                         <button onClick={onBack} className="w-8 h-8 -ml-2 flex items-center justify-center text-zinc-100" aria-label="Back to trade"><ArrowLeft className="w-5 h-5" /></button>
-                        <button className="flex items-center gap-1 text-[20px] font-bold truncate">{pairInfo.pair}<ChevronDown className="w-5 h-5 text-zinc-300" /></button>
+                        <button className="flex items-center gap-1 text-[17px] font-bold truncate">{pairInfo.pair}<ChevronDown className="w-5 h-5 text-zinc-300" /></button>
                     </div>
                     <div className="flex items-center gap-4 text-zinc-100">
-                        <span className="font-black text-[18px] text-purple-400">Ai</span>
+                        <span className="font-black text-[15px] text-purple-400">Ai</span>
                         <Star className="w-5 h-5" />
                         <Bell className="w-5 h-5" />
                     </div>
                 </div>
-                <div className="flex items-center gap-6 px-4 text-[17px] font-semibold text-zinc-400 overflow-x-auto">
+                <div className="flex items-center gap-5 px-3 text-[13px] font-semibold text-zinc-400 overflow-x-auto">
                     {["Price", "Info", "Trading Data", "Square", "Trade-X"].map((item, index) => (
-                        <button key={item} className={`relative py-3 whitespace-nowrap ${index === 0 ? "text-white" : ""}`}>
+                        <button key={item} className={`relative py-2.5 whitespace-nowrap ${index === 0 ? "text-white" : ""}`}>
                             {item}
                             {item === "Trade-X" && <span className="absolute -top-0.5 right-[-16px] rounded-full bg-[#f0b90b] px-1 text-[9px] font-bold text-black">New</span>}
                             {index === 0 && <span className="absolute left-0 bottom-0 h-1 w-8 bg-[#f0b90b] rounded-full" />}
@@ -447,16 +519,16 @@ function MobileChartView({ pairInfo, candles, timeframe, setTimeframe, chartType
                 </div>
             </div>
 
-            <div className="px-4 pt-4">
-                <div className="grid grid-cols-[1fr_auto] gap-5">
+            <div className="px-3 pt-3">
+                <div className="grid grid-cols-[1fr_auto] gap-3">
                     <div>
-                        <p className="text-[40px] leading-none font-bold tracking-tight text-white">{formatPrice(pairInfo.rate)}</p>
-                        <p className="mt-1.5 text-[15px] font-semibold text-white">Rs{(pairInfo.rate * FX_PKR).toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className={up ? "text-emerald-400" : "text-rose-400"}>{pct(pairInfo.baseMarket?.price_change_percentage_24h)}</span></p>
-                        <div className="mt-2 flex items-center gap-2 text-[#f0b90b] text-[12px] font-semibold">
+                        <p className="text-[30px] leading-none font-bold tracking-tight text-white">{formatPrice(pairInfo.rate)}</p>
+                        <p className="mt-1 text-[12px] font-semibold text-white">Rs{(pairInfo.rate * FX_PKR).toLocaleString(undefined, { maximumFractionDigits: 2 })} <span className={up ? "text-emerald-400" : "text-rose-400"}>{pct(pairInfo.baseMarket?.price_change_percentage_24h)}</span></p>
+                        <div className="mt-1.5 flex items-center gap-1.5 text-[#f0b90b] text-[10px] font-semibold">
                             <span>Payments</span><span className="text-zinc-500">|</span><span>Vol</span><span className="text-zinc-500">|</span><span>Price Protection</span><ChevronDown className="w-4 h-4 -rotate-90" />
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-[12px] min-w-[175px]">
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-[10px] min-w-[152px]">
                         <div><p className="text-zinc-500">24h High</p><p className="text-white font-medium">{formatPrice(pairInfo.baseMarket?.high_24h || pairInfo.rate * 1.018)}</p></div>
                         <div><p className="text-zinc-500">24h Vol({pairInfo.base})</p><p className="text-white font-medium">{compact(pairInfo.baseMarket?.total_volume || 0)}</p></div>
                         <div><p className="text-zinc-500">24h Low</p><p className="text-white font-medium">{formatPrice(pairInfo.baseMarket?.low_24h || pairInfo.rate * 0.982)}</p></div>
@@ -465,7 +537,21 @@ function MobileChartView({ pairInfo, candles, timeframe, setTimeframe, chartType
                 </div>
             </div>
 
-            <div className="mt-4 h-[calc(100vh-315px)] min-h-[430px] max-h-[650px] border-y border-white/5">
+            <div className="px-3 mt-3 flex items-center justify-between gap-2 text-[12px] text-zinc-400 border-b border-white/5 pb-2">
+                <div className="flex items-center gap-4 overflow-x-auto">
+                    <span>Time</span>
+                    {TIMEFRAMES.map((tf) => (
+                        <button key={tf.key} onClick={() => setTimeframe(tf.key)} className={`whitespace-nowrap font-semibold ${timeframe === tf.key ? "text-white" : "text-zinc-500"}`}>{tf.label}{tf.key === "1w" && timeframe === "1w" ? "⌄" : ""}</button>
+                    ))}
+                </div>
+                <div className="flex items-center gap-4 text-zinc-100 shrink-0">
+                    <Maximize2 className="w-4 h-4" />
+                    <SlidersHorizontal className="w-4 h-4" />
+                    <BarChart3 className="w-4 h-4" />
+                </div>
+            </div>
+
+            <div className="mt-0 h-[calc(100vh-316px)] min-h-[350px] max-h-[540px] border-y border-white/5">
                 <CandleChart
                     candles={candles}
                     pair={pairInfo.pair}
@@ -477,20 +563,20 @@ function MobileChartView({ pairInfo, candles, timeframe, setTimeframe, chartType
                 />
             </div>
 
-            <div className="px-4 pt-4">
-                <div className="flex items-center gap-7 text-[16px] text-zinc-400 overflow-x-auto">
+            <div className="px-3 pt-3">
+                <div className="flex items-center gap-5 text-[12px] text-zinc-400 overflow-x-auto">
                     {["MA", "EMA", "BOLL", "SAR", "AVL", "SUPER", "VOL"].map((item) => <button key={item}>{item}</button>)}
                     <button className="ml-auto text-white"><LineChart className="w-5 h-5" /></button>
                 </div>
-                <div className="mt-4 flex items-center gap-5 text-[13px] text-zinc-400 overflow-x-auto">
+                <div className="mt-3 flex items-center gap-4 text-[11px] text-zinc-400 overflow-x-auto">
                     {["Today", "7 Days", "30 Days", "90 Days", "180 Days", "1 Year"].map((item) => <button key={item}>{item}</button>)}
                 </div>
-                <div className="mt-5 grid grid-cols-[auto_auto_auto_1fr_1fr] gap-3 items-center pb-5">
-                    <button className="text-center text-zinc-100"><span className="mx-auto mb-1 w-8 h-8 rounded-full border border-white/50 flex items-center justify-center">•••</span><span className="text-xs">More</span></button>
-                    <button className="text-center text-zinc-100"><span className="mx-auto mb-1 w-8 h-8 grid grid-cols-2 gap-1 p-1"><i className="border border-white rounded-sm" /><i className="border border-white rounded-sm rotate-45" /><i className="border border-white rounded-sm rotate-45" /><i className="border border-white rounded-sm" /></span><span className="text-xs">Hub</span></button>
-                    <button className="text-center text-zinc-100"><span className="mx-auto mb-1 w-8 h-8 flex items-center justify-center text-2xl">↗</span><span className="text-xs">Margin</span></button>
-                    <button onClick={() => { setSide("buy"); setTradeMode("spot"); onBack(); }} className="h-12 rounded-xl bg-emerald-500 text-white text-[19px] font-bold">Buy</button>
-                    <button onClick={() => { setSide("sell"); setTradeMode("spot"); onBack(); }} className="h-12 rounded-xl bg-rose-500 text-white text-[19px] font-bold">Sell</button>
+                <div className="mt-4 grid grid-cols-[auto_auto_auto_1fr_1fr] gap-2.5 items-center pb-4">
+                    <button className="text-center text-zinc-100"><span className="mx-auto mb-1 w-7 h-7 rounded-full border border-white/50 flex items-center justify-center">•••</span><span className="text-[11px]">More</span></button>
+                    <button className="text-center text-zinc-100"><span className="mx-auto mb-1 w-7 h-7 grid grid-cols-2 gap-1 p-1"><i className="border border-white rounded-sm" /><i className="border border-white rounded-sm rotate-45" /><i className="border border-white rounded-sm rotate-45" /><i className="border border-white rounded-sm" /></span><span className="text-[11px]">Hub</span></button>
+                    <button className="text-center text-zinc-100"><span className="mx-auto mb-1 w-7 h-7 flex items-center justify-center text-2xl">↗</span><span className="text-[11px]">Margin</span></button>
+                    <button onClick={() => { setSide("buy"); setTradeMode("spot"); onBack(); }} className="h-10 rounded-lg bg-emerald-500 text-white text-[15px] font-bold">Buy</button>
+                    <button onClick={() => { setSide("sell"); setTradeMode("spot"); onBack(); }} className="h-10 rounded-lg bg-rose-500 text-white text-[15px] font-bold">Sell</button>
                 </div>
             </div>
         </div>
@@ -509,86 +595,79 @@ function MobileTradeView({ pairInfo, pairs, orderPairs, portfolio, orders, optio
     };
 
     return (
-        <div className="xl:hidden -mx-3 sm:mx-0 bg-[#1f2732] min-h-[calc(100vh-72px)] pb-24 text-zinc-100 text-[13px]">
-            <div className="px-4 pt-3 border-b border-white/5">
-                <div className="flex items-center justify-between gap-4 overflow-x-auto text-[20px] leading-tight font-bold text-zinc-500">
-                    {["Convert", "Spot", "Stocks", "P2P", "Alpha"].map((tab) => <button key={tab} className={`whitespace-nowrap ${tab === "Spot" ? "text-white" : ""}`}>{tab}</button>)}
-                    <Menu className="w-6 h-6 ml-auto text-zinc-200 shrink-0" />
-                </div>
-            </div>
-
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-white/5 text-[12px] text-zinc-200">
+        <div className="xl:hidden -mx-3 sm:mx-0 bg-[#1f2732] min-h-[calc(100vh-72px)] pb-20 text-zinc-100 text-[12px]">
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/5 text-[11px] text-zinc-200">
                 <span className="text-[#f0b90b] text-base">♛</span>
                 <span className="truncate">Hot Campaign: Eregon exchange mode is live with protected internal wallet trades</span>
                 <span className="text-zinc-300 text-base">×</span>
             </div>
 
-            <div className="px-4 py-3">
-                <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="px-3 py-2.5">
+                <div className="flex items-start justify-between gap-2 mb-2.5">
                     <div>
-                        <button className="flex items-center gap-1 text-[22px] leading-none font-bold tracking-tight text-white">
+                        <button className="flex items-center gap-1 text-[19px] leading-none font-bold tracking-tight text-white">
                             {pairInfo.pair}<ChevronDown className="w-5 h-5" />
                         </button>
-                        <p className={`mt-1.5 text-[14px] font-semibold ${up ? "text-emerald-400" : "text-rose-400"}`}>{pct(pairInfo.baseMarket?.price_change_percentage_24h)}</p>
+                        <p className={`mt-1 text-[12px] font-semibold ${up ? "text-emerald-400" : "text-rose-400"}`}>{pct(pairInfo.baseMarket?.price_change_percentage_24h)}</p>
                     </div>
-                    <div className="flex items-center gap-5 text-zinc-200">
-                        <button onClick={onOpenChart} className="relative w-8 h-8 flex items-center justify-center"><BarChart3 className="w-5 h-5" /></button>
-                        <button className="relative w-8 h-8 flex items-center justify-center"><span className="absolute -top-1 right-0 w-3 h-3 rounded-full bg-[#f0b90b]" /><span className="text-3xl leading-none tracking-[2px]">…</span></button>
+                    <div className="flex items-center gap-3 text-zinc-200">
+                        <button onClick={onOpenChart} className="relative w-7 h-7 flex items-center justify-center"><BarChart3 className="w-5 h-5" /></button>
+                        <button className="relative w-7 h-7 flex items-center justify-center"><span className="absolute -top-1 right-0 w-3 h-3 rounded-full bg-[#f0b90b]" /><span className="text-2xl leading-none tracking-[1px]">…</span></button>
                     </div>
                 </div>
 
-                <div className="grid grid-cols-[minmax(0,1.08fr)_minmax(112px,0.92fr)] gap-3">
-                    <div className="min-w-0 space-y-2.5">
-                        <div className="grid grid-cols-2 rounded-xl border border-white/10 bg-[#2a3441] p-0.5">
-                            <button onClick={() => { setTradeMode("spot"); setSide("buy"); }} className={`h-10 rounded-lg text-[18px] font-bold ${tradeMode === "spot" && side === "buy" ? "bg-emerald-500 text-white" : "text-zinc-400"}`}>Buy</button>
-                            <button onClick={() => { setTradeMode("spot"); setSide("sell"); }} className={`h-10 rounded-lg text-[18px] font-bold ${tradeMode === "spot" && side === "sell" ? "bg-rose-500 text-white" : "text-zinc-400"}`}>Sell</button>
+                <div className="grid grid-cols-[minmax(0,1.08fr)_minmax(104px,0.92fr)] gap-2.5">
+                    <div className="min-w-0 space-y-2">
+                        <div className="grid grid-cols-2 rounded-lg border border-white/10 bg-[#2a3441] p-0.5">
+                            <button onClick={() => { setTradeMode("spot"); setSide("buy"); }} className={`h-8 rounded-md text-[15px] font-bold ${tradeMode === "spot" && side === "buy" ? "bg-emerald-500 text-white" : "text-zinc-400"}`}>Buy</button>
+                            <button onClick={() => { setTradeMode("spot"); setSide("sell"); }} className={`h-8 rounded-md text-[15px] font-bold ${tradeMode === "spot" && side === "sell" ? "bg-rose-500 text-white" : "text-zinc-400"}`}>Sell</button>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2">
-                            <button onClick={() => setTradeMode("spot")} className={`h-9 rounded-xl text-[13px] font-bold ${tradeMode === "spot" ? "bg-[#2a3441] text-white" : "bg-[#151c26] text-zinc-500"}`}>Market</button>
-                            <button onClick={() => setTradeMode("options")} className={`h-9 rounded-xl text-[13px] font-bold ${tradeMode === "options" ? "bg-purple-500/25 text-purple-100" : "bg-[#151c26] text-zinc-500"}`}>Trade-X</button>
+                        <div className="grid grid-cols-2 gap-1.5">
+                            <button onClick={() => setTradeMode("spot")} className={`h-8 rounded-lg text-[12px] font-bold ${tradeMode === "spot" ? "bg-[#2a3441] text-white" : "bg-[#151c26] text-zinc-500"}`}>Market</button>
+                            <button onClick={() => setTradeMode("options")} className={`h-8 rounded-lg text-[12px] font-bold ${tradeMode === "options" ? "bg-purple-500/25 text-purple-100" : "bg-[#151c26] text-zinc-500"}`}>Trade-X</button>
                         </div>
 
-                        <select className="w-full h-10 rounded-xl border-0 bg-[#2a3441] px-3 text-[14px] font-semibold text-white outline-none" value={pairInfo.pair} onChange={(event) => setSelectedPair(event.target.value)}>
+                        <select className="w-full h-9 rounded-lg border-0 bg-[#2a3441] px-2.5 text-[12px] font-semibold text-white outline-none" value={pairInfo.pair} onChange={(event) => setSelectedPair(event.target.value)}>
                             {orderPairs.map((pair) => <option key={pair.pair}>{pair.pair}</option>)}
                         </select>
 
                         {tradeMode === "spot" ? (
                             <>
-                                <div className="grid grid-cols-[1fr_auto] items-center h-11 rounded-xl bg-[#2a3441] overflow-hidden">
-                                    <input className="h-full min-w-0 bg-transparent px-3 text-[15px] text-white outline-none placeholder:text-zinc-500" value={amount} onChange={(event) => setAmount(event.target.value)} type="number" min="0" step="any" placeholder={side === "buy" ? "Total" : "Amount"} />
-                                    <span className="px-2.5 text-[13px] font-bold text-white border-l border-white/5">{side === "buy" ? pairInfo.quote : pairInfo.base}<ChevronDown className="w-4 h-4 inline ml-1 text-zinc-400" /></span>
+                                <div className="grid grid-cols-[1fr_auto] items-center h-10 rounded-lg bg-[#2a3441] overflow-hidden">
+                                    <input className="h-full min-w-0 bg-transparent px-2 text-[12px] text-white outline-none placeholder:text-zinc-500" value={amount} onChange={(event) => setAmount(event.target.value)} type="number" min="0" step="any" placeholder={side === "buy" ? "Total" : "Amount"} />
+                                    <span className="px-2 text-[12px] font-bold text-white border-l border-white/5">{side === "buy" ? pairInfo.quote : pairInfo.base}<ChevronDown className="w-4 h-4 inline ml-1 text-zinc-400" /></span>
                                 </div>
-                                <div className="relative pt-2 pb-3">
-                                    <div className="absolute left-0 right-0 top-[16px] h-0.5 bg-zinc-600/50" />
+                                <div className="relative pt-1.5 pb-2.5">
+                                    <div className="absolute left-0 right-0 top-[13px] h-0.5 bg-zinc-600/50" />
                                     <div className="relative flex items-center justify-between">
                                         {[0, 25, 50, 75, 100].map((item) => (
-                                            <button key={item} onClick={() => setPresetAmount(item)} className={`relative w-4 h-4 rotate-45 border-2 ${percent === item ? "border-white bg-[#2a3441]" : "border-zinc-600 bg-[#1f2732]"}`} aria-label={`${item}%`} />
+                                            <button key={item} onClick={() => setPresetAmount(item)} className={`relative w-3.5 h-3.5 rotate-45 border-2 ${percent === item ? "border-white bg-[#2a3441]" : "border-zinc-600 bg-[#1f2732]"}`} aria-label={`${item}%`} />
                                         ))}
                                     </div>
-                                    <span className="absolute -top-1 left-0 -translate-x-1 rounded-md bg-zinc-300 px-2 py-0.5 text-[10px] font-semibold text-zinc-800">{percent}%</span>
+                                    <span className="absolute -top-1.5 left-0 -translate-x-1 rounded-md bg-zinc-300 px-1.5 py-0 text-[9px] font-semibold text-zinc-800">{percent}%</span>
                                 </div>
-                                <label className="flex items-center gap-2 text-[13px] text-white"><span className="w-5 h-5 rounded-md border-2 border-zinc-500" />Slippage Tolerance</label>
-                                <div className="space-y-0.5 text-[13px]">
+                                <label className="flex items-center gap-2 text-[12px] text-white"><span className="w-4 h-4 rounded border-2 border-zinc-500" />Slippage Tolerance</label>
+                                <div className="space-y-0.5 text-[12px]">
                                     <div className="flex justify-between"><span className="text-zinc-400">Avbl</span><span>{formatAmount(available)} {side === "buy" ? pairInfo.quote : pairInfo.base} <button className="ml-1 w-5 h-5 rounded-full bg-[#f0b90b] text-black font-bold">+</button></span></div>
                                     <div className="flex justify-between"><span className="text-zinc-400">Max {side === "buy" ? "Buy" : "Sell"}</span><span>{side === "buy" ? formatAmount(Number(amount || 0) / Math.max(pairInfo.rate, 0.00000001)) : formatAmount(Number(amount || 0) * pairInfo.rate)} {side === "buy" ? pairInfo.base : pairInfo.quote}</span></div>
                                     <div className="flex justify-between"><span className="text-zinc-400">Est. Fee</span><span>{(Number(portfolio?.fee_rate || 0.001) * 100).toFixed(2)}%</span></div>
                                 </div>
-                                <button disabled={submitting} onClick={submit} className={`w-full h-12 rounded-xl text-[18px] font-bold text-white ${side === "buy" ? "bg-emerald-500" : "bg-rose-500"}`}>{submitting ? "Processing..." : `${side === "buy" ? "Buy" : "Sell"} ${pairInfo.base}`}</button>
+                                <button disabled={submitting} onClick={submit} className={`w-full h-10 rounded-lg text-[15px] font-bold text-white ${side === "buy" ? "bg-emerald-500" : "bg-rose-500"}`}>{submitting ? "Processing..." : `${side === "buy" ? "Buy" : "Sell"} ${pairInfo.base}`}</button>
                             </>
                         ) : (
                             <>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => setOptionDirection("up")} className={`h-10 rounded-xl text-[14px] font-bold ${optionDirection === "up" ? "bg-emerald-500 text-white" : "bg-[#2a3441] text-zinc-400"}`}>↗ Up</button>
-                                    <button onClick={() => setOptionDirection("down")} className={`h-10 rounded-xl text-[14px] font-bold ${optionDirection === "down" ? "bg-rose-500 text-white" : "bg-[#2a3441] text-zinc-400"}`}>↘ Down</button>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                    <button onClick={() => setOptionDirection("up")} className={`h-9 rounded-lg text-[12px] font-bold ${optionDirection === "up" ? "bg-emerald-500 text-white" : "bg-[#2a3441] text-zinc-400"}`}>↗ Up</button>
+                                    <button onClick={() => setOptionDirection("down")} className={`h-9 rounded-lg text-[12px] font-bold ${optionDirection === "down" ? "bg-rose-500 text-white" : "bg-[#2a3441] text-zinc-400"}`}>↘ Down</button>
                                 </div>
-                                <input className="w-full h-11 rounded-xl border-0 bg-[#2a3441] px-3 text-[15px] text-white outline-none placeholder:text-zinc-500" value={optionStake} onChange={(event) => setOptionStake(event.target.value)} type="number" min="0" step="any" placeholder="Stake USDT" />
-                                <select className="w-full h-10 rounded-xl border-0 bg-[#2a3441] px-3 text-[14px] text-white outline-none" value={optionDuration} onChange={(event) => setOptionDuration(Number(event.target.value))}>{optionMeta.durations.map((duration) => <option key={duration} value={duration}>{duration < 60 ? `${duration}s` : `${duration / 60}m`}</option>)}</select>
-                                <div className="space-y-0.5 text-[13px]">
+                                <input className="w-full h-10 rounded-lg border-0 bg-[#2a3441] px-2.5 text-[13px] text-white outline-none placeholder:text-zinc-500" value={optionStake} onChange={(event) => setOptionStake(event.target.value)} type="number" min="0" step="any" placeholder="Stake USDT" />
+                                <select className="w-full h-9 rounded-lg border-0 bg-[#2a3441] px-2.5 text-[12px] text-white outline-none" value={optionDuration} onChange={(event) => setOptionDuration(Number(event.target.value))}>{optionMeta.durations.map((duration) => <option key={duration} value={duration}>{duration < 60 ? `${duration}s` : `${duration / 60}m`}</option>)}</select>
+                                <div className="space-y-0.5 text-[12px]">
                                     <div className="flex justify-between"><span className="text-zinc-400">Avbl</span><span>{formatAmount(quoteBalance)} USDT</span></div>
                                     <div className="flex justify-between"><span className="text-zinc-400">Win payout</span><span>{formatUsd(Number(optionStake || 0) * (1 + Number(optionMeta.payout_rate || 0.8)))}</span></div>
                                 </div>
-                                <button disabled={submitting} onClick={submitOption} className={`w-full h-12 rounded-xl text-[15px] font-bold text-white ${optionDirection === "up" ? "bg-emerald-500" : "bg-rose-500"}`}>{submitting ? "Opening..." : `Open ${optionDirection.toUpperCase()} Contract`}</button>
+                                <button disabled={submitting} onClick={submitOption} className={`w-full h-10 rounded-lg text-[13px] font-bold text-white ${optionDirection === "up" ? "bg-emerald-500" : "bg-rose-500"}`}>{submitting ? "Opening..." : `Open ${optionDirection.toUpperCase()} Contract`}</button>
                             </>
                         )}
                     </div>
@@ -596,25 +675,25 @@ function MobileTradeView({ pairInfo, pairs, orderPairs, portfolio, orders, optio
                     <OrderBookRows price={pairInfo.rate} compactMode />
                 </div>
 
-                <div className="mt-4 border-t border-white/5 pt-3">
-                    <div className="flex items-center gap-5 text-[16px] font-bold overflow-x-auto">
+                <div className="mt-3 border-t border-white/5 pt-2.5">
+                    <div className="flex items-center gap-4 text-[14px] font-bold overflow-x-auto">
                         <button className="relative pb-3 text-white whitespace-nowrap">Open Orders ({orders?.filter((item) => item.status === "open").length || 0})<span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-1 w-8 rounded-full bg-[#f0b90b]" /></button>
                         <button className="pb-3 text-zinc-500 whitespace-nowrap">Holdings ({portfolio?.positions?.length || 0})</button>
                         <button className="pb-3 text-zinc-500 whitespace-nowrap">Bots</button>
                     </div>
-                    <div className="py-7 text-center text-zinc-100">
-                        <div className="mx-auto mb-3 w-12 h-12 rounded-full border-2 border-white/70 flex items-center justify-center text-2xl">◇</div>
-                        <p className="text-[15px] font-semibold">Available Funds: {formatAmount(quoteBalance)} {pairInfo.quote}</p>
+                    <div className="py-5 text-center text-zinc-100">
+                        <div className="mx-auto mb-2 w-10 h-10 rounded-full border-2 border-white/70 flex items-center justify-center text-2xl">◇</div>
+                        <p className="text-[13px] font-semibold">Available Funds: {formatAmount(quoteBalance)} {pairInfo.quote}</p>
                     </div>
                 </div>
 
-                <button onClick={onOpenChart} className="w-full h-12 rounded-xl border border-white/10 bg-[#202936] px-3 flex items-center justify-between text-left text-[15px] font-semibold">
+                <button onClick={onOpenChart} className="w-full h-10 rounded-lg border border-white/10 bg-[#202936] px-3 flex items-center justify-between text-left text-[13px] font-semibold">
                     <span>{pairInfo.pair} Chart</span>
                     <ChevronDown className="w-5 h-5 rotate-180 text-zinc-400" />
                 </button>
 
                 {(options || []).length > 0 && (
-                    <div className="mt-4 rounded-xl border border-white/5 bg-[#151c26] p-4">
+                    <div className="mt-3 rounded-xl border border-white/5 bg-[#151c26] p-3">
                         <p className="font-bold mb-3">Recent Trade-X Contracts</p>
                         <div className="space-y-2 max-h-40 overflow-y-auto">
                             {options.slice(0, 4).map((option) => (
@@ -875,7 +954,7 @@ export default function Trading() {
                     <div className="space-y-5">
                         <Card hover={false}>
                             <div className="flex items-center justify-between gap-3 mb-5"><h2 className="font-display text-xl">Place Order</h2><Badge color={tradeMode === "spot" ? (side === "buy" ? "emerald" : "rose") : "purple"}>{tradeMode === "spot" ? side.toUpperCase() : "TRADE-X"}</Badge></div>
-                            <div className="grid grid-cols-2 gap-2 mb-4">
+                            <div className="grid grid-cols-2 gap-1.5 mb-4">
                                 <button onClick={() => setTradeMode("spot")} className={`rounded-xl py-3 font-semibold border ${tradeMode === "spot" ? "bg-amber-500/15 text-amber-200 border-amber-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}>Spot</button>
                                 <button onClick={() => setTradeMode("options")} className={`rounded-xl py-3 font-semibold border ${tradeMode === "options" ? "bg-purple-500/15 text-purple-200 border-purple-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}>Trade-X</button>
                             </div>
@@ -884,7 +963,7 @@ export default function Trading() {
 
                             {tradeMode === "spot" ? (
                                 <>
-                                    <div className="grid grid-cols-2 gap-2 mb-4">
+                                    <div className="grid grid-cols-2 gap-1.5 mb-4">
                                         <button onClick={() => setSide("buy")} className={`rounded-xl py-3 font-semibold border ${side === "buy" ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}>Buy</button>
                                         <button onClick={() => setSide("sell")} className={`rounded-xl py-3 font-semibold border ${side === "sell" ? "bg-rose-500/15 text-rose-200 border-rose-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}>Sell</button>
                                     </div>
@@ -900,7 +979,7 @@ export default function Trading() {
                                 </>
                             ) : (
                                 <>
-                                    <div className="grid grid-cols-2 gap-2 mb-4">
+                                    <div className="grid grid-cols-2 gap-1.5 mb-4">
                                         <button onClick={() => setOptionDirection("up")} className={`rounded-xl py-3 font-semibold border ${optionDirection === "up" ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}><ArrowUpRight className="w-4 h-4 inline" /> Up</button>
                                         <button onClick={() => setOptionDirection("down")} className={`rounded-xl py-3 font-semibold border ${optionDirection === "down" ? "bg-rose-500/15 text-rose-200 border-rose-400/30" : "bg-white/5 border-white/10 text-zinc-400"}`}><ArrowDownRight className="w-4 h-4 inline" /> Down</button>
                                     </div>
@@ -925,7 +1004,7 @@ export default function Trading() {
                                 {orders.map((order) => <div key={order.id} className="rounded-xl bg-black/35 border border-white/5 px-3 py-3">
                                     <div className="flex justify-between gap-3"><span className="font-semibold">{order.pair}</span><Badge color={order.side === "buy" ? "emerald" : "rose"}>{order.side}</Badge></div>
                                     <p className="text-xs text-zinc-500 mt-1">{new Date(order.created_at).toLocaleString()}</p>
-                                    <div className="grid grid-cols-2 gap-2 text-xs mt-3"><span className="text-zinc-500">Filled</span><span className="text-right">{formatAmount(order.executed_base)} {order.base_symbol}</span><span className="text-zinc-500">Rate</span><span className="text-right">{formatPrice(order.rate)}</span></div>
+                                    <div className="grid grid-cols-2 gap-1.5 text-xs mt-3"><span className="text-zinc-500">Filled</span><span className="text-right">{formatAmount(order.executed_base)} {order.base_symbol}</span><span className="text-zinc-500">Rate</span><span className="text-right">{formatPrice(order.rate)}</span></div>
                                 </div>)}
                             </div>
                         </Card>
