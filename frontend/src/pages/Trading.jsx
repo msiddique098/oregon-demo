@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import DashboardLayout from "../components/DashboardLayout";
 import CinematicLoader from "../components/CinematicLoader";
+import NotificationBell from "../components/NotificationBell";
+import RealtimeStatus from "../components/RealtimeStatus";
 import { Badge, Card } from "../components/ui-eregon";
 import { api, formatApiError } from "../lib/api";
 import { toast } from "sonner";
@@ -1017,15 +1019,17 @@ export default function Trading() {
             />
 
             <div className="hidden xl:block">
-                <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 mb-4">
+                <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 mb-3">
                     <div>
                         <p className="text-xs uppercase tracking-[0.28em] text-amber-400/80">Eregon Exchange</p>
                         <h1 className="text-3xl font-display font-semibold mt-1">Spot Trading</h1>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex flex-wrap items-center justify-end gap-2">
                         <Badge color={marketPayload?.source === "coingecko" ? "emerald" : "gold"}>{marketPayload?.provider || DEFAULT_MARKET_SOURCE}</Badge>
                         <Badge color="purple">Fee {(Number(portfolio?.fee_rate || 0.001) * 100).toFixed(2)}%</Badge>
                         <button className="btn-ghost px-4 py-2 text-sm" onClick={() => load(true)}><RefreshCcw className="w-4 h-4" /> Refresh</button>
+                        <RealtimeStatus />
+                        <NotificationBell />
                     </div>
                 </div>
 
