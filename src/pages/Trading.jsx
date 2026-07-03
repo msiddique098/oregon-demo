@@ -1017,11 +1017,10 @@ export default function Trading() {
             />
 
             <div className="hidden xl:block">
-                <div className="flex flex-col xl:flex-row xl:items-end xl:justify-between gap-4 mb-6">
+                <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 mb-4">
                     <div>
                         <p className="text-xs uppercase tracking-[0.28em] text-amber-400/80">Eregon Exchange</p>
-                        <h1 className="text-4xl font-display font-semibold mt-1">Spot Trading</h1>
-                        <p className="text-zinc-400 mt-2 max-w-2xl">A tighter exchange-style layout with live pair pricing, draggable zoom charts, internal wallet conversion, and protected Eregon Trade-X contracts.</p>
+                        <h1 className="text-3xl font-display font-semibold mt-1">Spot Trading</h1>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                         <Badge color={marketPayload?.source === "coingecko" ? "emerald" : "gold"}>{marketPayload?.provider || DEFAULT_MARKET_SOURCE}</Badge>
