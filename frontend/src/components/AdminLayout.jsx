@@ -172,7 +172,7 @@ export default function AdminLayout({ children }) {
             )}
 
             <main className="relative min-h-screen pt-14 lg:pt-0 lg:ml-64 overflow-x-hidden">
-                <div className="w-full min-w-0 max-w-7xl mx-auto px-3 sm:px-5 lg:px-8 py-4 sm:py-6 lg:py-8">
+                <div className="w-full min-w-0 px-3 sm:px-4 lg:px-4 py-3 sm:py-4 lg:py-5">
                     {children}
                 </div>
             </main>
