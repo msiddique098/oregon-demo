@@ -60,7 +60,7 @@ export default function NotificationBell() {
                 )}
             </button>
             {open && (
-                <div className="fixed left-3 right-3 top-[68px] max-h-[min(520px,calc(100vh-152px))] rounded-2xl border border-white/10 bg-[#09090d]/98 shadow-[0_22px_70px_rgba(0,0,0,0.65)] backdrop-blur-2xl p-3 z-[80] animate-fade-up sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[360px] sm:max-w-[90vw] sm:max-h-none sm:p-4" data-testid="notification-dropdown">
+                <div className="fixed left-3 right-3 top-[68px] max-h-[min(520px,calc(100vh-152px))] rounded-2xl border border-white/15 bg-[#050507] shadow-[0_24px_80px_rgba(0,0,0,0.92)] p-3 z-[120] animate-fade-up ring-1 ring-purple-500/20 sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[360px] sm:max-w-[90vw] sm:max-h-none sm:p-4" data-testid="notification-dropdown">
                     <div className="flex items-center justify-between gap-3 mb-3">
                         <div className="min-w-0">
                             <p className="text-xs uppercase tracking-widest text-zinc-500">Eregon Inbox</p>
@@ -68,7 +68,7 @@ export default function NotificationBell() {
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                             <button onClick={markAll} className="rounded-lg border border-amber-400/20 bg-amber-400/10 px-2.5 py-1.5 text-[11px] font-semibold text-amber-200">Mark read</button>
-                            <button onClick={() => setOpen(false)} className="w-8 h-8 rounded-lg border border-white/10 bg-white/[0.04] flex items-center justify-center"><X className="w-4 h-4 text-zinc-400" /></button>
+                            <button onClick={() => setOpen(false)} className="w-8 h-8 rounded-lg border border-white/10 bg-[#15151a] flex items-center justify-center"><X className="w-4 h-4 text-zinc-400" /></button>
                         </div>
                     </div>
                     <div className="max-h-[min(400px,calc(100vh-244px))] overflow-y-auto overscroll-contain space-y-2 pr-1 sm:max-h-[400px]">
@@ -77,7 +77,7 @@ export default function NotificationBell() {
                             const Icon = ICONS[n.category] || Sparkles;
                             const color = COLORS[n.category] || COLORS.system;
                             return (
-                                <div key={n.id} className={`p-3 rounded-xl border ${n.read ? "border-white/5 bg-black/30" : "border-purple-500/20 bg-purple-500/[0.04]"}`}>
+                                <div key={n.id} className={`p-3 rounded-xl border shadow-[0_10px_30px_rgba(0,0,0,0.35)] ${n.read ? "border-white/10 bg-[#0b0b10]" : "border-purple-500/35 bg-[#15101f]"}`}>
                                     <div className="flex gap-3">
                                         <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
                                             <Icon className="w-4 h-4" strokeWidth={1.6} />
