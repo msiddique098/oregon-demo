@@ -70,7 +70,7 @@ MARKET_CACHE_SECONDS = int(os.environ.get("MARKET_CACHE_SECONDS", "25"))
 TRADING_DEFAULT_LIMIT = int(os.environ.get("TRADING_DEFAULT_MARKET_LIMIT", "200"))
 BINANCE_API_BASE = os.environ.get("BINANCE_API_BASE", "https://api.binance.com/api/v3").rstrip("/")
 OPTIONS_PAYOUT_RATE = float(os.environ.get("OPTIONS_PAYOUT_RATE", "0.8"))
-OPTIONS_DURATIONS_SECONDS = [30, 60, 120, 300]
+OPTIONS_DURATIONS_SECONDS = [300, 600, 900, 1800]
 
 
 mongo_url = os.environ["MONGO_URL"]
@@ -514,7 +514,7 @@ class OptionsTradeIn(BaseModel):
     pair: str = Field(min_length=3, max_length=24)
     direction: Literal["up", "down"]
     stake: float = Field(gt=0)
-    duration_seconds: int = Field(default=60)
+    duration_seconds: int = Field(default=300, ge=300)
 
 
 class OptionsOutcomeIn(BaseModel):
@@ -2961,7 +2961,7 @@ async def options_trade_history(limit: int = 50, user: dict = Depends(get_curren
 
 @api.post("/trading/options")
 async def place_options_trade(body: OptionsTradeIn, user: dict = Depends(get_current_user)):
-    duration = int(body.duration_seconds or 60)
+    duration = int(body.duration_seconds or 300)
     if duration not in OPTIONS_DURATIONS_SECONDS:
         raise HTTPException(status_code=400, detail="Unsupported contract duration")
     stake = round(float(body.stake), 2)

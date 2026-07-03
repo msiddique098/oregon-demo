@@ -847,14 +847,14 @@ export default function Trading() {
     const [portfolio, setPortfolio] = useState(null);
     const [orders, setOrders] = useState([]);
     const [options, setOptions] = useState([]);
-    const [optionMeta, setOptionMeta] = useState({ payout_rate: 0.8, durations: [30, 60, 120, 300] });
+    const [optionMeta, setOptionMeta] = useState({ payout_rate: 0.8, durations: [300, 600, 900, 1800] });
     const [selectedPair, setSelectedPair] = useState(queryPair);
     const [side, setSide] = useState("buy");
     const [amount, setAmount] = useState("");
-    const [tradeMode, setTradeMode] = useState("spot");
+    const [tradeMode, setTradeMode] = useState("options");
     const [optionDirection, setOptionDirection] = useState("up");
     const [optionStake, setOptionStake] = useState("");
-    const [optionDuration, setOptionDuration] = useState(60);
+    const [optionDuration, setOptionDuration] = useState(300);
     const [search, setSearch] = useState("");
     const [timeframe, setTimeframe] = useState("1w");
     const [chartType, setChartType] = useState("candles");
@@ -882,7 +882,7 @@ export default function Trading() {
                 setOptions(optionsResult.value.data.items || []);
                 setOptionMeta({
                     payout_rate: optionsResult.value.data.payout_rate ?? 0.8,
-                    durations: optionsResult.value.data.durations || [30, 60, 120, 300],
+                    durations: optionsResult.value.data.durations || [300, 600, 900, 1800],
                 });
             }
         } catch (error) {
