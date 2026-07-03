@@ -179,11 +179,11 @@ export default function DashboardLayout({ children }) {
             )}
 
             <main className="relative min-h-screen pt-[72px] lg:pt-0 pb-24 lg:pb-0 lg:ml-64 min-w-0">
-                <div className="hidden lg:flex items-center justify-end gap-3 px-3 sm:px-4 lg:px-4 pt-4">
+                <div className="hidden lg:flex fixed top-4 right-4 z-50 items-center justify-end gap-3">
                     <RealtimeStatus />
                     <NotificationBell />
                 </div>
-                <div className="w-full min-w-0 px-3 sm:px-4 lg:px-4 py-3 sm:py-4 lg:py-5">
+                <div className="w-full min-w-0 px-3 sm:px-4 lg:px-4 pt-2 pb-3 sm:pt-3 sm:pb-4 lg:pt-3 lg:pb-5">
                     {children}
                 </div>
             </main>
