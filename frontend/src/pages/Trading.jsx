@@ -648,19 +648,9 @@ function MobileChartView({ pairInfo, candles, timeframe, setTimeframe, chartType
                         <button className="flex items-center gap-1 text-[17px] font-bold truncate">{pairInfo.pair}<ChevronDown className="w-5 h-5 text-zinc-300" /></button>
                     </div>
                     <div className="flex items-center gap-4 text-zinc-100">
-                        <span className="font-black text-[15px] text-purple-400">Ai</span>
                         <Star className="w-5 h-5" />
                         <Bell className="w-5 h-5" />
                     </div>
-                </div>
-                <div className="flex items-center gap-5 px-3 text-[13px] font-semibold text-zinc-400 overflow-x-auto">
-                    {["Price", "Info", "Trading Data", "Square", "Trade-X"].map((item, index) => (
-                        <button key={item} className={`relative py-2.5 whitespace-nowrap ${index === 0 ? "text-white" : ""}`}>
-                            {item}
-                            {item === "Trade-X" && <span className="absolute -top-0.5 right-[-16px] rounded-full bg-[#f0b90b] px-1 text-[9px] font-bold text-black">New</span>}
-                            {index === 0 && <span className="absolute left-0 bottom-0 h-1 w-8 bg-[#f0b90b] rounded-full" />}
-                        </button>
-                    ))}
                 </div>
             </div>
 
@@ -709,14 +699,7 @@ function MobileChartView({ pairInfo, candles, timeframe, setTimeframe, chartType
             </div>
 
             <div className="px-3 pt-3">
-                <div className="flex items-center gap-5 text-[12px] text-zinc-400 overflow-x-auto">
-                    {["MA", "EMA", "BOLL", "SAR", "AVL", "SUPER", "VOL"].map((item) => <button key={item}>{item}</button>)}
-                    <button className="ml-auto text-white"><LineChart className="w-5 h-5" /></button>
-                </div>
-                <div className="mt-3 flex items-center gap-4 text-[11px] text-zinc-400 overflow-x-auto">
-                    {["Today", "7 Days", "30 Days", "90 Days", "180 Days", "1 Year"].map((item) => <button key={item}>{item}</button>)}
-                </div>
-                <div className="mt-4 grid grid-cols-[auto_auto_auto_1fr_1fr] gap-2.5 items-center pb-4">
+                <div className="mt-3 grid grid-cols-[auto_auto_auto_1fr_1fr] gap-2.5 items-center pb-4">
                     <button className="text-center text-zinc-100"><span className="mx-auto mb-1 w-7 h-7 rounded-full border border-white/50 flex items-center justify-center">•••</span><span className="text-[11px]">More</span></button>
                     <button className="text-center text-zinc-100"><span className="mx-auto mb-1 w-7 h-7 grid grid-cols-2 gap-1 p-1"><i className="border border-white rounded-sm" /><i className="border border-white rounded-sm rotate-45" /><i className="border border-white rounded-sm rotate-45" /><i className="border border-white rounded-sm" /></span><span className="text-[11px]">Hub</span></button>
                     <button className="text-center text-zinc-100"><span className="mx-auto mb-1 w-7 h-7 flex items-center justify-center text-2xl">↗</span><span className="text-[11px]">Margin</span></button>
