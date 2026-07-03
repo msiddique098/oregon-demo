@@ -180,11 +180,13 @@ export default function DashboardLayout({ children }) {
             )}
 
             <main className="relative min-h-screen pt-[72px] lg:pt-0 pb-24 lg:pb-0 lg:ml-64 min-w-0">
-                {!suppressDesktopTopControls && <div className="hidden lg:flex items-center justify-end gap-3 px-3 sm:px-4 lg:px-4 pt-3">
-                    <RealtimeStatus />
-                    <NotificationBell />
-                </div>}
                 <div className="w-full min-w-0 px-3 sm:px-4 lg:px-4 pt-1 pb-3 sm:pt-2 sm:pb-4 lg:pt-2 lg:pb-5">
+                    {!suppressDesktopTopControls && (
+                        <div className="hidden lg:flex float-right ml-4 mb-2 items-center justify-end gap-3">
+                            <RealtimeStatus />
+                            <NotificationBell />
+                        </div>
+                    )}
                     {children}
                 </div>
             </main>
