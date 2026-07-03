@@ -162,7 +162,7 @@ export default function Rewards() {
                 <div className="flex items-start justify-between gap-4 relative z-10">
                     <div>
                         <p className="text-xs uppercase tracking-widest text-zinc-500">Limited Deposit Boost</p>
-                        <h2 className="text-xl sm:text-2xl font-display mt-2">Get <span className="gradient-text-gold">30% extra bonus</span></h2>
+                        <h2 className="text-xl sm:text-2xl font-display mt-2">Get <span className="gradient-text-gold">12% extra bonus</span></h2>
                     </div>
                     <Zap className="w-8 h-8 text-amber-300" />
                 </div>

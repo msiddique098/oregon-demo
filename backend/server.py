@@ -71,6 +71,7 @@ TRADING_DEFAULT_LIMIT = int(os.environ.get("TRADING_DEFAULT_MARKET_LIMIT", "200"
 BINANCE_API_BASE = os.environ.get("BINANCE_API_BASE", "https://api.binance.com/api/v3").rstrip("/")
 OPTIONS_PAYOUT_RATE = float(os.environ.get("OPTIONS_PAYOUT_RATE", "0.8"))
 OPTIONS_DURATIONS_SECONDS = [300, 600, 900, 1800]
+DEPOSIT_BONUS_RATE = float(os.environ.get("DEPOSIT_BONUS_RATE", "0.12"))
 
 
 mongo_url = os.environ["MONGO_URL"]
@@ -196,7 +197,7 @@ def gen_registration_code() -> str:
 
 # ---------------- Ledger ----------------
 # Transaction types: admin_credit, admin_debit, admin_user_reward, registration_code_reward, withdrawal_debit, withdrawal_refund,
-# deposit_credit, referral_commission, referral_join_bonus, task_reward, membership_bonus, bulk_bonus, spin_reward
+# deposit_credit, deposit_bonus_12, referral_commission, referral_join_bonus, task_reward, membership_bonus, bulk_bonus, spin_reward
 async def record_tx(user_id: str, type_: str, amount: float, coin: str,
                     before_balance: float, after_balance: float,
                     admin_id: Optional[str] = None, reference_id: Optional[str] = None,
@@ -717,6 +718,7 @@ WALLET_BALANCE_TX_TYPES = {
     "withdrawal_debit",
     "withdrawal_refund",
     "deposit_credit",
+    "deposit_bonus_12",
     "deposit_bonus_30",
     "bulk_bonus",
     "referral_commission",
@@ -1770,17 +1772,34 @@ async def admin_decide_deposit(did: str, body: DepositDecisionIn, admin: dict = 
                         spin_reward_values = _build_random_deposit_spin_rewards(float(dep["amount"]), int(package.get("spin_tokens", 1)))
                         spin_reward_mode = "random"
             existing_credit = await db.transactions.find_one({"reference_id": dep["id"], "type": "deposit_credit"})
+            existing_bonus = await db.transactions.find_one({"reference_id": dep["id"], "type": "deposit_bonus_12"})
             if not existing_credit:
                 before = float(user_doc.get("balance", 0))
-                after = before + float(dep["amount"])
+                deposit_amount = float(dep["amount"])
+                after = before + deposit_amount
                 user_update["balance"] = after
                 await record_tx(
                     user_id=dep["user_id"], type_="deposit_credit",
-                    amount=float(dep["amount"]), coin=dep["coin"],
+                    amount=deposit_amount, coin=dep["coin"],
                     before_balance=before, after_balance=after,
                     admin_id=admin["id"], reference_id=dep["id"],
                     note=f"Deposit approved · tx {dep.get('tx_hash') or '—'}",
                 )
+                if not existing_bonus:
+                    bonus = round(deposit_amount * DEPOSIT_BONUS_RATE, 2)
+                    if bonus > 0:
+                        bonus_before = after
+                        bonus_after = round(bonus_before + bonus, 2)
+                        user_update["balance"] = bonus_after
+                        user_update["bonus_balance"] = round(float(user_doc.get("bonus_balance", 0)) + bonus, 2)
+                        user_update["total_earnings"] = round(float(user_doc.get("total_earnings", 0)) + bonus, 2)
+                        await record_tx(
+                            user_id=dep["user_id"], type_="deposit_bonus_12",
+                            amount=bonus, coin=dep["coin"],
+                            before_balance=bonus_before, after_balance=bonus_after,
+                            admin_id=admin["id"], reference_id=dep["id"],
+                            note=f"12% deposit bonus for approved deposit {dep.get('tx_hash') or dep['id']}",
+                        )
             if user_update:
                 await db.users.update_one({"id": dep["user_id"]}, {"$set": user_update})
             if package:
