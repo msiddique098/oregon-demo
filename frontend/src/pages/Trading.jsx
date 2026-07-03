@@ -286,7 +286,7 @@ function CandleChart({
                 mode: 0,
             },
             handleScroll: {
-                mouseWheel: false,
+                mouseWheel: true,
                 pressedMouseMove: true,
                 horzTouchDrag: true,
                 vertTouchDrag: false,
@@ -418,7 +418,114 @@ function CandleChart({
             totalBars: chartData.length,
         };
 
+        const saveAndApplyRange = (range) => {
+            const next = clampLogicalRange(range, seriesRef.current.totalBars || chartData.length || 0);
+            if (!next) return;
+            syncingRef.current = true;
+            mainChart.timeScale().setVisibleLogicalRange(next);
+            rsiChart.timeScale().setVisibleLogicalRange(next);
+            try { window.localStorage?.setItem(chartStorageKey, JSON.stringify(next)); } catch (_) { /* ignore */ }
+            setVisibleBars(Math.max(0, Math.round(next.to - next.from)));
+            requestAnimationFrame(() => { syncingRef.current = false; });
+        };
+        const getCurrentRange = () => safeRange(mainChart.timeScale().getVisibleLogicalRange()) || clampLogicalRange({ from: Math.max(0, chartData.length - 54), to: chartData.length + 4 }, chartData.length);
+        const zoomRange = (factor, anchorRatio = 0.5) => {
+            const current = getCurrentRange();
+            if (!current) return;
+            const span = current.to - current.from;
+            const anchor = current.from + span * anchorRatio;
+            const nextSpan = Math.max(6, Math.min(Math.max(36, (seriesRef.current.totalBars || chartData.length) + 12), span * factor));
+            saveAndApplyRange({ from: anchor - nextSpan * anchorRatio, to: anchor + nextSpan * (1 - anchorRatio) });
+        };
+        const panRange = (deltaX, width) => {
+            const current = getCurrentRange();
+            if (!current || !width) return;
+            const span = current.to - current.from;
+            const bars = (deltaX / width) * span;
+            saveAndApplyRange({ from: current.from - bars, to: current.to - bars });
+        };
+        const containers = [mainContainerRef.current, rsiContainerRef.current].filter(Boolean);
+        const dragState = { active: false, x: 0 };
+        const touchState = { lastX: 0, lastDistance: 0 };
+        const onWheel = (event) => {
+            event.preventDefault();
+            const rect = event.currentTarget.getBoundingClientRect();
+            const anchorRatio = rect.width ? Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) : 0.5;
+            const factor = event.deltaY > 0 ? 1.12 : 0.88;
+            zoomRange(factor, anchorRatio);
+        };
+        const onPointerDown = (event) => {
+            if (event.pointerType === "touch") return;
+            dragState.active = true;
+            dragState.x = event.clientX;
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+        };
+        const onPointerMove = (event) => {
+            if (!dragState.active || event.pointerType === "touch") return;
+            const dx = event.clientX - dragState.x;
+            dragState.x = event.clientX;
+            panRange(dx, event.currentTarget.clientWidth);
+        };
+        const onPointerUp = () => { dragState.active = false; };
+        const touchDistance = (touches) => Math.abs(touches[0].clientX - touches[1].clientX);
+        const touchCenterRatio = (touches, element) => {
+            const rect = element.getBoundingClientRect();
+            const center = (touches[0].clientX + touches[1].clientX) / 2;
+            return rect.width ? Math.max(0, Math.min(1, (center - rect.left) / rect.width)) : 0.5;
+        };
+        const onTouchStart = (event) => {
+            if (event.touches.length === 1) {
+                touchState.lastX = event.touches[0].clientX;
+                touchState.lastDistance = 0;
+            } else if (event.touches.length === 2) {
+                touchState.lastDistance = touchDistance(event.touches);
+            }
+        };
+        const onTouchMove = (event) => {
+            if (event.touches.length === 1) {
+                event.preventDefault();
+                const x = event.touches[0].clientX;
+                const dx = x - touchState.lastX;
+                touchState.lastX = x;
+                panRange(dx, event.currentTarget.clientWidth);
+            } else if (event.touches.length === 2) {
+                event.preventDefault();
+                const distance = touchDistance(event.touches);
+                if (touchState.lastDistance > 0 && distance > 0) {
+                    const factor = Math.max(0.75, Math.min(1.35, touchState.lastDistance / distance));
+                    zoomRange(factor, touchCenterRatio(event.touches, event.currentTarget));
+                }
+                touchState.lastDistance = distance;
+            }
+        };
+        const onTouchEnd = () => {
+            touchState.lastDistance = 0;
+            dragState.active = false;
+        };
+        containers.forEach((container) => {
+            container.addEventListener("wheel", onWheel, { passive: false });
+            container.addEventListener("pointerdown", onPointerDown);
+            container.addEventListener("pointermove", onPointerMove);
+            container.addEventListener("pointerup", onPointerUp);
+            container.addEventListener("pointercancel", onPointerUp);
+            container.addEventListener("touchstart", onTouchStart, { passive: false });
+            container.addEventListener("touchmove", onTouchMove, { passive: false });
+            container.addEventListener("touchend", onTouchEnd);
+            container.addEventListener("touchcancel", onTouchEnd);
+        });
+
         return () => {
+            containers.forEach((container) => {
+                container.removeEventListener("wheel", onWheel);
+                container.removeEventListener("pointerdown", onPointerDown);
+                container.removeEventListener("pointermove", onPointerMove);
+                container.removeEventListener("pointerup", onPointerUp);
+                container.removeEventListener("pointercancel", onPointerUp);
+                container.removeEventListener("touchstart", onTouchStart);
+                container.removeEventListener("touchmove", onTouchMove);
+                container.removeEventListener("touchend", onTouchEnd);
+                container.removeEventListener("touchcancel", onTouchEnd);
+            });
             mainChart.timeScale().unsubscribeVisibleLogicalRangeChange(syncFromMain);
             rsiChart.timeScale().unsubscribeVisibleLogicalRangeChange(syncFromRsi);
             mainChart.remove();
