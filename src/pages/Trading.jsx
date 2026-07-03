@@ -10,8 +10,6 @@ import {
     LineChart,
     Maximize2,
     Minimize2,
-    Minus,
-    Plus,
     RefreshCcw,
     Search,
     SlidersHorizontal,
@@ -23,10 +21,9 @@ import CinematicLoader from "../components/CinematicLoader";
 import { Badge, Card } from "../components/ui-eregon";
 import { api, formatApiError } from "../lib/api";
 import { toast } from "sonner";
+import { createChart, CandlestickSeries, HistogramSeries, LineSeries } from "lightweight-charts";
 
 const FX_PKR = 278;
-const MIN_ZOOM = 1;
-const MAX_ZOOM = 7;
 const DEFAULT_MARKET_SOURCE = "Live market feed";
 
 const formatUsd = (value, max = 6) => Number(value || 0).toLocaleString(undefined, {
@@ -58,9 +55,9 @@ const TIMEFRAMES = [
 function makeFallbackPrices(rate) {
     const base = Number(rate || 0);
     if (!base) return [];
-    return Array.from({ length: 96 }).map((_, index) => {
+    return Array.from({ length: 420 }).map((_, index) => {
         const wave = Math.sin(index / 5.5) * 0.012 + Math.cos(index / 9) * 0.006;
-        const drift = (index - 48) * 0.00008;
+        const drift = (index - 210) * 0.000025;
         return Math.max(0.00000001, base * (1 + wave + drift));
     });
 }
@@ -70,7 +67,7 @@ function buildCandles(prices = [], timeframe = "15m") {
     if (cleaned.length < 2) return [];
     const config = TIMEFRAMES.find((item) => item.key === timeframe) || TIMEFRAMES[0];
     const values = cleaned.slice(-Math.min(cleaned.length, config.window));
-    const target = timeframe === "15m" ? 72 : 58;
+    const target = timeframe === "15m" ? 240 : timeframe === "1h" ? 220 : timeframe === "4h" ? 200 : 180;
     const step = Math.max(config.bucket, Math.floor(values.length / target));
     const candles = [];
 
@@ -161,6 +158,88 @@ function OrderBookRows({ price, compactMode = false }) {
     );
 }
 
+const TF_SECONDS = {
+    "15m": 15 * 60,
+    "1h": 60 * 60,
+    "4h": 4 * 60 * 60,
+    "1D": 24 * 60 * 60,
+    "1w": 7 * 24 * 60 * 60,
+};
+
+function toChartCandles(candles = [], timeframe = "15m") {
+    const step = TF_SECONDS[timeframe] || TF_SECONDS["15m"];
+    const now = Math.floor(Date.now() / step) * step;
+    const start = now - Math.max(0, candles.length - 1) * step;
+    return candles
+        .map((candle, index) => ({
+            time: start + index * step,
+            open: Number(candle.open || 0),
+            high: Number(candle.high || 0),
+            low: Number(candle.low || 0),
+            close: Number(candle.close || 0),
+            volume: Number(candle.volume || 0),
+        }))
+        .filter((item) => item.time && item.open > 0 && item.high > 0 && item.low > 0 && item.close > 0)
+        .sort((a, b) => a.time - b.time);
+}
+
+function buildMaLine(data = [], period = 7) {
+    const output = [];
+    for (let index = period - 1; index < data.length; index += 1) {
+        const slice = data.slice(index - period + 1, index + 1);
+        const value = slice.reduce((sum, candle) => sum + candle.close, 0) / period;
+        output.push({ time: data[index].time, value });
+    }
+    return output;
+}
+
+function buildRsiLine(data = [], period = 6) {
+    const output = [];
+    for (let i = period; i < data.length; i += 1) {
+        let gains = 0;
+        let losses = 0;
+        for (let j = i - period + 1; j <= i; j += 1) {
+            const delta = data[j].close - data[j - 1].close;
+            if (delta >= 0) gains += delta;
+            else losses += Math.abs(delta);
+        }
+        const rs = losses === 0 ? 100 : gains / Math.max(losses, 0.00000001);
+        const value = Math.max(0, Math.min(100, 100 - 100 / (1 + rs)));
+        output.push({ time: data[i].time, value });
+    }
+    return output;
+}
+
+function safeRange(range) {
+    if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to)) return null;
+    if (range.to <= range.from) return null;
+    return { from: Number(range.from), to: Number(range.to) };
+}
+
+function clampLogicalRange(range, totalBars) {
+    const clean = safeRange(range);
+    if (!clean || !totalBars) return null;
+    const minBars = 6;
+    const maxBars = Math.max(36, totalBars + 12);
+    const span = Math.max(minBars, Math.min(maxBars, clean.to - clean.from));
+    const center = (clean.from + clean.to) / 2;
+    let from = center - span / 2;
+    let to = center + span / 2;
+
+    // Keep a little whitespace at both ends but avoid losing the data area completely.
+    const hardMin = -8;
+    const hardMax = totalBars + 8;
+    if (from < hardMin) {
+        to += hardMin - from;
+        from = hardMin;
+    }
+    if (to > hardMax) {
+        from -= to - hardMax;
+        to = hardMax;
+    }
+    return { from, to };
+}
+
 function CandleChart({
     candles = [],
     pair = "BTC/USDT",
@@ -172,224 +251,254 @@ function CandleChart({
     fullscreen = false,
     onToggleFullscreen,
 }) {
-    const [hover, setHover] = useState(null);
-    const chartStorageKey = `eregon-chart-zoom-${variant}`;
-    const [zoom, setZoom] = useState(() => {
-        if (typeof window === "undefined") return 1;
-        const saved = Number(window.localStorage?.getItem(chartStorageKey));
-        return Number.isFinite(saved) && saved >= MIN_ZOOM && saved <= MAX_ZOOM ? saved : 1;
-    });
-    const [offset, setOffset] = useState(0);
-    const [drag, setDrag] = useState(null);
-    const wrapRef = useRef(null);
-    const pointerCache = useRef(new Map());
-    const pinchStart = useRef(null);
-    const touchStart = useRef(null);
+    const mainContainerRef = useRef(null);
+    const rsiContainerRef = useRef(null);
+    const mainChartRef = useRef(null);
+    const rsiChartRef = useRef(null);
+    const seriesRef = useRef({});
+    const syncingRef = useRef(false);
+    const chartStorageKey = `eregon-native-lwc-visible-range-${variant}-${pair}-${timeframe}`;
+    const chartData = useMemo(() => toChartCandles(candles, timeframe), [candles, timeframe]);
+    const [visibleBars, setVisibleBars] = useState(0);
 
-    const clampZoom = (value) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value || MIN_ZOOM)));
-    const visibleCountForZoom = (zoomValue) => Math.max(14, Math.min(candles.length || 14, Math.round((candles.length || 14) / clampZoom(zoomValue))));
-    const maxOffsetForZoom = (zoomValue) => Math.max(0, (candles.length || 0) - visibleCountForZoom(zoomValue));
-    const clampOffset = (value, zoomValue = zoom) => Math.max(0, Math.min(maxOffsetForZoom(zoomValue), Number(value || 0)));
+    const chartHeightClass = variant === "analysis" ? "h-full min-h-[330px]" : fullscreen ? "h-full min-h-[420px]" : "h-full min-h-[250px]";
+    const mainHeight = variant === "analysis" ? "calc(100% - 82px)" : "calc(100% - 72px)";
+    const rsiHeight = variant === "analysis" ? 82 : 72;
 
     useEffect(() => {
-        if (typeof window !== "undefined") window.localStorage?.setItem(chartStorageKey, String(zoom));
-    }, [chartStorageKey, zoom]);
+        if (!mainContainerRef.current || !rsiContainerRef.current) return undefined;
 
-    const setZoomSafely = (nextZoom) => {
-        setZoom((current) => {
-            const next = clampZoom(Number(nextZoom ?? current));
-            setOffset((currentOffset) => clampOffset(currentOffset, next));
-            return next;
+        const common = {
+            autoSize: true,
+            layout: {
+                background: { type: "solid", color: "#1f2732" },
+                textColor: "rgba(234, 239, 247, 0.72)",
+                fontSize: variant === "analysis" ? 10 : 9,
+                fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+            },
+            grid: {
+                vertLines: { color: "rgba(255,255,255,0.055)" },
+                horzLines: { color: "rgba(255,255,255,0.075)" },
+            },
+            crosshair: {
+                vertLine: { color: "rgba(234,239,247,.36)", width: 1, style: 3, labelBackgroundColor: "#2a3441" },
+                horzLine: { color: "rgba(234,239,247,.36)", width: 1, style: 3, labelBackgroundColor: "#2a3441" },
+                mode: 0,
+            },
+            handleScroll: {
+                mouseWheel: false,
+                pressedMouseMove: true,
+                horzTouchDrag: true,
+                vertTouchDrag: false,
+            },
+            handleScale: {
+                mouseWheel: true,
+                pinch: true,
+                axisPressedMouseMove: true,
+                axisDoubleClickReset: false,
+            },
+            kineticScroll: { mouse: true, touch: true },
+            localization: {
+                priceFormatter: (price) => formatPrice(price),
+            },
+        };
+
+        const mainChart = createChart(mainContainerRef.current, {
+            ...common,
+            rightPriceScale: {
+                borderVisible: false,
+                scaleMargins: { top: 0.07, bottom: 0.22 },
+            },
+            timeScale: {
+                visible: false,
+                timeVisible: true,
+                secondsVisible: false,
+                borderVisible: false,
+                rightOffset: 5,
+                barSpacing: variant === "analysis" ? 4.4 : 3.8,
+                minBarSpacing: 0.5,
+                maxBarSpacing: 64,
+                lockVisibleTimeRangeOnResize: true,
+                shiftVisibleRangeOnNewBar: false,
+                enableConflation: true,
+            },
         });
-    };
 
-    const changeZoom = (direction) => {
-        setZoom((current) => {
-            const next = clampZoom(Number((current + direction).toFixed(2)));
-            setOffset((currentOffset) => clampOffset(currentOffset, next));
-            return next;
+        const rsiChart = createChart(rsiContainerRef.current, {
+            ...common,
+            rightPriceScale: {
+                borderVisible: false,
+                scaleMargins: { top: 0.12, bottom: 0.12 },
+                minimumWidth: 48,
+            },
+            timeScale: {
+                visible: true,
+                timeVisible: true,
+                secondsVisible: false,
+                borderVisible: false,
+                rightOffset: 5,
+                barSpacing: variant === "analysis" ? 4.4 : 3.8,
+                minBarSpacing: 0.5,
+                maxBarSpacing: 64,
+                lockVisibleTimeRangeOnResize: true,
+                shiftVisibleRangeOnNewBar: false,
+                enableConflation: true,
+            },
         });
-    };
 
-    const visible = useMemo(() => {
-        const source = candles.length ? candles : [];
-        if (!source.length) return [];
-        const count = Math.max(14, Math.min(source.length, Math.round(source.length / zoom)));
-        const maxOffset = Math.max(0, source.length - count);
-        const safeOffset = Math.max(0, Math.min(maxOffset, offset));
-        const start = Math.max(0, source.length - count - safeOffset);
-        return source.slice(start, start + count);
-    }, [candles, zoom, offset]);
+        const candleSeries = mainChart.addSeries(CandlestickSeries, {
+            upColor: "#35c98b",
+            downColor: "#f6465d",
+            wickUpColor: "#35c98b",
+            wickDownColor: "#f6465d",
+            borderVisible: false,
+            priceLineColor: "rgba(234,239,247,.55)",
+            lastValueVisible: true,
+            priceFormat: { type: "price", precision: 6, minMove: 0.000001 },
+        });
+        const closeLineSeries = mainChart.addSeries(LineSeries, {
+            color: "#f0b90b",
+            lineWidth: 2,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            visible: false,
+            priceFormat: { type: "price", precision: 6, minMove: 0.000001 },
+        });
+        const ma7Series = mainChart.addSeries(LineSeries, { color: "#f0b90b", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+        const ma25Series = mainChart.addSeries(LineSeries, { color: "#8b5cf6", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+        const volumeSeries = mainChart.addSeries(HistogramSeries, {
+            priceScaleId: "volume",
+            priceFormat: { type: "volume" },
+            lastValueVisible: false,
+            priceLineVisible: false,
+        });
+        mainChart.priceScale("volume").applyOptions({
+            scaleMargins: { top: 0.78, bottom: 0 },
+            borderVisible: false,
+        });
+        const rsiSeries = rsiChart.addSeries(LineSeries, {
+            color: "#f0b90b",
+            lineWidth: 1,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            priceScaleId: "right",
+            priceFormat: { type: "price", precision: 2, minMove: 0.01 },
+        });
+
+        const syncFromMain = (range) => {
+            const next = clampLogicalRange(range, seriesRef.current.totalBars || 0);
+            if (!next || syncingRef.current) return;
+            syncingRef.current = true;
+            rsiChart.timeScale().setVisibleLogicalRange(next);
+            try { window.localStorage?.setItem(chartStorageKey, JSON.stringify(next)); } catch (_) { /* ignore */ }
+            setVisibleBars(Math.max(0, Math.round(next.to - next.from)));
+            requestAnimationFrame(() => { syncingRef.current = false; });
+        };
+        const syncFromRsi = (range) => {
+            const next = clampLogicalRange(range, seriesRef.current.totalBars || 0);
+            if (!next || syncingRef.current) return;
+            syncingRef.current = true;
+            mainChart.timeScale().setVisibleLogicalRange(next);
+            try { window.localStorage?.setItem(chartStorageKey, JSON.stringify(next)); } catch (_) { /* ignore */ }
+            setVisibleBars(Math.max(0, Math.round(next.to - next.from)));
+            requestAnimationFrame(() => { syncingRef.current = false; });
+        };
+        mainChart.timeScale().subscribeVisibleLogicalRangeChange(syncFromMain);
+        rsiChart.timeScale().subscribeVisibleLogicalRangeChange(syncFromRsi);
+
+        mainChartRef.current = mainChart;
+        rsiChartRef.current = rsiChart;
+        seriesRef.current = {
+            candleSeries,
+            closeLineSeries,
+            ma7Series,
+            ma25Series,
+            volumeSeries,
+            rsiSeries,
+            totalBars: chartData.length,
+        };
+
+        return () => {
+            mainChart.timeScale().unsubscribeVisibleLogicalRangeChange(syncFromMain);
+            rsiChart.timeScale().unsubscribeVisibleLogicalRangeChange(syncFromRsi);
+            mainChart.remove();
+            rsiChart.remove();
+            mainChartRef.current = null;
+            rsiChartRef.current = null;
+            seriesRef.current = {};
+        };
+    // Recreate only when the chart mode shell changes. Data updates are handled in the next effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [variant, fullscreen]);
 
     useEffect(() => {
-        setOffset((current) => {
-            const count = visibleCountForZoom(zoom);
-            return Math.max(0, Math.min(Math.max(0, (candles.length || 0) - count), current));
-        });
-    }, [candles.length, zoom]);
+        const refs = seriesRef.current;
+        if (!mainChartRef.current || !rsiChartRef.current || !refs.candleSeries || !chartData.length) return;
+        refs.totalBars = chartData.length;
+        const candleData = chartData.map((item) => ({ time: item.time, open: item.open, high: item.high, low: item.low, close: item.close }));
+        const closeData = chartData.map((item) => ({ time: item.time, value: item.close }));
+        const volumeData = chartData.map((item) => ({
+            time: item.time,
+            value: item.volume,
+            color: item.close >= item.open ? "rgba(53,201,139,.28)" : "rgba(246,70,93,.26)",
+        }));
 
-    if (!visible.length) {
-        return <div className="h-full min-h-[260px] bg-[#111923] flex items-center justify-center text-zinc-500">Waiting for chart data...</div>;
+        refs.candleSeries.setData(candleData);
+        refs.closeLineSeries.setData(closeData);
+        refs.ma7Series.setData(buildMaLine(chartData, 7));
+        refs.ma25Series.setData(buildMaLine(chartData, 25));
+        refs.volumeSeries.setData(volumeData);
+        refs.rsiSeries.setData(buildRsiLine(chartData, 6));
+        refs.candleSeries.applyOptions({ visible: chartType === "candles" });
+        refs.closeLineSeries.applyOptions({ visible: chartType === "line" });
+        refs.ma7Series.applyOptions({ visible: chartType === "candles" });
+        refs.ma25Series.applyOptions({ visible: chartType === "candles" });
+
+        let applied = false;
+        try {
+            const stored = JSON.parse(window.localStorage?.getItem(chartStorageKey) || "null");
+            const restored = clampLogicalRange(stored, chartData.length);
+            if (restored) {
+                mainChartRef.current.timeScale().setVisibleLogicalRange(restored);
+                rsiChartRef.current.timeScale().setVisibleLogicalRange(restored);
+                setVisibleBars(Math.round(restored.to - restored.from));
+                applied = true;
+            }
+        } catch (_) { /* ignore invalid saved ranges */ }
+        if (!applied) {
+            const defaultBars = variant === "analysis" ? 78 : 54;
+            const initialRange = clampLogicalRange({ from: Math.max(0, chartData.length - defaultBars), to: chartData.length + 4 }, chartData.length);
+            if (initialRange) {
+                mainChartRef.current.timeScale().setVisibleLogicalRange(initialRange);
+                rsiChartRef.current.timeScale().setVisibleLogicalRange(initialRange);
+                setVisibleBars(Math.round(initialRange.to - initialRange.from));
+            }
+        }
+    }, [chartData, chartType, chartStorageKey, variant]);
+
+    useEffect(() => {
+        const refs = seriesRef.current;
+        if (!refs.closeLineSeries || !refs.candleSeries || !refs.ma7Series || !refs.ma25Series) return;
+        refs.candleSeries.applyOptions({ visible: chartType === "candles" });
+        refs.closeLineSeries.applyOptions({ visible: chartType === "line" });
+        refs.ma7Series.applyOptions({ visible: chartType === "candles" });
+        refs.ma25Series.applyOptions({ visible: chartType === "candles" });
+    }, [chartType]);
+
+    if (!chartData.length) {
+        return <div className="h-full min-h-[260px] bg-[#1f2732] flex items-center justify-center text-zinc-500">Waiting for chart data...</div>;
     }
-
-    const width = variant === "analysis" || fullscreen ? 760 : 660;
-    const height = variant === "analysis" ? 560 : fullscreen ? 520 : 286;
-    const rsiHeight = variant === "analysis" ? 104 : 68;
-    const pad = variant === "analysis"
-        ? { left: 26, right: 76, top: 20, bottom: 26 }
-        : { left: 20, right: 62, top: 24, bottom: 26 };
-    const chartBottom = height - pad.bottom - rsiHeight;
-    const plotH = chartBottom - pad.top;
-    const hi = Math.max(...visible.map((c) => c.high));
-    const lo = Math.min(...visible.map((c) => c.low));
-    const span = Math.max(0.00000001, hi - lo);
-    const maxVol = Math.max(...visible.map((c) => c.volume || 1));
-    const plotW = width - pad.left - pad.right;
-    const y = (value) => pad.top + ((hi - value) / span) * plotH;
-    const xFor = (index) => pad.left + (index + 0.5) * (plotW / visible.length);
-    const candleW = Math.max(2.2, Math.min(14, (plotW / visible.length) * 0.62));
-    const ticks = Array.from({ length: variant === "analysis" ? 6 : 5 }).map((_, i) => lo + (span * i) / (variant === "analysis" ? 5 : 4));
-    const last = visible[visible.length - 1];
-    const hoverCandle = hover ? visible[hover.index] : last;
-    const rsi = computeRsi(visible, 6);
-    const rsiY = (value) => chartBottom + 14 + ((100 - value) / 100) * (rsiHeight - 24);
-    const rsiPath = rsi.map((item, idx) => `${idx === 0 ? "M" : "L"} ${xFor(item.index).toFixed(2)} ${rsiY(item.rsi).toFixed(2)}`).join(" ");
-    const closePath = visible.map((c, index) => `${index === 0 ? "M" : "L"} ${xFor(index).toFixed(2)} ${y(c.close).toFixed(2)}`).join(" ");
-    const maPath = (period) => visible.map((_, index) => {
-        if (index < period - 1) return null;
-        const slice = visible.slice(index - period + 1, index + 1);
-        const avg = slice.reduce((sum, candle) => sum + candle.close, 0) / period;
-        return `${index === period - 1 ? "M" : "L"} ${xFor(index).toFixed(2)} ${y(avg).toFixed(2)}`;
-    }).filter(Boolean).join(" ");
-
-    const handleMove = (event) => {
-        pointerCache.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-
-        if (pointerCache.current.size >= 2) {
-            event.preventDefault();
-            const points = Array.from(pointerCache.current.values()).slice(0, 2);
-            const distance = Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
-            if (!pinchStart.current) {
-                pinchStart.current = { distance, zoom };
-                return;
-            }
-            if (pinchStart.current.distance > 0) {
-                const nextZoom = clampZoom(pinchStart.current.zoom * (distance / pinchStart.current.distance));
-                setZoom(nextZoom);
-                setOffset((currentOffset) => clampOffset(currentOffset, nextZoom));
-            }
-            setHover(null);
-            return;
-        }
-
-        if (drag && event.pointerId === drag.pointerId) {
-            const rect = event.currentTarget.getBoundingClientRect();
-            const dx = event.clientX - drag.x;
-            const candlePixels = rect.width / Math.max(1, visible.length);
-            if (Math.abs(dx) > candlePixels * 0.8) {
-                const shift = Math.round(-dx / candlePixels);
-                setOffset((current) => clampOffset(current + shift));
-                setDrag({ ...drag, x: event.clientX });
-            }
-        }
-
-        const rect = event.currentTarget.getBoundingClientRect();
-        const relX = ((event.clientX - rect.left) / rect.width) * width;
-        const relY = ((event.clientY - rect.top) / rect.height) * height;
-        if (relX < pad.left || relX > width - pad.right || relY < pad.top || relY > chartBottom) {
-            setHover(null);
-            return;
-        }
-        const index = Math.max(0, Math.min(visible.length - 1, Math.floor(((relX - pad.left) / plotW) * visible.length)));
-        const price = hi - ((relY - pad.top) / plotH) * span;
-        setHover({ index, x: xFor(index), y: relY, price });
-    };
-
-    const handleWheel = (event) => {
-        event.preventDefault();
-        changeZoom(event.deltaY > 0 ? -0.28 : 0.28);
-    };
-
-    const distanceBetweenTouches = (touches) => {
-        if (!touches || touches.length < 2) return 0;
-        return Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
-    };
-
-    const handleTouchStart = (event) => {
-        if (event.touches.length >= 2) {
-            const distance = distanceBetweenTouches(event.touches);
-            touchStart.current = { mode: "pinch", distance, zoom };
-            setDrag(null);
-            setHover(null);
-            return;
-        }
-        if (event.touches.length === 1) {
-            touchStart.current = { mode: "pan", x: event.touches[0].clientX };
-        }
-    };
-
-    const handleTouchMove = (event) => {
-        if (!touchStart.current) return;
-        if (event.cancelable) event.preventDefault();
-
-        if (event.touches.length >= 2 && touchStart.current.mode === "pinch") {
-            const distance = distanceBetweenTouches(event.touches);
-            if (touchStart.current.distance > 0) {
-                setZoomSafely(touchStart.current.zoom * (distance / touchStart.current.distance));
-            }
-            return;
-        }
-
-        if (event.touches.length === 1 && touchStart.current.mode === "pan") {
-            const rect = wrapRef.current?.getBoundingClientRect();
-            const currentX = event.touches[0].clientX;
-            const dx = currentX - touchStart.current.x;
-            const candlePixels = (rect?.width || 1) / Math.max(1, visible.length);
-            if (Math.abs(dx) > Math.max(6, candlePixels * 0.55)) {
-                const shift = Math.round(-dx / candlePixels);
-                setOffset((current) => clampOffset(current + shift));
-                touchStart.current = { ...touchStart.current, x: currentX };
-            }
-        }
-    };
-
-    const handleTouchEnd = () => {
-        if (!wrapRef.current) return;
-        touchStart.current = null;
-        setDrag(null);
-    };
-
-    const handlePointerDown = (event) => {
-        event.preventDefault();
-        pointerCache.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
-        if (pointerCache.current.size === 2) {
-            const points = Array.from(pointerCache.current.values()).slice(0, 2);
-            pinchStart.current = { distance: Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y), zoom };
-            setDrag(null);
-        } else {
-            setDrag({ pointerId: event.pointerId, x: event.clientX });
-        }
-        event.currentTarget.setPointerCapture?.(event.pointerId);
-    };
-
-    const handlePointerUp = (event) => {
-        if (event?.pointerId !== undefined) pointerCache.current.delete(event.pointerId);
-        if (pointerCache.current.size < 2) pinchStart.current = null;
-        setDrag(null);
-    };
 
     const showChrome = variant !== "analysis";
 
     return (
-        <div className={`${fullscreen ? "fixed inset-0 z-[90] bg-[#111923]" : "h-full bg-[#111923]"} flex flex-col overflow-hidden`}>
-            {showChrome && <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/5 bg-[#111923]">
+        <div className={`${fullscreen ? "fixed inset-0 z-[90] bg-[#1f2732]" : chartHeightClass} flex flex-col overflow-hidden bg-[#1f2732]`}>
+            {showChrome && <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/5 bg-[#1f2732]">
                 <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-zinc-200 truncate">{pair} Chart</p>
-                    <p className="text-[9px] uppercase tracking-[0.16em] text-zinc-600">Pinch/scroll to zoom · drag to pan</p>
+                    <p className="text-[12px] font-semibold text-zinc-200 truncate">{pair} Chart</p>
+                    <p className="text-[9px] uppercase tracking-[0.14em] text-zinc-600">Native Lightweight Charts zoom/pan</p>
                 </div>
                 <div className="flex items-center gap-1">
-                    <button type="button" onClick={() => changeZoom(0.5)} className="w-8 h-8 rounded-lg bg-white/5 text-zinc-300 flex items-center justify-center" aria-label="Zoom in"><Plus className="w-4 h-4" /></button>
-                    <button type="button" onClick={() => changeZoom(-0.5)} className="w-8 h-8 rounded-lg bg-white/5 text-zinc-300 flex items-center justify-center" aria-label="Zoom out"><Minus className="w-4 h-4" /></button>
                     {onToggleFullscreen && (
                         <button type="button" onClick={onToggleFullscreen} className="w-8 h-8 rounded-lg bg-white/5 text-zinc-300 flex items-center justify-center" aria-label="Toggle chart fullscreen">
                             {fullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
@@ -397,88 +506,17 @@ function CandleChart({
                     )}
                 </div>
             </div>}
-            <div
-                ref={wrapRef}
-                className="relative flex-1 min-h-0 touch-none"
-                style={{ touchAction: "none", overscrollBehavior: "contain" }}
-                onTouchStart={handleTouchStart}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={handleTouchEnd}
-                onTouchCancel={handleTouchEnd}
-            >
-                <svg
-                    viewBox={`0 0 ${width} ${height}`}
-                    preserveAspectRatio="none"
-                    onPointerMove={handleMove}
-                    onPointerDown={handlePointerDown}
-                    onPointerUp={handlePointerUp}
-                    onPointerCancel={handlePointerUp}
-                    onPointerLeave={(event) => { setHover(null); handlePointerUp(event); }}
-                    onWheel={handleWheel}
-                    className="w-full h-full select-none cursor-grab active:cursor-grabbing"
-                >
-                    <defs>
-                        <linearGradient id={`chartFade-${variant}`} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.10" />
-                            <stop offset="55%" stopColor="#111923" stopOpacity="0" />
-                        </linearGradient>
-                    </defs>
-                    <rect x="0" y="0" width={width} height={height} fill="#111923" />
-                    <rect x="0" y="0" width={width} height={chartBottom} fill={`url(#chartFade-${variant})`} />
-                    {ticks.map((tick) => (
-                        <g key={tick}>
-                            <line x1={pad.left} x2={width - pad.right} y1={y(tick)} y2={y(tick)} stroke="rgba(255,255,255,.075)" />
-                            <text x={width - pad.right + 8} y={y(tick) + 5} fill="rgba(255,255,255,.48)" fontSize={variant === "analysis" ? "11" : "10"}>{formatPrice(tick)}</text>
-                        </g>
-                    ))}
-                    <text x={pad.left} y={variant === "analysis" ? 20 : 18} fill="rgba(255,255,255,.76)" fontSize={variant === "analysis" ? "10" : "9"}>
-                        O {formatPrice(hoverCandle.open)}  H {formatPrice(hoverCandle.high)}  L {formatPrice(hoverCandle.low)}  C {formatPrice(hoverCandle.close)}
-                    </text>
-                    {visible.map((candle, index) => {
-                        const x = xFor(index);
-                        const up = candle.close >= candle.open;
-                        const color = up ? "#35c98b" : "#f6465d";
-                        const bodyTop = y(Math.max(candle.open, candle.close));
-                        const bodyBottom = y(Math.min(candle.open, candle.close));
-                        const bodyH = Math.max(2, bodyBottom - bodyTop);
-                        const vHeight = Math.max(2, ((candle.volume || 1) / maxVol) * 34);
-                        return (
-                            <g key={`${index}-${candle.close}`}>
-                                <rect x={x - candleW / 2} y={chartBottom - vHeight} width={candleW} height={vHeight} fill={up ? "rgba(53,201,139,.18)" : "rgba(246,70,93,.18)"} rx="1" />
-                                {chartType === "candles" ? (
-                                    <>
-                                        <line x1={x} x2={x} y1={y(candle.high)} y2={y(candle.low)} stroke={color} strokeWidth={variant === "analysis" ? 1.35 : 1.15} />
-                                        <rect x={x - candleW / 2} y={bodyTop} width={candleW} height={bodyH} fill={color} rx="1.4" />
-                                    </>
-                                ) : null}
-                            </g>
-                        );
-                    })}
-                    {chartType === "line" && <path d={closePath} fill="none" stroke="#f0b90b" strokeWidth="2.4" />}
-                    {chartType === "candles" && <>
-                        <path d={maPath(7)} fill="none" stroke="#f0b90b" strokeWidth="1.45" opacity=".95" />
-                        <path d={maPath(25)} fill="none" stroke="#8b5cf6" strokeWidth="1.35" opacity=".85" />
-                    </>}
-                    <line x1={pad.left} x2={width - pad.right} y1={y(last.close)} y2={y(last.close)} stroke="rgba(255,255,255,.45)" strokeDasharray="4 4" />
-                    <rect x={width - pad.right + 8} y={y(last.close) - 14} width={pad.right - 10} height="28" rx="6" fill="#1f2937" stroke="rgba(255,255,255,.55)" />
-                    <text x={width - pad.right + 8 + (pad.right - 10) / 2} y={y(last.close) + 5} textAnchor="middle" fill="white" fontSize={variant === "analysis" ? "11" : "10"}>{formatPrice(last.close)}</text>
-                    {hover && (
-                        <>
-                            <line x1={hover.x} x2={hover.x} y1={pad.top} y2={chartBottom} stroke="rgba(255,255,255,.28)" strokeDasharray="5 5" />
-                            <line x1={pad.left} x2={width - pad.right} y1={hover.y} y2={hover.y} stroke="rgba(255,255,255,.28)" strokeDasharray="5 5" />
-                        </>
-                    )}
-                    <line x1="0" x2={width} y1={chartBottom} y2={chartBottom} stroke="rgba(255,255,255,.09)" />
-                    <text x={pad.left} y={chartBottom + 22} fill="#f0b90b" fontSize={variant === "analysis" ? "11" : "10"}>RSI(6): {rsi.length ? rsi[rsi.length - 1].rsi.toFixed(2) : "--"}</text>
-                    <line x1={pad.left} x2={width - pad.right} y1={rsiY(70)} y2={rsiY(70)} stroke="rgba(255,255,255,.45)" strokeDasharray="7 7" />
-                    <line x1={pad.left} x2={width - pad.right} y1={rsiY(40)} y2={rsiY(40)} stroke="rgba(255,255,255,.32)" strokeDasharray="7 7" />
-                    <path d={rsiPath} fill="none" stroke="#f0b90b" strokeWidth={variant === "analysis" ? 1.35 : 1.2} />
-                    <text x={width - pad.right + 8} y={rsiY(70) + 5} fill="rgba(255,255,255,.55)" fontSize="10">70.0</text>
-                    <text x={width - pad.right + 8} y={rsiY(40) + 5} fill="rgba(255,255,255,.55)" fontSize="10">40.0</text>
-                </svg>
-                {showChrome && <div className="absolute left-2 bottom-2 rounded-md bg-black/35 px-1.5 py-0.5 text-[9px] text-zinc-400 backdrop-blur">{zoom.toFixed(1)}x</div>}
+            <div className="relative min-h-0" style={{ height: mainHeight, touchAction: "none", overscrollBehavior: "contain" }}>
+                <div ref={mainContainerRef} className="absolute inset-0" />
+                <div className="pointer-events-none absolute left-2 top-2 rounded bg-black/25 px-1.5 py-0.5 text-[9px] font-medium text-zinc-400">
+                    {visibleBars ? `${visibleBars} bars` : "native zoom"}
+                </div>
             </div>
-            {showChrome && <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-t border-white/5 bg-[#111923] overflow-x-auto">
+            <div className="relative shrink-0 border-t border-white/5" style={{ height: rsiHeight, touchAction: "none", overscrollBehavior: "contain" }}>
+                <div ref={rsiContainerRef} className="absolute inset-0" />
+                <div className="pointer-events-none absolute left-2 top-1 text-[9px] font-semibold text-[#f0b90b]">RSI(6)</div>
+            </div>
+            {showChrome && <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-t border-white/5 bg-[#1f2732] overflow-x-auto">
                 <div className="flex items-center gap-1">
                     {TIMEFRAMES.map((tf) => (
                         <button key={tf.key} type="button" onClick={() => onTimeframe?.(tf.key)} className={`px-3 py-1.5 text-[12px] rounded-lg font-medium ${timeframe === tf.key ? "text-[#f0b90b] border-b-2 border-[#f0b90b]" : "text-zinc-500"}`}>{tf.label}</button>
