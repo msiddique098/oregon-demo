@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
     ArrowDownRight,
     ArrowLeft,
@@ -640,18 +640,18 @@ function CandleChart({
     );
 }
 
-function MobileChartView({ pairInfo, candles, timeframe, setTimeframe, chartType, setChartType, up, onBack, side, setSide, setTradeMode }) {
+function MobileChartView({ pairInfo, candles, timeframe, setTimeframe, chartType, setChartType, up, onBack, side, setSide, setTradeMode, fullscreen, onToggleFullscreen, onOpenMarkets, onOpenNotifications }) {
     return (
         <div className="fixed inset-0 z-[90] bg-[#1f2732] text-zinc-100 overflow-y-auto pb-[env(safe-area-inset-bottom)] text-[12px]">
             <div className="sticky top-0 z-10 bg-[#1f2732]/95 backdrop-blur-xl border-b border-white/5">
                 <div className="flex items-center justify-between px-3 h-11">
                     <div className="flex items-center gap-4 min-w-0">
                         <button onClick={onBack} className="w-8 h-8 -ml-2 flex items-center justify-center text-zinc-100" aria-label="Back to trade"><ArrowLeft className="w-5 h-5" /></button>
-                        <button className="flex items-center gap-1 text-[17px] font-bold truncate">{pairInfo.pair}<ChevronDown className="w-5 h-5 text-zinc-300" /></button>
+                        <button onClick={onOpenMarkets} className="flex items-center gap-1 text-[17px] font-bold truncate">{pairInfo.pair}<ChevronDown className="w-5 h-5 text-zinc-300" /></button>
                     </div>
                     <div className="flex items-center gap-4 text-zinc-100">
-                        <Star className="w-5 h-5" />
-                        <Bell className="w-5 h-5" />
+                        <button type="button" onClick={onOpenMarkets} aria-label="Open markets"><Star className="w-5 h-5" /></button>
+                        <button type="button" onClick={onOpenNotifications} aria-label="Open notifications"><Bell className="w-5 h-5" /></button>
                     </div>
                 </div>
             </div>
@@ -682,9 +682,9 @@ function MobileChartView({ pairInfo, candles, timeframe, setTimeframe, chartType
                     ))}
                 </div>
                 <div className="flex items-center gap-4 text-zinc-100 shrink-0">
-                    <Maximize2 className="w-4 h-4" />
-                    <SlidersHorizontal className="w-4 h-4" />
-                    <BarChart3 className="w-4 h-4" />
+                    <button type="button" onClick={onToggleFullscreen} aria-label="Toggle chart fullscreen"><Maximize2 className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => setChartType(chartType === "candles" ? "line" : "candles")} aria-label="Switch chart type"><SlidersHorizontal className="w-4 h-4" /></button>
+                    <button type="button" onClick={() => setChartType("candles")} aria-label="Candlestick chart"><BarChart3 className="w-4 h-4" /></button>
                 </div>
             </div>
 
@@ -697,14 +697,16 @@ function MobileChartView({ pairInfo, candles, timeframe, setTimeframe, chartType
                     chartType={chartType}
                     onChartType={setChartType}
                     variant="analysis"
+                    fullscreen={fullscreen}
+                    onToggleFullscreen={onToggleFullscreen}
                 />
             </div>
 
             <div className="px-3 pt-3">
                 <div className="mt-3 grid grid-cols-[auto_auto_auto_1fr_1fr] gap-2.5 items-center pb-4">
-                    <button className="text-center text-zinc-100"><span className="mx-auto mb-1 w-7 h-7 rounded-full border border-white/50 flex items-center justify-center">•••</span><span className="text-[11px]">More</span></button>
-                    <button className="text-center text-zinc-100"><span className="mx-auto mb-1 w-7 h-7 grid grid-cols-2 gap-1 p-1"><i className="border border-white rounded-sm" /><i className="border border-white rounded-sm rotate-45" /><i className="border border-white rounded-sm rotate-45" /><i className="border border-white rounded-sm" /></span><span className="text-[11px]">Hub</span></button>
-                    <button className="text-center text-zinc-100"><span className="mx-auto mb-1 w-7 h-7 flex items-center justify-center text-2xl">↗</span><span className="text-[11px]">Margin</span></button>
+                    <button onClick={onOpenNotifications} className="text-center text-zinc-100"><span className="mx-auto mb-1 w-7 h-7 rounded-full border border-white/50 flex items-center justify-center">...</span><span className="text-[11px]">More</span></button>
+                    <button onClick={onOpenMarkets} className="text-center text-zinc-100"><span className="mx-auto mb-1 w-7 h-7 grid grid-cols-2 gap-1 p-1"><i className="border border-white rounded-sm" /><i className="border border-white rounded-sm rotate-45" /><i className="border border-white rounded-sm rotate-45" /><i className="border border-white rounded-sm" /></span><span className="text-[11px]">Hub</span></button>
+                    <button onClick={() => { setTradeMode("options"); onBack(); }} className="text-center text-zinc-100"><span className="mx-auto mb-1 w-7 h-7 flex items-center justify-center text-2xl">TX</span><span className="text-[11px]">Trade-X</span></button>
                     <button onClick={() => { setSide("buy"); setTradeMode("spot"); onBack(); }} className="h-10 rounded-lg bg-emerald-500 text-white text-[15px] font-bold">Buy</button>
                     <button onClick={() => { setSide("sell"); setTradeMode("spot"); onBack(); }} className="h-10 rounded-lg bg-rose-500 text-white text-[15px] font-bold">Sell</button>
                 </div>
@@ -713,8 +715,9 @@ function MobileChartView({ pairInfo, candles, timeframe, setTimeframe, chartType
     );
 }
 
-function MobileTradeView({ pairInfo, pairs, orderPairs, portfolio, orders, options, side, setSide, amount, setAmount, tradeMode, setTradeMode, optionDirection, setOptionDirection, optionStake, setOptionStake, optionDuration, setOptionDuration, optionMeta, submitting, submit, submitOption, setSelectedPair, quoteBalance, baseBalance, onOpenChart, up }) {
+function MobileTradeView({ pairInfo, pairs, orderPairs, portfolio, orders, options, side, setSide, amount, setAmount, tradeMode, setTradeMode, optionDirection, setOptionDirection, optionStake, setOptionStake, optionDuration, setOptionDuration, optionMeta, submitting, submit, submitOption, setSelectedPair, quoteBalance, baseBalance, onOpenChart, onOpenMarkets, onOpenNotifications, up }) {
     const [percent, setPercent] = useState(0);
+    const [tradeTab, setTradeTab] = useState("orders");
     const available = side === "buy" ? quoteBalance : baseBalance;
 
     const setPresetAmount = (value) => {
@@ -735,14 +738,14 @@ function MobileTradeView({ pairInfo, pairs, orderPairs, portfolio, orders, optio
             <div className="px-3 py-2.5">
                 <div className="flex items-start justify-between gap-2 mb-2.5">
                     <div>
-                        <button className="flex items-center gap-1 text-[19px] leading-none font-bold tracking-tight text-white">
+                        <button onClick={onOpenMarkets} className="flex items-center gap-1 text-[19px] leading-none font-bold tracking-tight text-white">
                             {pairInfo.pair}<ChevronDown className="w-5 h-5" />
                         </button>
                         <p className={`mt-1 text-[12px] font-semibold ${up ? "text-emerald-400" : "text-rose-400"}`}>{pct(pairInfo.baseMarket?.price_change_percentage_24h)}</p>
                     </div>
                     <div className="flex items-center gap-3 text-zinc-200">
                         <button onClick={onOpenChart} className="relative w-7 h-7 flex items-center justify-center"><BarChart3 className="w-5 h-5" /></button>
-                        <button className="relative w-7 h-7 flex items-center justify-center"><span className="absolute -top-1 right-0 w-3 h-3 rounded-full bg-[#f0b90b]" /><span className="text-2xl leading-none tracking-[1px]">…</span></button>
+                        <button onClick={onOpenNotifications} className="relative w-7 h-7 flex items-center justify-center" aria-label="Open notifications"><span className="absolute -top-1 right-0 w-3 h-3 rounded-full bg-[#f0b90b]" /><span className="text-2xl leading-none tracking-[1px]">...</span></button>
                     </div>
                 </div>
 
@@ -779,7 +782,7 @@ function MobileTradeView({ pairInfo, pairs, orderPairs, portfolio, orders, optio
                                 </div>
                                 <label className="flex items-center gap-2 text-[12px] text-white"><span className="w-4 h-4 rounded border-2 border-zinc-500" />Slippage Tolerance</label>
                                 <div className="space-y-0.5 text-[12px]">
-                                    <div className="flex justify-between"><span className="text-zinc-400">Avbl</span><span>{formatAmount(available)} {side === "buy" ? pairInfo.quote : pairInfo.base} <button className="ml-1 w-5 h-5 rounded-full bg-[#f0b90b] text-black font-bold">+</button></span></div>
+                                    <div className="flex justify-between"><span className="text-zinc-400">Avbl</span><span>{formatAmount(available)} {side === "buy" ? pairInfo.quote : pairInfo.base} <button type="button" onClick={() => setPresetAmount(100)} className="ml-1 w-5 h-5 rounded-full bg-[#f0b90b] text-black font-bold">+</button></span></div>
                                     <div className="flex justify-between"><span className="text-zinc-400">Max {side === "buy" ? "Buy" : "Sell"}</span><span>{side === "buy" ? formatAmount(Number(amount || 0) / Math.max(pairInfo.rate, 0.00000001)) : formatAmount(Number(amount || 0) * pairInfo.rate)} {side === "buy" ? pairInfo.base : pairInfo.quote}</span></div>
                                     <div className="flex justify-between"><span className="text-zinc-400">Est. Fee</span><span>{(Number(portfolio?.fee_rate || 0.001) * 100).toFixed(2)}%</span></div>
                                 </div>
@@ -807,13 +810,13 @@ function MobileTradeView({ pairInfo, pairs, orderPairs, portfolio, orders, optio
 
                 <div className="mt-3 border-t border-white/5 pt-2.5">
                     <div className="flex items-center gap-4 text-[14px] font-bold overflow-x-auto">
-                        <button className="relative pb-3 text-white whitespace-nowrap">Open Orders ({orders?.filter((item) => item.status === "open").length || 0})<span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-1 w-8 rounded-full bg-[#f0b90b]" /></button>
-                        <button className="pb-3 text-zinc-500 whitespace-nowrap">Holdings ({portfolio?.positions?.length || 0})</button>
-                        <button className="pb-3 text-zinc-500 whitespace-nowrap">Bots</button>
+                        <button onClick={() => setTradeTab("orders")} className={`relative pb-3 whitespace-nowrap ${tradeTab === "orders" ? "text-white" : "text-zinc-500"}`}>Open Orders ({orders?.filter((item) => item.status === "open").length || 0}){tradeTab === "orders" && <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-1 w-8 rounded-full bg-[#f0b90b]" />}</button>
+                        <button onClick={() => setTradeTab("holdings")} className={`relative pb-3 whitespace-nowrap ${tradeTab === "holdings" ? "text-white" : "text-zinc-500"}`}>Holdings ({portfolio?.positions?.length || 0}){tradeTab === "holdings" && <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-1 w-8 rounded-full bg-[#f0b90b]" />}</button>
+                        <button onClick={() => setTradeTab("bots")} className={`relative pb-3 whitespace-nowrap ${tradeTab === "bots" ? "text-white" : "text-zinc-500"}`}>Bots{tradeTab === "bots" && <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-1 w-8 rounded-full bg-[#f0b90b]" />}</button>
                     </div>
                     <div className="py-5 text-center text-zinc-100">
                         <div className="mx-auto mb-2 w-10 h-10 rounded-full border-2 border-white/70 flex items-center justify-center text-2xl">◇</div>
-                        <p className="text-[13px] font-semibold">Available Funds: {formatAmount(quoteBalance)} {pairInfo.quote}</p>
+                        <p className="text-[13px] font-semibold">{tradeTab === "orders" ? `Open orders: ${orders?.filter((item) => item.status === "open").length || 0}` : tradeTab === "holdings" ? `Available Funds: ${formatAmount(quoteBalance)} ${pairInfo.quote}` : "Bots are not active for this account"}</p>
                     </div>
                 </div>
 
@@ -842,6 +845,7 @@ function MobileTradeView({ pairInfo, pairs, orderPairs, portfolio, orders, optio
 
 export default function Trading() {
     const queryPair = useQueryPair();
+    const navigate = useNavigate();
     const [marketPayload, setMarketPayload] = useState(null);
     const [pairs, setPairs] = useState([]);
     const [portfolio, setPortfolio] = useState(null);
@@ -985,6 +989,10 @@ export default function Trading() {
                     side={side}
                     setSide={setSide}
                     setTradeMode={setTradeMode}
+                    fullscreen={chartFullscreen}
+                    onToggleFullscreen={() => setChartFullscreen((value) => !value)}
+                    onOpenMarkets={() => { setMobileChartOpen(false); navigate("/dashboard/markets"); }}
+                    onOpenNotifications={() => { setMobileChartOpen(false); navigate("/dashboard/notifications"); }}
                 />
             )}
 
@@ -1015,6 +1023,8 @@ export default function Trading() {
                 quoteBalance={quoteBalance}
                 baseBalance={baseBalance}
                 onOpenChart={() => setMobileChartOpen(true)}
+                onOpenMarkets={() => navigate("/dashboard/markets")}
+                onOpenNotifications={() => navigate("/dashboard/notifications")}
                 up={up}
             />
 

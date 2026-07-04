@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import DashboardLayout from "../components/DashboardLayout";
 import { Badge } from "../components/ui-eregon";
 import { api, formatApiError } from "../lib/api";
@@ -96,7 +97,36 @@ function Stat({ label, value, icon: Icon, accent = "purple" }) {
 
 export function Notifications() {
     const [list, setList] = useState([]);
+    const navigate = useNavigate();
     useEffect(() => { api.get("/user/notifications").then(r => setList(r.data)); }, []);
+
+    const notificationTarget = (notification) => {
+        const category = String(notification?.category || "system").toLowerCase();
+        const title = String(notification?.title || "").toLowerCase();
+        const targets = {
+            trading: "/dashboard/trading",
+            withdrawals: "/dashboard/withdraw",
+            withdrawal: "/dashboard/withdraw",
+            deposits: "/dashboard/deposit",
+            deposit: "/dashboard/deposit",
+            membership: "/dashboard/active-plan",
+            rewards: "/dashboard/rewards",
+            tasks: "/dashboard/tasks",
+            referral: "/dashboard/referral",
+            support: "/dashboard/tickets",
+            promotions: "/dashboard",
+            security: "/dashboard",
+            system: "/dashboard/notifications",
+        };
+        return targets[category] || (title.includes("deposit") ? "/dashboard/deposit" : title.includes("withdraw") ? "/dashboard/withdraw" : "/dashboard/notifications");
+    };
+
+    const openNotification = async (notification) => {
+        try {
+            if (!notification.read) await api.post(`/user/notifications/${notification.id}/read`);
+        } catch (e) { void e; }
+        navigate(notificationTarget(notification));
+    };
     return (
         <DashboardLayout>
             <p className="text-xs uppercase tracking-widest text-amber-400/80">Notifications</p>
@@ -107,7 +137,7 @@ export function Notifications() {
                 ) : (
                     <div className="space-y-3">
                         {list.map(n => (
-                            <div key={n.id} className="p-4 bg-black/40 border border-white/5 rounded-xl">
+                            <button key={n.id} type="button" onClick={() => openNotification(n)} className="w-full text-left p-4 bg-black/40 border border-white/5 rounded-xl transition hover:border-purple-300/40 hover:bg-purple-500/10">
                                 <div className="flex items-start gap-3">
                                     <Bell className="w-4 h-4 text-purple-300 mt-1" />
                                     <div className="flex-1">
@@ -116,7 +146,7 @@ export function Notifications() {
                                     </div>
                                     {!n.read && <Badge color="gold">new</Badge>}
                                 </div>
-                            </div>
+                            </button>
                         ))}
                     </div>
                 )}

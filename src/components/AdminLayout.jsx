@@ -25,6 +25,8 @@ import {
     X,
 } from "lucide-react";
 import { useAuth } from "../lib/auth";
+import NotificationBell from "./NotificationBell";
+import RealtimeStatus from "./RealtimeStatus";
 
 const items = [
     { to: "/admin", label: "Overview", icon: LayoutDashboard },
@@ -141,14 +143,17 @@ export default function AdminLayout({ children }) {
 
             <header className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 bg-black/85 backdrop-blur-xl border-b border-amber-500/10 px-3 flex items-center justify-between">
                 <Brand mobile />
-                <button
+                <div className="flex items-center gap-2">
+                    <NotificationBell />
+                    <button
                     onClick={() => setDrawerOpen(true)}
                     className="w-10 h-10 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-zinc-200 active:scale-95 transition"
                     aria-label="Open admin menu"
                     data-testid="admin-mobile-menu-button"
                 >
                     <Menu className="w-5 h-5" />
-                </button>
+                    </button>
+                </div>
             </header>
 
             {drawerOpen && (
@@ -170,6 +175,11 @@ export default function AdminLayout({ children }) {
                     </aside>
                 </div>
             )}
+
+            <div className="hidden lg:flex fixed right-4 top-4 z-40 items-center gap-3">
+                <RealtimeStatus />
+                <NotificationBell />
+            </div>
 
             <main className="relative min-h-screen pt-14 lg:pt-0 lg:ml-64 overflow-x-hidden">
                 <div className="w-full min-w-0 px-3 sm:px-4 lg:px-4 py-3 sm:py-4 lg:py-5">
