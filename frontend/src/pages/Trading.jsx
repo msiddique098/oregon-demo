@@ -46,11 +46,13 @@ function useQueryPair() {
 }
 
 const TIMEFRAMES = [
-    { key: "15m", label: "15m", window: 110, bucket: 2 },
-    { key: "1h", label: "1h", window: 180, bucket: 4 },
-    { key: "4h", label: "4h", window: 260, bucket: 6 },
-    { key: "1D", label: "1D", window: 420, bucket: 8 },
-    { key: "1w", label: "1w", window: 9999, bucket: 10 },
+    { key: "1m", label: "1m", window: 240, bucket: 1 },
+    { key: "5m", label: "5m", window: 260, bucket: 1 },
+    { key: "15m", label: "15m", window: 320, bucket: 1 },
+    { key: "1h", label: "1h", window: 360, bucket: 1 },
+    { key: "4h", label: "4h", window: 420, bucket: 1 },
+    { key: "1D", label: "1D", window: 500, bucket: 1 },
+    { key: "1w", label: "1w", window: 500, bucket: 1 },
 ];
 
 
@@ -161,6 +163,8 @@ function OrderBookRows({ price, compactMode = false }) {
 }
 
 const TF_SECONDS = {
+    "1m": 60,
+    "5m": 5 * 60,
     "15m": 15 * 60,
     "1h": 60 * 60,
     "4h": 4 * 60 * 60,
@@ -168,13 +172,13 @@ const TF_SECONDS = {
     "1w": 7 * 24 * 60 * 60,
 };
 
-function toChartCandles(candles = [], timeframe = "15m") {
-    const step = TF_SECONDS[timeframe] || TF_SECONDS["15m"];
-    const now = Math.floor(Date.now() / step) * step;
+function toChartCandles(candles = [], timeframe = "1m") {
+    const step = TF_SECONDS[timeframe] || TF_SECONDS["1m"];
+    const now = Math.floor(Date.now() / 1000 / step) * step;
     const start = now - Math.max(0, candles.length - 1) * step;
     return candles
         .map((candle, index) => ({
-            time: start + index * step,
+            time: Number(candle.time || candle.timestamp || (start + index * step)),
             open: Number(candle.open || 0),
             high: Number(candle.high || 0),
             low: Number(candle.low || 0),
@@ -847,6 +851,7 @@ export default function Trading() {
     const queryPair = useQueryPair();
     const navigate = useNavigate();
     const [marketPayload, setMarketPayload] = useState(null);
+    const [ohlcCandles, setOhlcCandles] = useState([]);
     const [pairs, setPairs] = useState([]);
     const [portfolio, setPortfolio] = useState(null);
     const [orders, setOrders] = useState([]);
@@ -860,7 +865,7 @@ export default function Trading() {
     const [optionStake, setOptionStake] = useState("");
     const [optionDuration, setOptionDuration] = useState(300);
     const [search, setSearch] = useState("");
-    const [timeframe, setTimeframe] = useState("1w");
+    const [timeframe, setTimeframe] = useState("1m");
     const [chartType, setChartType] = useState("candles");
     const [chartFullscreen, setChartFullscreen] = useState(false);
     const [mobileChartOpen, setMobileChartOpen] = useState(false);
@@ -906,6 +911,24 @@ export default function Trading() {
         return () => window.clearInterval(timer);
     }, []);
 
+    useEffect(() => {
+        let active = true;
+        const fetchOhlc = async () => {
+            try {
+                const { data } = await api.get("/trading/ohlc", { params: { pair: selectedPair, timeframe, limit: 360 } });
+                if (active) setOhlcCandles(data.candles || []);
+            } catch (error) {
+                if (active) console.warn("Unable to load OHLC candles", error);
+            }
+        };
+        fetchOhlc();
+        const timer = window.setInterval(fetchOhlc, 3000);
+        return () => {
+            active = false;
+            window.clearInterval(timer);
+        };
+    }, [selectedPair, timeframe]);
+
     const markets = useMemo(() => marketPayload?.coins || [], [marketPayload]);
     const marketBySymbol = useMemo(() => Object.fromEntries(markets.map((coin) => [String(coin.symbol || "").toUpperCase(), coin])), [markets]);
     const pairInfo = useMemo(() => {
@@ -931,9 +954,10 @@ export default function Trading() {
     }, [tradeMode, pairInfo.quote, pairs]);
 
     const candles = useMemo(() => {
+        if (ohlcCandles.length) return ohlcCandles;
         const prices = pairInfo.baseMarket?.sparkline_in_7d?.price || makeFallbackPrices(pairInfo.rate);
         return buildCandles([...prices, pairInfo.rate].filter(Boolean), timeframe);
-    }, [pairInfo.baseMarket, pairInfo.rate, timeframe]);
+    }, [ohlcCandles, pairInfo.baseMarket, pairInfo.rate, timeframe]);
 
     const quoteBalance = Number(portfolio?.balances?.[pairInfo.quote] || 0);
     const baseBalance = Number(portfolio?.balances?.[pairInfo.base] || 0);
