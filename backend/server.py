@@ -730,6 +730,8 @@ WALLET_BALANCE_TX_TYPES = {
     "spin_reward",
     "achievement_reward",
     "first_task_reward",
+    "options_stake",
+    "options_payout",
 }
 
 
@@ -3209,6 +3211,12 @@ async def _settle_expired_options(user_id: Optional[str] = None) -> int:
                     reference_id=option["id"],
                     note=f"Options {direction.upper()} win on {option.get('pair')} at {exit_rate:g}; profit {profit:g} USDT",
                 )
+                await _phase2_emit_user(option["user_id"], "balance.updated", {
+                    "balance": after,
+                    "delta": payout,
+                    "source": "options_payout",
+                    "option": {"id": option["id"], "status": "won", "payout": payout, "profit": profit},
+                })
         await db.options_trades.update_one(
             {"id": option["id"], "status": "open"},
             {"$set": {
@@ -3236,6 +3244,68 @@ async def _settle_expired_options(user_id: Optional[str] = None) -> int:
         await _phase2_emit_admin("options.settled", {"id": option["id"], "status": "won" if won else "lost", "user_id": option["user_id"], "pair": option.get("pair")})
         settled += 1
     return settled
+
+
+async def _repair_options_wallet_balances() -> dict:
+    settled = await _settle_expired_options()
+    repaired_payouts = 0
+    affected_user_ids = set()
+    async for option in db.options_trades.find({"status": "won", "payout": {"$gt": 0}}, {"_id": 0}):
+        user_id = option.get("user_id")
+        option_id = option.get("id")
+        if not user_id or not option_id:
+            continue
+        affected_user_ids.add(user_id)
+        existing = await db.transactions.find_one({"user_id": user_id, "type": "options_payout", "reference_id": option_id}, {"_id": 0})
+        if existing:
+            continue
+        user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if not user_doc:
+            continue
+        payout = round(float(option.get("payout") or 0), 2)
+        if payout <= 0:
+            continue
+        before = round(float(user_doc.get("balance", 0)), 2)
+        after = round(before + payout, 2)
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"balance": after, "last_active": now_utc().isoformat()}, "$inc": {"total_earnings": max(0.0, float(option.get("profit") or 0))}},
+        )
+        await record_tx(
+            user_id=user_id,
+            type_="options_payout",
+            amount=payout,
+            coin="USDT",
+            before_balance=before,
+            after_balance=after,
+            reference_id=option_id,
+            note=f"Repaired options payout for won {option.get('pair', 'USDT')} contract",
+        )
+        await create_user_notification(
+            user_id,
+            "Options Payout Credited",
+            f"{payout:g} USDT from your won options contract has been added to your wallet.",
+            "trading",
+        )
+        repaired_payouts += 1
+    for user_id in affected_user_ids:
+        user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if user_doc:
+            await reconcile_user_wallet_balance(user_doc)
+    return {"settled": settled, "repaired_payouts": repaired_payouts, "users_reconciled": len(affected_user_ids)}
+
+
+@api.post("/admin/trading/options/repair-wallets")
+async def admin_repair_options_wallets(admin: dict = Depends(require_perm('users.update_balance'))):
+    result = await _repair_options_wallet_balances()
+    await db.admin_logs.insert_one({
+        "id": str(uuid.uuid4()),
+        "admin_id": admin["id"],
+        "action": "options.wallets.repair",
+        "metadata": result,
+        "created_at": now_utc().isoformat(),
+    })
+    return {"ok": True, **result}
 
 
 @api.get("/admin/trading/options")
@@ -3848,6 +3918,7 @@ async def _phase2_start():
     async def _phase2_tasks():
         await _seed_phase2()
         await _migrate_registration_code_signup_rewards()
+        await _repair_options_wallet_balances()
 
     if await run_startup_task("Phase 2 database seed", _phase2_tasks):
         logger.info("Eregon Marketing Phase 2 ready (tasks, deterministic plan spins, ws)")
