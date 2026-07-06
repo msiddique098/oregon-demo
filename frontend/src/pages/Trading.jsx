@@ -23,7 +23,6 @@ import RealtimeStatus from "../components/RealtimeStatus";
 import { Badge, Card } from "../components/ui-eregon";
 import { api, formatApiError } from "../lib/api";
 import { toast } from "sonner";
-import { createChart, CandlestickSeries, HistogramSeries, LineSeries } from "lightweight-charts";
 
 const FX_PKR = 278;
 const DEFAULT_MARKET_SOURCE = "Live";
@@ -310,6 +309,207 @@ function clampLogicalRange(range, totalBars) {
     return { from, to };
 }
 
+
+const CUSTOM_TRADING_SYMBOLS = new Set(["ERGN", "RYL", "MRKT", "BTD"]);
+const TRADINGVIEW_INTERVALS = {
+    "1m": "1",
+    "5m": "5",
+    "15m": "15",
+    "1h": "60",
+    "4h": "240",
+    "1D": "D",
+    "1w": "W",
+};
+let tradingViewScriptPromise = null;
+
+function loadTradingViewScript() {
+    if (typeof window === "undefined") return Promise.reject(new Error("TradingView can only run in the browser"));
+    if (window.TradingView?.widget) return Promise.resolve(window.TradingView);
+    if (tradingViewScriptPromise) return tradingViewScriptPromise;
+    tradingViewScriptPromise = new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-eregon-tradingview="true"]');
+        if (existing) {
+            existing.addEventListener("load", () => window.TradingView?.widget ? resolve(window.TradingView) : reject(new Error("TradingView widget did not initialize")), { once: true });
+            existing.addEventListener("error", () => reject(new Error("TradingView script failed to load")), { once: true });
+            return;
+        }
+        const script = document.createElement("script");
+        script.src = "https://s3.tradingview.com/tv.js";
+        script.async = true;
+        script.dataset.eregonTradingview = "true";
+        script.onload = () => window.TradingView?.widget ? resolve(window.TradingView) : reject(new Error("TradingView widget did not initialize"));
+        script.onerror = () => reject(new Error("TradingView script failed to load"));
+        document.head.appendChild(script);
+    });
+    return tradingViewScriptPromise;
+}
+
+function toTradingViewSymbol(pair = "BTC/USDT") {
+    const [baseRaw = "BTC", quoteRaw = "USDT"] = String(pair || "BTC/USDT").toUpperCase().replace("-", "/").split("/");
+    const base = baseRaw.replace(/[^A-Z0-9]/g, "");
+    const quote = quoteRaw.replace(/[^A-Z0-9]/g, "");
+    if (!base || !quote) return null;
+    if (CUSTOM_TRADING_SYMBOLS.has(base) || CUSTOM_TRADING_SYMBOLS.has(quote)) return null;
+    if (!["USDT", "USDC", "BTC", "ETH", "BNB"].includes(quote)) return null;
+    return `BINANCE:${base}${quote}`;
+}
+
+class ChartCrashGuard extends React.Component {
+    constructor(props) {
+        super(props);
+        this.state = { crashed: false };
+    }
+    static getDerivedStateFromError() {
+        return { crashed: true };
+    }
+    componentDidCatch(error) {
+        console.warn("Trading chart render failed", error);
+    }
+    render() {
+        if (this.state.crashed) return this.props.fallback;
+        return this.props.children;
+    }
+}
+
+function FallbackMiniChart({ candles = [], pair = "BTC/USDT", source = "internal" }) {
+    const chartData = useMemo(() => toChartCandles(candles, "1m").slice(-220), [candles]);
+    const path = useMemo(() => {
+        if (chartData.length < 2) return "";
+        const width = 1000;
+        const height = 330;
+        const min = Math.min(...chartData.map((item) => item.low));
+        const max = Math.max(...chartData.map((item) => item.high));
+        const span = Math.max(max - min, max * 0.001, 0.00000001);
+        return chartData.map((item, index) => {
+            const x = (index / Math.max(1, chartData.length - 1)) * width;
+            const y = height - ((item.close - min) / span) * height;
+            return `${index === 0 ? "M" : "L"}${x.toFixed(2)} ${y.toFixed(2)}`;
+        }).join(" ");
+    }, [chartData]);
+
+    return (
+        <div className="h-full w-full bg-[#1f2732] flex flex-col">
+            <div className="flex items-center justify-between px-3 py-2 border-b border-white/5">
+                <div>
+                    <p className="text-[11px] font-semibold text-zinc-200">{pair} internal chart</p>
+                    <p className="text-[9px] uppercase tracking-[0.14em] text-zinc-500">{source || "stable fallback"}</p>
+                </div>
+                <span className="text-[10px] text-amber-300">Realtime chart unavailable</span>
+            </div>
+            <div className="relative flex-1 min-h-[240px] overflow-hidden">
+                <svg viewBox="0 0 1000 360" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
+                    <defs>
+                        <linearGradient id="fallbackChartFill" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0" stopColor="#f0b90b" stopOpacity="0.26" />
+                            <stop offset="1" stopColor="#f0b90b" stopOpacity="0" />
+                        </linearGradient>
+                    </defs>
+                    {Array.from({ length: 7 }).map((_, index) => <line key={`h-${index}`} x1="0" x2="1000" y1={index * 60} y2={index * 60} stroke="rgba(255,255,255,.055)" />)}
+                    {Array.from({ length: 6 }).map((_, index) => <line key={`v-${index}`} y1="0" y2="360" x1={index * 200} x2={index * 200} stroke="rgba(255,255,255,.045)" />)}
+                    {path && <path d={`${path} L1000 360 L0 360 Z`} fill="url(#fallbackChartFill)" />}
+                    {path && <path d={path} fill="none" stroke="#f0b90b" strokeWidth="3" vectorEffect="non-scaling-stroke" />}
+                </svg>
+                <div className="absolute inset-0 flex items-end justify-center pb-4 pointer-events-none">
+                    <p className="rounded-full bg-black/40 px-3 py-1 text-[11px] text-zinc-400">Live TradingView chart loads for real Binance pairs only.</p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function TradingViewChartFrame({ pair, timeframe, chartType, variant, source, candles = [] }) {
+    const containerIdRef = useRef(`tv-chart-${Math.random().toString(36).slice(2)}-${Date.now()}`);
+    const widgetRef = useRef(null);
+    const [status, setStatus] = useState("loading");
+    const symbol = useMemo(() => toTradingViewSymbol(pair), [pair]);
+    const interval = TRADINGVIEW_INTERVALS[timeframe] || "1";
+
+    useEffect(() => {
+        let cancelled = false;
+        const container = document.getElementById(containerIdRef.current);
+        if (!container || !symbol) {
+            setStatus("fallback");
+            return undefined;
+        }
+        setStatus("loading");
+        container.innerHTML = "";
+        loadTradingViewScript()
+            .then((TradingView) => {
+                if (cancelled || !container) return;
+                container.innerHTML = "";
+                try {
+                    widgetRef.current = new TradingView.widget({
+                        autosize: true,
+                        symbol,
+                        interval,
+                        timezone: "Etc/UTC",
+                        theme: "dark",
+                        style: chartType === "line" ? "2" : "1",
+                        locale: "en",
+                        toolbar_bg: "#1f2732",
+                        backgroundColor: "#1f2732",
+                        gridColor: "rgba(255,255,255,0.06)",
+                        hide_top_toolbar: true,
+                        hide_side_toolbar: true,
+                        allow_symbol_change: false,
+                        save_image: false,
+                        enable_publishing: false,
+                        withdateranges: false,
+                        studies: ["Volume@tv-basicstudies", "RSI@tv-basicstudies", "MASimple@tv-basicstudies", "MAExp@tv-basicstudies"],
+                        overrides: {
+                            "paneProperties.background": "#1f2732",
+                            "paneProperties.backgroundType": "solid",
+                            "paneProperties.vertGridProperties.color": "rgba(255,255,255,0.055)",
+                            "paneProperties.horzGridProperties.color": "rgba(255,255,255,0.075)",
+                            "scalesProperties.textColor": "rgba(234,239,247,0.70)",
+                            "mainSeriesProperties.candleStyle.upColor": "#35c98b",
+                            "mainSeriesProperties.candleStyle.downColor": "#f6465d",
+                            "mainSeriesProperties.candleStyle.wickUpColor": "#35c98b",
+                            "mainSeriesProperties.candleStyle.wickDownColor": "#f6465d",
+                            "mainSeriesProperties.candleStyle.borderUpColor": "#35c98b",
+                            "mainSeriesProperties.candleStyle.borderDownColor": "#f6465d",
+                        },
+                        disabled_features: [
+                            "header_symbol_search",
+                            "symbol_search_hot_key",
+                            "header_compare",
+                            "header_screenshot",
+                            "header_saveload",
+                            "use_localstorage_for_settings",
+                            "show_object_tree",
+                        ],
+                        enabled_features: ["side_toolbar_in_fullscreen_mode"],
+                        container_id: containerIdRef.current,
+                    });
+                    setStatus("ready");
+                } catch (error) {
+                    console.warn("TradingView widget failed", error);
+                    setStatus("fallback");
+                }
+            })
+            .catch((error) => {
+                console.warn("TradingView script unavailable", error);
+                if (!cancelled) setStatus("fallback");
+            });
+        return () => {
+            cancelled = true;
+            widgetRef.current = null;
+            if (container) container.innerHTML = "";
+        };
+    }, [symbol, interval, chartType, variant]);
+
+    if (!symbol || status === "fallback") {
+        return <FallbackMiniChart candles={candles} pair={pair} source={source || "internal"} />;
+    }
+
+    return (
+        <div className="relative h-full w-full bg-[#1f2732]" style={{ touchAction: "none", overscrollBehavior: "contain" }}>
+            {status === "loading" && <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#1f2732] text-[12px] text-zinc-500">Loading live TradingView chart...</div>}
+            <div id={containerIdRef.current} className="h-full w-full" style={{ touchAction: "none", overscrollBehavior: "contain" }} />
+        </div>
+    );
+}
+
 function CandleChart({
     candles = [],
     pair = "BTC/USDT",
@@ -322,276 +522,19 @@ function CandleChart({
     fullscreen = false,
     onToggleFullscreen,
 }) {
-    const mainContainerRef = useRef(null);
-    const rsiContainerRef = useRef(null);
-    const mainChartRef = useRef(null);
-    const rsiChartRef = useRef(null);
-    const seriesRef = useRef({});
-    const syncingRef = useRef(false);
-    const initialRangeAppliedRef = useRef(false);
-    const chartStorageKey = `eregon-lwc-native-range-v2-${variant}-${pair}-${timeframe}`;
-    const chartData = useMemo(() => toChartCandles(candles, timeframe), [candles, timeframe]);
-    const [visibleBars, setVisibleBars] = useState(0);
-
+    const symbol = toTradingViewSymbol(pair);
     const chartHeightClass = variant === "analysis" ? "h-full min-h-[330px]" : fullscreen ? "h-full min-h-[420px]" : "h-full min-h-[250px]";
-    const mainHeight = variant === "analysis" ? "calc(100% - 82px)" : "calc(100% - 72px)";
-    const rsiHeight = variant === "analysis" ? 82 : 72;
-
-    useEffect(() => {
-        initialRangeAppliedRef.current = false;
-    }, [chartStorageKey]);
-
-    useEffect(() => {
-        const mainEl = mainContainerRef.current;
-        const rsiEl = rsiContainerRef.current;
-        if (!mainEl || !rsiEl) return undefined;
-
-        const common = {
-            autoSize: true,
-            layout: {
-                background: { type: "solid", color: "#1f2732" },
-                textColor: "rgba(234, 239, 247, 0.72)",
-                fontSize: variant === "analysis" ? 10 : 9,
-                fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
-                attributionLogo: false,
-            },
-            grid: {
-                vertLines: { color: "rgba(255,255,255,0.055)" },
-                horzLines: { color: "rgba(255,255,255,0.075)" },
-            },
-            crosshair: {
-                mode: 0,
-                vertLine: { color: "rgba(234,239,247,.36)", width: 1, style: 3, labelBackgroundColor: "#2a3441" },
-                horzLine: { color: "rgba(234,239,247,.36)", width: 1, style: 3, labelBackgroundColor: "#2a3441" },
-            },
-            handleScroll: {
-                mouseWheel: true,
-                pressedMouseMove: true,
-                horzTouchDrag: true,
-                vertTouchDrag: false,
-            },
-            handleScale: {
-                mouseWheel: true,
-                pinch: true,
-                axisPressedMouseMove: true,
-                axisDoubleClickReset: false,
-            },
-            kineticScroll: { mouse: true, touch: true },
-            localization: { priceFormatter: (price) => formatPrice(price) },
-        };
-
-        const timeScale = {
-            timeVisible: true,
-            secondsVisible: false,
-            borderVisible: false,
-            rightOffset: 5,
-            barSpacing: variant === "analysis" ? 4.4 : 3.6,
-            minBarSpacing: 0.35,
-            maxBarSpacing: 80,
-            lockVisibleTimeRangeOnResize: true,
-            shiftVisibleRangeOnNewBar: false,
-        };
-
-        const mainChart = createChart(mainEl, {
-            ...common,
-            rightPriceScale: {
-                borderVisible: false,
-                scaleMargins: { top: 0.06, bottom: 0.22 },
-                minimumWidth: 54,
-            },
-            timeScale: { ...timeScale, visible: false },
-        });
-        const rsiChart = createChart(rsiEl, {
-            ...common,
-            rightPriceScale: {
-                borderVisible: false,
-                scaleMargins: { top: 0.12, bottom: 0.12 },
-                minimumWidth: 54,
-            },
-            timeScale: { ...timeScale, visible: true },
-        });
-
-        const candleSeries = mainChart.addSeries(CandlestickSeries, {
-            upColor: "#35c98b",
-            downColor: "#f6465d",
-            wickUpColor: "#35c98b",
-            wickDownColor: "#f6465d",
-            borderVisible: false,
-            priceLineColor: "rgba(234,239,247,.55)",
-            lastValueVisible: true,
-            priceFormat: { type: "price", precision: 6, minMove: 0.000001 },
-        });
-        const closeLineSeries = mainChart.addSeries(LineSeries, {
-            color: "#f0b90b",
-            lineWidth: 2,
-            priceLineVisible: false,
-            lastValueVisible: false,
-            visible: false,
-            priceFormat: { type: "price", precision: 6, minMove: 0.000001 },
-        });
-        const ma7Series = mainChart.addSeries(LineSeries, { color: "#f0b90b", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-        const ma25Series = mainChart.addSeries(LineSeries, { color: "#8b5cf6", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
-        const volumeSeries = mainChart.addSeries(HistogramSeries, {
-            priceScaleId: "volume",
-            priceFormat: { type: "volume" },
-            lastValueVisible: false,
-            priceLineVisible: false,
-        });
-        mainChart.priceScale("volume").applyOptions({
-            scaleMargins: { top: 0.78, bottom: 0 },
-            borderVisible: false,
-        });
-        const rsiSeries = rsiChart.addSeries(LineSeries, {
-            color: "#f0b90b",
-            lineWidth: 1,
-            priceLineVisible: false,
-            lastValueVisible: false,
-            priceScaleId: "right",
-            priceFormat: { type: "price", precision: 2, minMove: 0.01 },
-            autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
-        });
-
-        const saveRange = (range) => {
-            const clean = safeRange(range);
-            if (!clean) return;
-            try { window.localStorage?.setItem(chartStorageKey, JSON.stringify(clean)); } catch (_) { /* ignore */ }
-            setVisibleBars(Math.max(0, Math.round(clean.to - clean.from)));
-        };
-        const syncFromMain = (range) => {
-            const clean = safeRange(range);
-            if (!clean || syncingRef.current) return;
-            syncingRef.current = true;
-            rsiChart.timeScale().setVisibleLogicalRange(clean);
-            saveRange(clean);
-            requestAnimationFrame(() => { syncingRef.current = false; });
-        };
-        const syncFromRsi = (range) => {
-            const clean = safeRange(range);
-            if (!clean || syncingRef.current) return;
-            syncingRef.current = true;
-            mainChart.timeScale().setVisibleLogicalRange(clean);
-            saveRange(clean);
-            requestAnimationFrame(() => { syncingRef.current = false; });
-        };
-        mainChart.timeScale().subscribeVisibleLogicalRangeChange(syncFromMain);
-        rsiChart.timeScale().subscribeVisibleLogicalRangeChange(syncFromRsi);
-
-        const blockDoubleClick = (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-        };
-        mainEl.addEventListener("dblclick", blockDoubleClick, { passive: false });
-        rsiEl.addEventListener("dblclick", blockDoubleClick, { passive: false });
-
-        mainChartRef.current = mainChart;
-        rsiChartRef.current = rsiChart;
-        seriesRef.current = {
-            candleSeries,
-            closeLineSeries,
-            ma7Series,
-            ma25Series,
-            volumeSeries,
-            rsiSeries,
-            totalBars: 0,
-        };
-
-        return () => {
-            mainEl.removeEventListener("dblclick", blockDoubleClick);
-            rsiEl.removeEventListener("dblclick", blockDoubleClick);
-            mainChart.timeScale().unsubscribeVisibleLogicalRangeChange(syncFromMain);
-            rsiChart.timeScale().unsubscribeVisibleLogicalRangeChange(syncFromRsi);
-            mainChart.remove();
-            rsiChart.remove();
-            mainChartRef.current = null;
-            rsiChartRef.current = null;
-            seriesRef.current = {};
-        };
-    }, [variant, fullscreen, chartStorageKey]);
-
-    useEffect(() => {
-        const refs = seriesRef.current;
-        const mainChart = mainChartRef.current;
-        const rsiChart = rsiChartRef.current;
-        if (!mainChart || !rsiChart || !refs.candleSeries || !chartData.length) return;
-
-        const previousTotal = refs.totalBars || 0;
-        const currentRange = safeRange(mainChart.timeScale().getVisibleLogicalRange());
-        const wasFollowingLatest = currentRange ? currentRange.to >= previousTotal - 2 : false;
-
-        const candleData = chartData.map((item) => ({ time: item.time, open: item.open, high: item.high, low: item.low, close: item.close }));
-        const closeData = chartData.map((item) => ({ time: item.time, value: item.close }));
-        const volumeData = chartData.map((item) => ({
-            time: item.time,
-            value: item.volume,
-            color: item.close >= item.open ? "rgba(53,201,139,.28)" : "rgba(246,70,93,.26)",
-        }));
-
-        refs.candleSeries.setData(candleData);
-        refs.closeLineSeries.setData(closeData);
-        refs.ma7Series.setData(buildMaLine(chartData, 7));
-        refs.ma25Series.setData(buildMaLine(chartData, 25));
-        refs.volumeSeries.setData(volumeData);
-        refs.rsiSeries.setData(buildRsiLine(chartData, 6));
-        refs.totalBars = chartData.length;
-
-        refs.candleSeries.applyOptions({ visible: chartType === "candles" });
-        refs.closeLineSeries.applyOptions({ visible: chartType === "line" });
-        refs.ma7Series.applyOptions({ visible: chartType === "candles" });
-        refs.ma25Series.applyOptions({ visible: chartType === "candles" });
-
-        let nextRange = null;
-        if (currentRange && initialRangeAppliedRef.current) {
-            const addedBars = Math.max(0, chartData.length - previousTotal);
-            nextRange = wasFollowingLatest && addedBars > 0
-                ? { from: currentRange.from + addedBars, to: currentRange.to + addedBars }
-                : currentRange;
-        } else {
-            try {
-                nextRange = safeRange(JSON.parse(window.localStorage?.getItem(chartStorageKey) || "null"));
-            } catch (_) { nextRange = null; }
-            if (!nextRange) {
-                const defaultBars = variant === "analysis" ? 96 : 64;
-                nextRange = { from: Math.max(0, chartData.length - defaultBars), to: chartData.length + 4 };
-            }
-            initialRangeAppliedRef.current = true;
-        }
-
-        const clamped = clampLogicalRange(nextRange, chartData.length);
-        const shouldApplyRange = Boolean(clamped && (!currentRange || !initialRangeAppliedRef.current || (wasFollowingLatest && Math.max(0, chartData.length - previousTotal) > 0)));
-        if (clamped && shouldApplyRange) {
-            syncingRef.current = true;
-            mainChart.timeScale().setVisibleLogicalRange(clamped);
-            rsiChart.timeScale().setVisibleLogicalRange(clamped);
-            setVisibleBars(Math.max(0, Math.round(clamped.to - clamped.from)));
-            try { window.localStorage?.setItem(chartStorageKey, JSON.stringify(clamped)); } catch (_) { /* ignore */ }
-            requestAnimationFrame(() => { syncingRef.current = false; });
-        } else if (currentRange) {
-            saveRange(currentRange);
-        }
-    }, [chartData, chartType, chartStorageKey, variant]);
-
-    useEffect(() => {
-        const refs = seriesRef.current;
-        if (!refs.closeLineSeries || !refs.candleSeries || !refs.ma7Series || !refs.ma25Series) return;
-        refs.candleSeries.applyOptions({ visible: chartType === "candles" });
-        refs.closeLineSeries.applyOptions({ visible: chartType === "line" });
-        refs.ma7Series.applyOptions({ visible: chartType === "candles" });
-        refs.ma25Series.applyOptions({ visible: chartType === "candles" });
-    }, [chartType]);
-
-    if (!chartData.length) {
-        return <div className="h-full min-h-[260px] bg-[#1f2732] flex items-center justify-center text-zinc-500">Waiting for chart data...</div>;
-    }
-
     const showChrome = variant !== "analysis";
+    const label = symbol ? "TRADINGVIEW REALTIME" : String(source || "").includes("binance") ? "BINANCE KLINES" : "INTERNAL CHART";
+    const fallback = <FallbackMiniChart candles={candles} pair={pair} source={label} />;
 
     return (
         <div className={`${fullscreen ? "fixed inset-0 z-[90] bg-[#1f2732]" : chartHeightClass} flex flex-col overflow-hidden bg-[#1f2732]`}>
-            <style>{`.eregon-lwc-touch, .eregon-lwc-touch * { touch-action: none !important; overscroll-behavior: contain !important; -webkit-user-select: none; user-select: none; }`}</style>
+            <style>{`.eregon-tv-frame iframe { touch-action: none !important; }`}</style>
             {showChrome && <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/5 bg-[#1f2732]">
                 <div className="min-w-0">
                     <p className="text-[12px] font-semibold text-zinc-200 truncate">{pair} Chart</p>
-                    <p className="text-[9px] uppercase tracking-[0.14em] text-zinc-600">{String(source || "").includes("websocket") ? "BINANCE REALTIME" : String(source || "").includes("binance") ? "BINANCE KLINES" : "INTERNAL CHART"}</p>
+                    <p className="text-[9px] uppercase tracking-[0.14em] text-zinc-600">{label}</p>
                 </div>
                 <div className="flex items-center gap-1">
                     {onToggleFullscreen && (
@@ -601,15 +544,10 @@ function CandleChart({
                     )}
                 </div>
             </div>}
-            <div className="relative min-h-0 eregon-lwc-touch" style={{ height: mainHeight, touchAction: "none", overscrollBehavior: "contain" }}>
-                <div ref={mainContainerRef} className="absolute inset-0 eregon-lwc-touch" style={{ touchAction: "none", overscrollBehavior: "contain" }} />
-                <div className="pointer-events-none absolute left-2 top-2 rounded bg-black/25 px-1.5 py-0.5 text-[9px] font-medium text-zinc-400">
-                    {visibleBars ? `${visibleBars} bars` : "native zoom"}
-                </div>
-            </div>
-            <div className="relative shrink-0 border-t border-white/5 eregon-lwc-touch" style={{ height: rsiHeight, touchAction: "none", overscrollBehavior: "contain" }}>
-                <div ref={rsiContainerRef} className="absolute inset-0 eregon-lwc-touch" style={{ touchAction: "none", overscrollBehavior: "contain" }} />
-                <div className="pointer-events-none absolute left-2 top-1 text-[9px] font-semibold text-[#f0b90b]">RSI(6)</div>
+            <div className="eregon-tv-frame relative min-h-0 flex-1" style={{ touchAction: "none", overscrollBehavior: "contain" }}>
+                <ChartCrashGuard fallback={fallback}>
+                    {symbol ? <TradingViewChartFrame pair={pair} timeframe={timeframe} chartType={chartType} variant={variant} source={source} candles={candles} /> : fallback}
+                </ChartCrashGuard>
             </div>
             {showChrome && <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-t border-white/5 bg-[#1f2732] overflow-x-auto">
                 <div className="flex items-center gap-1">
