@@ -2766,28 +2766,6 @@ def _fetch_binance_klines_sync(pair: str, timeframe: str, limit: int) -> List[Di
     return [by_time[key] for key in sorted(by_time)]
 
 
-
-
-def _fetch_binance_ticker_price_sync(pair: str) -> float:
-    """Fetch the latest exchange price for a supported Binance spot pair.
-
-    This is used only for exchange-supported pairs. It prevents chart candles
-    from being moved by internal animated/fallback market prices.
-    """
-    symbol = _pair_to_binance_symbol(pair)
-    response = requests.get(
-        f"{BINANCE_API_BASE}/ticker/price",
-        params={"symbol": symbol},
-        timeout=5,
-    )
-    response.raise_for_status()
-    payload = response.json()
-    price = float(payload.get("price") or 0)
-    if price <= 0:
-        raise ValueError("Binance ticker price was unavailable")
-    return round(price, 10)
-
-
 def _build_deterministic_ohlc_history(pair: str, rate: float, timeframe: str, limit: int, now_ts: Optional[float] = None) -> List[Dict[str, float]]:
     """Fallback history for custom/internal coins when an exchange kline source does not exist.
 
@@ -2906,8 +2884,7 @@ def _update_ohlc(pair: str, timeframe: str, rate: float, limit: int = 720) -> Li
     candles = entry.get("candles") if isinstance(entry, dict) else entry
     source = entry.get("source") if isinstance(entry, dict) else None
     last_fetch = float(entry.get("last_fetch") or 0) if isinstance(entry, dict) else 0.0
-    # Refresh exchange klines frequently so the currently-open candle moves like a real trading chart.
-    fetch_every = 2 if timeframe in {"1m", "5m", "15m"} else 15
+    fetch_every = 12 if timeframe in {"1m", "5m", "15m"} else 45
 
     should_refresh_history = not candles or (source == "binance-klines" and now_ts - last_fetch >= fetch_every) or len(candles or []) < min(120, limit)
     if should_refresh_history:
@@ -2923,23 +2900,8 @@ def _update_ohlc(pair: str, timeframe: str, rate: float, limit: int = 720) -> Li
         _ohlc_cache[key] = {"candles": _dedupe_sort_candles(candles), "source": source, "last_fetch": now_ts}
 
     cached = _ohlc_cache.get(key) or {"candles": candles or [], "source": source, "last_fetch": last_fetch}
-    cached_source = cached.get("source") or source or "internal"
-
-    # For Binance-backed pairs, use Binance's own latest ticker/klines as the
-    # live candle source. Do not use the animated market snapshot price here.
-    # That animated movement is useful for custom/internal coins only and makes
-    # real pairs look random if it drives the candle close.
-    live_price = price
-    if cached_source == "binance-klines":
-        try:
-            live_price = _fetch_binance_ticker_price_sync(normalized_pair)
-        except Exception as exc:
-            logger.debug("Unable to fetch Binance ticker for %s: %s", normalized_pair, exc)
-            last_close = float((cached.get("candles") or [{}])[-1].get("close") or price)
-            live_price = last_close
-
-    live_candles = _apply_live_price_to_ohlc(cached.get("candles") or [], live_price, timeframe, limit)
-    _ohlc_cache[key] = {"candles": live_candles, "source": cached_source, "last_fetch": cached.get("last_fetch") or now_ts}
+    live_candles = _apply_live_price_to_ohlc(cached.get("candles") or [], price, timeframe, limit)
+    _ohlc_cache[key] = {"candles": live_candles, "source": cached.get("source") or source or "internal", "last_fetch": cached.get("last_fetch") or now_ts}
     return live_candles[-limit:]
 
 def _user_balance_map(user: dict) -> dict:
@@ -3030,11 +2992,10 @@ async def trading_ohlc(pair: str = "BTC/USDT", timeframe: str = "1m", limit: int
     rate = pair_rate(base, quote, prices)
     candles = _update_ohlc(f"{base}/{quote}", tf, rate, limit=limit)
     cache_entry = _ohlc_cache.get(f"{base}/{quote}:{tf}") or {}
-    display_rate = float(candles[-1].get("close") or rate) if candles else rate
     return {
         "pair": f"{base}/{quote}",
         "timeframe": tf,
-        "rate": round(display_rate, 12),
+        "rate": round(rate, 12),
         "candles": candles,
         "candle_source": cache_entry.get("source") or "internal",
         "source": snapshot.get("source"),

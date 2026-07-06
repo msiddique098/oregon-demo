@@ -64,53 +64,6 @@ const TIMEFRAMES = [
 ];
 
 
-
-const BINANCE_INTERVALS = {
-    "1m": "1m",
-    "5m": "5m",
-    "15m": "15m",
-    "1h": "1h",
-    "4h": "4h",
-    "1D": "1d",
-    "1w": "1w",
-};
-
-function toBinanceStreamSymbol(pair = "BTC/USDT") {
-    const raw = String(pair || "").toUpperCase().replace("-", "/");
-    const [base, quote] = raw.split("/");
-    if (!base || !quote) return null;
-    // Binance spot WebSocket is reliable for real exchange pairs. Custom coins
-    // intentionally return null and use the backend deterministic/internal feed.
-    if (!["USDT", "USDC", "BTC", "ETH", "BNB"].includes(quote)) return null;
-    return `${base}${quote}`.toLowerCase();
-}
-
-function mergeRealtimeCandle(previous = [], nextCandle, max = 1000) {
-    if (!nextCandle || !Number.isFinite(Number(nextCandle.time))) return previous;
-    const candle = {
-        time: Number(nextCandle.time),
-        open: Number(nextCandle.open),
-        high: Number(nextCandle.high),
-        low: Number(nextCandle.low),
-        close: Number(nextCandle.close),
-        volume: Number(nextCandle.volume || 0),
-    };
-    if (![candle.open, candle.high, candle.low, candle.close].every((value) => Number.isFinite(value) && value > 0)) return previous;
-    const list = Array.isArray(previous) ? [...previous] : [];
-    const last = list[list.length - 1];
-    if (last && Number(last.time) === candle.time) {
-        list[list.length - 1] = candle;
-    } else if (!last || Number(last.time) < candle.time) {
-        list.push(candle);
-    } else {
-        const index = list.findIndex((item) => Number(item.time) === candle.time);
-        if (index >= 0) list[index] = candle;
-        else list.push(candle);
-        list.sort((a, b) => Number(a.time) - Number(b.time));
-    }
-    return list.slice(-max);
-}
-
 function makeFallbackPrices(rate) {
     const base = Number(rate || 0);
     if (!base) return [];
@@ -314,7 +267,6 @@ function CandleChart({
     candles = [],
     pair = "BTC/USDT",
     timeframe = "15m",
-    source = "",
     onTimeframe,
     chartType = "candles",
     onChartType,
@@ -557,16 +509,13 @@ function CandleChart({
         }
 
         const clamped = clampLogicalRange(nextRange, chartData.length);
-        const shouldApplyRange = Boolean(clamped && (!currentRange || !initialRangeAppliedRef.current || (wasFollowingLatest && Math.max(0, chartData.length - previousTotal) > 0)));
-        if (clamped && shouldApplyRange) {
+        if (clamped) {
             syncingRef.current = true;
             mainChart.timeScale().setVisibleLogicalRange(clamped);
             rsiChart.timeScale().setVisibleLogicalRange(clamped);
             setVisibleBars(Math.max(0, Math.round(clamped.to - clamped.from)));
             try { window.localStorage?.setItem(chartStorageKey, JSON.stringify(clamped)); } catch (_) { /* ignore */ }
             requestAnimationFrame(() => { syncingRef.current = false; });
-        } else if (currentRange) {
-            saveRange(currentRange);
         }
     }, [chartData, chartType, chartStorageKey, variant]);
 
@@ -591,7 +540,7 @@ function CandleChart({
             {showChrome && <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/5 bg-[#1f2732]">
                 <div className="min-w-0">
                     <p className="text-[12px] font-semibold text-zinc-200 truncate">{pair} Chart</p>
-                    <p className="text-[9px] uppercase tracking-[0.14em] text-zinc-600">{String(source || "").includes("websocket") ? "BINANCE REALTIME" : String(source || "").includes("binance") ? "BINANCE KLINES" : "INTERNAL CHART"}</p>
+                    <p className="text-[9px] uppercase tracking-[0.14em] text-zinc-600">TradingView Lightweight Charts</p>
                 </div>
                 <div className="flex items-center gap-1">
                     {onToggleFullscreen && (
@@ -626,7 +575,7 @@ function CandleChart({
     );
 }
 
-function MobileChartView({ pairInfo, candles, ohlcMeta, timeframe, setTimeframe, chartType, setChartType, up, onBack, side, setSide, setTradeMode, fullscreen, onToggleFullscreen, onOpenMarkets, onOpenNotifications }) {
+function MobileChartView({ pairInfo, candles, timeframe, setTimeframe, chartType, setChartType, up, onBack, side, setSide, setTradeMode, fullscreen, onToggleFullscreen, onOpenMarkets, onOpenNotifications }) {
     return (
         <div className="fixed inset-0 z-[90] bg-[#1f2732] text-zinc-100 overflow-y-auto pb-[env(safe-area-inset-bottom)] text-[12px]">
             <div className="sticky top-0 z-10 bg-[#1f2732]/95 backdrop-blur-xl border-b border-white/5">
@@ -679,7 +628,6 @@ function MobileChartView({ pairInfo, candles, ohlcMeta, timeframe, setTimeframe,
                     candles={candles}
                     pair={pairInfo.pair}
                     timeframe={timeframe}
-                    source={ohlcMeta?.source}
                     onTimeframe={setTimeframe}
                     chartType={chartType}
                     onChartType={setChartType}
@@ -835,8 +783,6 @@ export default function Trading() {
     const navigate = useNavigate();
     const [marketPayload, setMarketPayload] = useState(null);
     const [ohlcCandles, setOhlcCandles] = useState([]);
-    const [ohlcMeta, setOhlcMeta] = useState({ source: "loading", live: false });
-    const [liveTicker, setLiveTicker] = useState({});
     const [pairs, setPairs] = useState([]);
     const [portfolio, setPortfolio] = useState(null);
     const [orders, setOrders] = useState([]);
@@ -900,81 +846,17 @@ export default function Trading() {
         let active = true;
         const fetchOhlc = async () => {
             try {
-                const { data } = await api.get("/trading/ohlc", { params: { pair: selectedPair, timeframe, limit: 1000, _: Date.now() } });
-                if (!active) return;
-                setOhlcCandles(data.candles || []);
-                setOhlcMeta({
-                    source: data.candle_source || data.provider || "backend",
-                    live: String(data.candle_source || "").includes("binance"),
-                    updated_at: data.updated_at,
-                });
-                if (Number(data.rate) > 0) {
-                    setLiveTicker((prior) => ({ ...prior, [String(data.pair || selectedPair).toUpperCase()]: Number(data.rate) }));
-                }
+                const { data } = await api.get("/trading/ohlc", { params: { pair: selectedPair, timeframe, limit: 1000 } });
+                if (active) setOhlcCandles(data.candles || []);
             } catch (error) {
                 if (active) console.warn("Unable to load OHLC candles", error);
             }
         };
         fetchOhlc();
-        const timer = window.setInterval(fetchOhlc, 2500);
+        const timer = window.setInterval(fetchOhlc, 3000);
         return () => {
             active = false;
             window.clearInterval(timer);
-        };
-    }, [selectedPair, timeframe]);
-
-    useEffect(() => {
-        const streamSymbol = toBinanceStreamSymbol(selectedPair);
-        const interval = BINANCE_INTERVALS[timeframe] || "1m";
-        if (!streamSymbol || typeof WebSocket === "undefined") return undefined;
-
-        let closedByEffect = false;
-        let reconnectTimer = null;
-        let socket = null;
-
-        const connect = () => {
-            socket = new WebSocket(`wss://stream.binance.com:9443/ws/${streamSymbol}@kline_${interval}`);
-            socket.onopen = () => {
-                if (!closedByEffect) {
-                    setOhlcMeta((prior) => ({ ...prior, source: "binance-websocket", live: true }));
-                }
-            };
-            socket.onmessage = (event) => {
-                try {
-                    const message = JSON.parse(event.data);
-                    const kline = message?.k;
-                    if (!kline) return;
-                    const liveCandle = {
-                        time: Math.floor(Number(kline.t) / 1000),
-                        open: Number(kline.o),
-                        high: Number(kline.h),
-                        low: Number(kline.l),
-                        close: Number(kline.c),
-                        volume: Number(kline.v),
-                    };
-                    setOhlcCandles((prior) => mergeRealtimeCandle(prior, liveCandle, 1000));
-                    setLiveTicker((prior) => ({ ...prior, [selectedPair.toUpperCase()]: liveCandle.close }));
-                    setOhlcMeta((prior) => ({ ...prior, source: "binance-websocket", live: true }));
-                } catch (error) {
-                    console.warn("Unable to parse Binance kline message", error);
-                }
-            };
-            socket.onerror = () => {
-                if (!closedByEffect) setOhlcMeta((prior) => ({ ...prior, live: false }));
-            };
-            socket.onclose = () => {
-                if (!closedByEffect) {
-                    setOhlcMeta((prior) => ({ ...prior, live: false }));
-                    reconnectTimer = window.setTimeout(connect, 2500);
-                }
-            };
-        };
-
-        connect();
-        return () => {
-            closedByEffect = true;
-            if (reconnectTimer) window.clearTimeout(reconnectTimer);
-            if (socket && socket.readyState <= 1) socket.close();
         };
     }, [selectedPair, timeframe]);
 
@@ -985,11 +867,9 @@ export default function Trading() {
         const [base = "BTC", quote = "USDT"] = raw.split("/");
         const baseMarket = marketBySymbol[base] || {};
         const quoteMarket = marketBySymbol[quote] || { current_price: 1 };
-        const pairKey = `${base}/${quote}`;
-        const wsRate = Number(liveTicker[pairKey] || 0);
-        const rate = wsRate > 0 ? wsRate : Number(baseMarket.current_price || 0) / Math.max(0.00000001, Number(quoteMarket.current_price || 1));
-        return { pair: pairKey, base, quote, rate, baseMarket, quoteMarket };
-    }, [selectedPair, marketBySymbol, liveTicker]);
+        const rate = Number(baseMarket.current_price || 0) / Math.max(0.00000001, Number(quoteMarket.current_price || 1));
+        return { pair: `${base}/${quote}`, base, quote, rate, baseMarket, quoteMarket };
+    }, [selectedPair, marketBySymbol]);
 
     const filteredPairs = useMemo(() => {
         const term = search.toLowerCase().trim();
@@ -1055,7 +935,6 @@ export default function Trading() {
                 <MobileChartView
                     pairInfo={pairInfo}
                     candles={candles}
-                    ohlcMeta={ohlcMeta}
                     timeframe={timeframe}
                     setTimeframe={setTimeframe}
                     chartType={chartType}
@@ -1146,7 +1025,7 @@ export default function Trading() {
                                 <div className="text-right"><p className={up ? "text-3xl font-display text-emerald-400" : "text-3xl font-display text-rose-400"}>{formatPrice(pairInfo.rate)}</p><p className={up ? "text-emerald-300 text-sm" : "text-rose-300 text-sm"}>{up ? <ArrowUpRight className="w-4 h-4 inline" /> : <ArrowDownRight className="w-4 h-4 inline" />} {pct(pairInfo.baseMarket?.price_change_percentage_24h)}</p></div>
                             </div>
                             <div className="h-[450px]">
-                                <CandleChart candles={candles} pair={pairInfo.pair} timeframe={timeframe} source={ohlcMeta?.source} onTimeframe={setTimeframe} chartType={chartType} onChartType={setChartType} fullscreen={chartFullscreen} onToggleFullscreen={() => setChartFullscreen((value) => !value)} />
+                                <CandleChart candles={candles} pair={pairInfo.pair} timeframe={timeframe} onTimeframe={setTimeframe} chartType={chartType} onChartType={setChartType} fullscreen={chartFullscreen} onToggleFullscreen={() => setChartFullscreen((value) => !value)} />
                             </div>
                         </Card>
 
