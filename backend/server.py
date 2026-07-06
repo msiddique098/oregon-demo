@@ -2486,7 +2486,8 @@ async def health():
 
 # ---------------- Markets + Internal Trading ----------------
 _market_cache: dict = {"expires_at": 0.0, "payload": None}
-_ohlc_cache: Dict[str, List[Dict[str, float]]] = {}
+_last_live_market_payload: dict | None = None
+_ohlc_cache: Dict[str, Dict[str, Any]] = {}
 OHLC_TIMEFRAME_SECONDS = {
     "1m": 60,
     "5m": 5 * 60,
@@ -2573,6 +2574,7 @@ def _fetch_binance_markets_sync() -> list[dict]:
 
 
 async def get_market_snapshot(limit: int = TRADING_DEFAULT_LIMIT, vs_currency: str = "usd", include_custom: bool = True, force: bool = False) -> dict:
+    global _last_live_market_payload
     now = time.time()
     limit = max(1, min(250, int(limit or TRADING_DEFAULT_LIMIT)))
     vs_currency = (vs_currency or "usd").lower()
@@ -2602,7 +2604,15 @@ async def get_market_snapshot(limit: int = TRADING_DEFAULT_LIMIT, vs_currency: s
             coins = merge_markets(live, include_custom=include_custom)
             source = "coingecko"
         except Exception as exc:
-            logger.warning("Market fetch failed; using static fallback. binance=%s coingecko=%s", binance_exc, exc)
+            logger.warning("Market fetch failed; using last live cache or fallback. binance=%s coingecko=%s", binance_exc, exc)
+            if _last_live_market_payload and _last_live_market_payload.get("coins"):
+                stale_payload = dict(_last_live_market_payload)
+                stale_payload["source"] = "live-cache"
+                stale_payload["provider"] = "Live market"
+                stale_payload["source_error"] = None
+                stale_payload["updated_at"] = now_utc().isoformat()
+                stale_payload["cache_seconds"] = min(MARKET_CACHE_SECONDS, 3)
+                return await _with_live_market_controls(stale_payload)
             coins = fallback_markets(limit)
             source = "fallback"
             error = f"{error}; CoinGecko: {str(exc)[:120]}"
@@ -2625,6 +2635,8 @@ async def get_market_snapshot(limit: int = TRADING_DEFAULT_LIMIT, vs_currency: s
         "cache_seconds": MARKET_CACHE_SECONDS,
     }
     _market_cache.update({"key": cache_key, "expires_at": now + MARKET_CACHE_SECONDS, "payload": payload})
+    if source != "fallback":
+        _last_live_market_payload = payload
     return await _with_live_market_controls(payload)
 
 
@@ -2688,82 +2700,209 @@ def _ohlc_step(timeframe: str) -> int:
     return OHLC_TIMEFRAME_SECONDS.get(str(timeframe or "1m"), OHLC_TIMEFRAME_SECONDS["1m"])
 
 
-def _seed_ohlc(pair: str, rate: float, timeframe: str, limit: int, now_ts: Optional[float] = None) -> List[Dict[str, float]]:
+BINANCE_KLINE_INTERVALS = {
+    "1m": "1m",
+    "5m": "5m",
+    "15m": "15m",
+    "1h": "1h",
+    "4h": "4h",
+    "1D": "1d",
+    "1w": "1w",
+}
+
+
+def _normalize_ohlc_limit(limit: int | None) -> int:
+    """Keep enough history for real chart zooming without returning huge payloads."""
+    try:
+        value = int(limit or 720)
+    except (TypeError, ValueError):
+        value = 720
+    return max(120, min(1000, value))
+
+
+def _pair_to_binance_symbol(pair: str) -> str:
+    normalized_pair = str(pair or "BTC/USDT").upper().replace("-", "/")
+    base, quote = split_pair(normalized_pair)
+    return f"{normalize_symbol(base)}{normalize_symbol(quote)}"
+
+
+def _fetch_binance_klines_sync(pair: str, timeframe: str, limit: int) -> List[Dict[str, float]]:
+    """Fetch real Binance candle history for supported exchange pairs.
+
+    This is the source of truth for real chart history on BTC/USDT, ETH/USDT, etc.
+    It uses Binance klines, not generated random candles.
+    """
+    interval = BINANCE_KLINE_INTERVALS.get(str(timeframe or "1m"), "1m")
+    symbol = _pair_to_binance_symbol(pair)
+    response = requests.get(
+        f"{BINANCE_API_BASE}/klines",
+        params={"symbol": symbol, "interval": interval, "limit": _normalize_ohlc_limit(limit)},
+        timeout=8,
+    )
+    response.raise_for_status()
+    payload = response.json()
+    if not isinstance(payload, list):
+        raise ValueError("Binance klines response was not a list")
+
+    candles: List[Dict[str, float]] = []
+    for row in payload:
+        if not isinstance(row, list) or len(row) < 6:
+            continue
+        try:
+            candles.append({
+                "time": float(int(row[0]) // 1000),
+                "open": round(float(row[1]), 10),
+                "high": round(float(row[2]), 10),
+                "low": round(float(row[3]), 10),
+                "close": round(float(row[4]), 10),
+                "volume": round(float(row[5]), 6),
+            })
+        except (TypeError, ValueError):
+            continue
+    if len(candles) < 20:
+        raise ValueError("Binance returned too few usable klines")
+    # Binance returns sorted data, but sort again defensively and de-duplicate by time.
+    by_time = {int(c["time"]): c for c in candles if c.get("time")}
+    return [by_time[key] for key in sorted(by_time)]
+
+
+def _build_deterministic_ohlc_history(pair: str, rate: float, timeframe: str, limit: int, now_ts: Optional[float] = None) -> List[Dict[str, float]]:
+    """Fallback history for custom/internal coins when an exchange kline source does not exist.
+
+    This is deterministic and stable for the same pair/timeframe. It is not random and
+    the final candle is always tied to the live/internal price.
+    """
     step = _ohlc_step(timeframe)
     now_value = float(now_ts or time.time())
     bucket = int(now_value // step) * step
-    count = max(80, min(500, int(limit or 260)))
+    count = _normalize_ohlc_limit(limit)
     start = bucket - (count - 1) * step
-    seed = sum((idx + 1) * ord(ch) for idx, ch in enumerate(pair + timeframe))
+    seed = sum((idx + 1) * ord(ch) for idx, ch in enumerate(str(pair) + str(timeframe)))
     base = max(0.00000001, float(rate or 0))
-    previous = base * (0.985 + (seed % 17) * 0.001)
+    previous = base * (0.992 + (seed % 11) * 0.0008)
     candles: List[Dict[str, float]] = []
     for index in range(count):
         progress = index / max(1, count - 1)
-        wave = math.sin(index / 7.0 + seed * 0.017) * 0.009 + math.cos(index / 19.0 + seed * 0.011) * 0.006
-        trend = (progress - 1.0) * 0.018
+        # Smooth deterministic movement so custom coins still have readable history.
+        wave = math.sin(index / 14.0 + seed * 0.003) * 0.007 + math.cos(index / 31.0 + seed * 0.002) * 0.004
+        trend = (progress - 1.0) * 0.012
         close = base * (1 + wave + trend)
         if index == count - 1:
             close = base
         open_price = previous
-        wick = max(open_price, close) * (0.0015 + ((seed + index) % 5) * 0.00022)
+        wick = max(open_price, close) * (0.0008 + ((seed + index) % 4) * 0.00012)
         high = max(open_price, close) + wick
         low = max(0.00000001, min(open_price, close) - wick)
-        volume = max(1.0, abs(close - open_price) * (2200 + (seed % 700)) + (index % 9 + 1) * 18)
+        volume = (180 + (seed % 70) + index * 0.55) * (1 + min(1.2, abs(close - open_price) / max(open_price, 0.00000001) * 45))
         candles.append({
             "time": float(start + index * step),
-            "open": round(open_price, 10),
-            "high": round(high, 10),
-            "low": round(low, 10),
+            "open": round(max(0.00000001, open_price), 10),
+            "high": round(max(0.00000001, high), 10),
+            "low": round(max(0.00000001, low), 10),
             "close": round(max(0.00000001, close), 10),
-            "volume": round(volume, 6),
+            "volume": round(max(1.0, volume), 6),
         })
         previous = max(0.00000001, close)
     return candles
 
 
-def _update_ohlc(pair: str, timeframe: str, rate: float, limit: int = 320) -> List[Dict[str, float]]:
-    normalized_pair = str(pair or "BTC/USDT").upper().replace("-", "/")
+# Backward-compatible name used by older tests/extensions.
+def _seed_ohlc(pair: str, rate: float, timeframe: str, limit: int, now_ts: Optional[float] = None) -> List[Dict[str, float]]:
+    return _build_deterministic_ohlc_history(pair, rate, timeframe, limit, now_ts)
+
+
+def _dedupe_sort_candles(candles: List[Dict[str, float]]) -> List[Dict[str, float]]:
+    by_time: Dict[int, Dict[str, float]] = {}
+    for item in candles or []:
+        try:
+            timestamp = int(float(item.get("time") or 0))
+            open_price = float(item.get("open") or 0)
+            high = float(item.get("high") or 0)
+            low = float(item.get("low") or 0)
+            close = float(item.get("close") or 0)
+            volume = float(item.get("volume") or 0)
+        except (TypeError, ValueError):
+            continue
+        if timestamp <= 0 or open_price <= 0 or high <= 0 or low <= 0 or close <= 0:
+            continue
+        by_time[timestamp] = {
+            "time": float(timestamp),
+            "open": round(open_price, 10),
+            "high": round(max(high, open_price, close), 10),
+            "low": round(max(0.00000001, min(low, open_price, close)), 10),
+            "close": round(close, 10),
+            "volume": round(max(0.0, volume), 6),
+        }
+    return [by_time[key] for key in sorted(by_time)]
+
+
+def _apply_live_price_to_ohlc(candles: List[Dict[str, float]], rate: float, timeframe: str, limit: int) -> List[Dict[str, float]]:
+    """Move the currently-open candle with the latest price, without re-randomizing history."""
     step = _ohlc_step(timeframe)
     now_ts = time.time()
     bucket = int(now_ts // step) * step
-    key = f"{normalized_pair}:{timeframe}"
-    price = max(0.00000001, float(rate or 0))
-    candles = _ohlc_cache.get(key)
-    if not candles or abs(float(candles[-1].get("close") or price) - price) / max(price, 0.00000001) > 0.35:
-        candles = _seed_ohlc(normalized_pair, price, timeframe, limit, now_ts)
-        _ohlc_cache[key] = candles
-        return candles[-limit:]
+    price = round(max(0.00000001, float(rate or 0)), 10)
+    candles = _dedupe_sort_candles(candles)
+    if not candles:
+        return _build_deterministic_ohlc_history("BTC/USDT", price, timeframe, limit, now_ts)
 
-    last = candles[-1]
+    last = dict(candles[-1])
     last_time = int(last.get("time") or 0)
     if bucket <= last_time:
+        previous_close = float(last.get("close") or price)
         last["high"] = round(max(float(last.get("high") or price), price), 10)
         last["low"] = round(max(0.00000001, min(float(last.get("low") or price), price)), 10)
-        last["close"] = round(price, 10)
-        last["volume"] = round(float(last.get("volume") or 0) + max(1.0, abs(price - float(last.get("open") or price)) * 900), 6)
+        last["close"] = price
+        last["volume"] = round(float(last.get("volume") or 0) + max(0.01, abs(price - previous_close) / max(previous_close, 0.00000001) * 1200), 6)
+        candles[-1] = last
     else:
         previous_close = float(last.get("close") or price)
         next_time = last_time + step
         while next_time <= bucket:
-            is_current = next_time == bucket
-            close = price if is_current else previous_close + (price - previous_close) * 0.45
-            wick = max(previous_close, close) * 0.0012
+            close = price if next_time == bucket else previous_close
+            wick = max(previous_close, close) * 0.00045
             candles.append({
                 "time": float(next_time),
                 "open": round(previous_close, 10),
                 "high": round(max(previous_close, close) + wick, 10),
                 "low": round(max(0.00000001, min(previous_close, close) - wick), 10),
                 "close": round(max(0.00000001, close), 10),
-                "volume": round(max(1.0, abs(close - previous_close) * 1200), 6),
+                "volume": round(max(1.0, abs(close - previous_close) / max(previous_close, 0.00000001) * 10000), 6),
             })
-            previous_close = max(0.00000001, close)
+            previous_close = close
             next_time += step
-    if len(candles) > 600:
-        candles = candles[-600:]
-        _ohlc_cache[key] = candles
-    return candles[-max(1, min(500, int(limit or 320))):]
+    return candles[-_normalize_ohlc_limit(limit):]
 
+
+def _update_ohlc(pair: str, timeframe: str, rate: float, limit: int = 720) -> List[Dict[str, float]]:
+    normalized_pair = str(pair or "BTC/USDT").upper().replace("-", "/")
+    limit = _normalize_ohlc_limit(limit)
+    price = max(0.00000001, float(rate or 0))
+    key = f"{normalized_pair}:{timeframe}"
+    now_ts = time.time()
+    entry = _ohlc_cache.get(key) or {}
+    candles = entry.get("candles") if isinstance(entry, dict) else entry
+    source = entry.get("source") if isinstance(entry, dict) else None
+    last_fetch = float(entry.get("last_fetch") or 0) if isinstance(entry, dict) else 0.0
+    fetch_every = 12 if timeframe in {"1m", "5m", "15m"} else 45
+
+    should_refresh_history = not candles or (source == "binance-klines" and now_ts - last_fetch >= fetch_every) or len(candles or []) < min(120, limit)
+    if should_refresh_history:
+        try:
+            candles = _fetch_binance_klines_sync(normalized_pair, timeframe, limit)
+            source = "binance-klines"
+        except Exception as exc:
+            # Custom/internal coins or unsupported exchange pairs use deterministic history.
+            if not candles:
+                candles = _build_deterministic_ohlc_history(normalized_pair, price, timeframe, limit, now_ts)
+                source = "deterministic-internal"
+            logger.debug("Using internal deterministic OHLC for %s %s: %s", normalized_pair, timeframe, exc)
+        _ohlc_cache[key] = {"candles": _dedupe_sort_candles(candles), "source": source, "last_fetch": now_ts}
+
+    cached = _ohlc_cache.get(key) or {"candles": candles or [], "source": source, "last_fetch": last_fetch}
+    live_candles = _apply_live_price_to_ohlc(cached.get("candles") or [], price, timeframe, limit)
+    _ohlc_cache[key] = {"candles": live_candles, "source": cached.get("source") or source or "internal", "last_fetch": cached.get("last_fetch") or now_ts}
+    return live_candles[-limit:]
 
 def _user_balance_map(user: dict) -> dict:
     balances = {"USDT": round(float(user.get("balance", 0) or 0), 12)}
@@ -2852,11 +2991,13 @@ async def trading_ohlc(pair: str = "BTC/USDT", timeframe: str = "1m", limit: int
     prices = market_price_map(snapshot["coins"])
     rate = pair_rate(base, quote, prices)
     candles = _update_ohlc(f"{base}/{quote}", tf, rate, limit=limit)
+    cache_entry = _ohlc_cache.get(f"{base}/{quote}:{tf}") or {}
     return {
         "pair": f"{base}/{quote}",
         "timeframe": tf,
         "rate": round(rate, 12),
         "candles": candles,
+        "candle_source": cache_entry.get("source") or "internal",
         "source": snapshot.get("source"),
         "provider": snapshot.get("provider"),
         "updated_at": now_utc().isoformat(),

@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import { createChart, CandlestickSeries, HistogramSeries, LineSeries } from "lightweight-charts";
 
 const FX_PKR = 278;
-const DEFAULT_MARKET_SOURCE = "Live market feed";
+const DEFAULT_MARKET_SOURCE = "Live";
 
 const formatUsd = (value, max = 6) => Number(value || 0).toLocaleString(undefined, {
     style: "currency",
@@ -39,6 +39,14 @@ const formatPrice = (value) => Number(value || 0).toLocaleString(undefined, {
 const formatAmount = (value, max = 8) => Number(value || 0).toLocaleString(undefined, { maximumFractionDigits: max });
 const pct = (value) => `${Number(value || 0) >= 0 ? "+" : ""}${Number(value || 0).toFixed(2)}%`;
 const compact = (value) => Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 2 }).format(Number(value || 0));
+const marketProviderLabel = (payload) => {
+    const source = String(payload?.source || "").toLowerCase();
+    if (!payload?.coins?.length) return DEFAULT_MARKET_SOURCE;
+    if (source.includes("binance")) return "Binance Live";
+    if (source.includes("coingecko")) return "Live";
+    if (source === "live-cache") return "Live";
+    return "Live";
+};
 
 function useQueryPair() {
     const { search } = useLocation();
@@ -176,17 +184,26 @@ function toChartCandles(candles = [], timeframe = "1m") {
     const step = TF_SECONDS[timeframe] || TF_SECONDS["1m"];
     const now = Math.floor(Date.now() / 1000 / step) * step;
     const start = now - Math.max(0, candles.length - 1) * step;
-    return candles
-        .map((candle, index) => ({
-            time: Number(candle.time || candle.timestamp || (start + index * step)),
+    const byTime = new Map();
+
+    candles.forEach((candle, index) => {
+        const rawTime = Number(candle.time || candle.timestamp || (start + index * step));
+        const time = rawTime > 100000000000 ? Math.floor(rawTime / 1000) : Math.floor(rawTime);
+        const item = {
+            time,
             open: Number(candle.open || 0),
             high: Number(candle.high || 0),
             low: Number(candle.low || 0),
             close: Number(candle.close || 0),
             volume: Number(candle.volume || 0),
-        }))
-        .filter((item) => item.time && item.open > 0 && item.high > 0 && item.low > 0 && item.close > 0)
-        .sort((a, b) => a.time - b.time);
+        };
+        if (!item.time || item.open <= 0 || item.high <= 0 || item.low <= 0 || item.close <= 0) return;
+        item.high = Math.max(item.high, item.open, item.close);
+        item.low = Math.max(0.00000001, Math.min(item.low, item.open, item.close));
+        byTime.set(item.time, item);
+    });
+
+    return Array.from(byTime.values()).sort((a, b) => a.time - b.time);
 }
 
 function buildMaLine(data = [], period = 7) {
@@ -263,7 +280,8 @@ function CandleChart({
     const rsiChartRef = useRef(null);
     const seriesRef = useRef({});
     const syncingRef = useRef(false);
-    const chartStorageKey = `eregon-native-lwc-visible-range-${variant}-${pair}-${timeframe}`;
+    const initialRangeAppliedRef = useRef(false);
+    const chartStorageKey = `eregon-lwc-native-range-v2-${variant}-${pair}-${timeframe}`;
     const chartData = useMemo(() => toChartCandles(candles, timeframe), [candles, timeframe]);
     const [visibleBars, setVisibleBars] = useState(0);
 
@@ -272,7 +290,13 @@ function CandleChart({
     const rsiHeight = variant === "analysis" ? 82 : 72;
 
     useEffect(() => {
-        if (!mainContainerRef.current || !rsiContainerRef.current) return undefined;
+        initialRangeAppliedRef.current = false;
+    }, [chartStorageKey]);
+
+    useEffect(() => {
+        const mainEl = mainContainerRef.current;
+        const rsiEl = rsiContainerRef.current;
+        if (!mainEl || !rsiEl) return undefined;
 
         const common = {
             autoSize: true,
@@ -281,15 +305,16 @@ function CandleChart({
                 textColor: "rgba(234, 239, 247, 0.72)",
                 fontSize: variant === "analysis" ? 10 : 9,
                 fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif",
+                attributionLogo: false,
             },
             grid: {
                 vertLines: { color: "rgba(255,255,255,0.055)" },
                 horzLines: { color: "rgba(255,255,255,0.075)" },
             },
             crosshair: {
+                mode: 0,
                 vertLine: { color: "rgba(234,239,247,.36)", width: 1, style: 3, labelBackgroundColor: "#2a3441" },
                 horzLine: { color: "rgba(234,239,247,.36)", width: 1, style: 3, labelBackgroundColor: "#2a3441" },
-                mode: 0,
             },
             handleScroll: {
                 mouseWheel: true,
@@ -304,52 +329,38 @@ function CandleChart({
                 axisDoubleClickReset: false,
             },
             kineticScroll: { mouse: true, touch: true },
-            localization: {
-                priceFormatter: (price) => formatPrice(price),
-            },
+            localization: { priceFormatter: (price) => formatPrice(price) },
         };
 
-        const mainChart = createChart(mainContainerRef.current, {
+        const timeScale = {
+            timeVisible: true,
+            secondsVisible: false,
+            borderVisible: false,
+            rightOffset: 5,
+            barSpacing: variant === "analysis" ? 4.4 : 3.6,
+            minBarSpacing: 0.35,
+            maxBarSpacing: 80,
+            lockVisibleTimeRangeOnResize: true,
+            shiftVisibleRangeOnNewBar: false,
+        };
+
+        const mainChart = createChart(mainEl, {
             ...common,
             rightPriceScale: {
                 borderVisible: false,
-                scaleMargins: { top: 0.07, bottom: 0.22 },
+                scaleMargins: { top: 0.06, bottom: 0.22 },
+                minimumWidth: 54,
             },
-            timeScale: {
-                visible: false,
-                timeVisible: true,
-                secondsVisible: false,
-                borderVisible: false,
-                rightOffset: 5,
-                barSpacing: variant === "analysis" ? 4.4 : 3.8,
-                minBarSpacing: 0.5,
-                maxBarSpacing: 64,
-                lockVisibleTimeRangeOnResize: true,
-                shiftVisibleRangeOnNewBar: false,
-                enableConflation: true,
-            },
+            timeScale: { ...timeScale, visible: false },
         });
-
-        const rsiChart = createChart(rsiContainerRef.current, {
+        const rsiChart = createChart(rsiEl, {
             ...common,
             rightPriceScale: {
                 borderVisible: false,
                 scaleMargins: { top: 0.12, bottom: 0.12 },
-                minimumWidth: 48,
+                minimumWidth: 54,
             },
-            timeScale: {
-                visible: true,
-                timeVisible: true,
-                secondsVisible: false,
-                borderVisible: false,
-                rightOffset: 5,
-                barSpacing: variant === "analysis" ? 4.4 : 3.8,
-                minBarSpacing: 0.5,
-                maxBarSpacing: 64,
-                lockVisibleTimeRangeOnResize: true,
-                shiftVisibleRangeOnNewBar: false,
-                enableConflation: true,
-            },
+            timeScale: { ...timeScale, visible: true },
         });
 
         const candleSeries = mainChart.addSeries(CandlestickSeries, {
@@ -389,28 +400,40 @@ function CandleChart({
             lastValueVisible: false,
             priceScaleId: "right",
             priceFormat: { type: "price", precision: 2, minMove: 0.01 },
+            autoscaleInfoProvider: () => ({ priceRange: { minValue: 0, maxValue: 100 } }),
         });
 
+        const saveRange = (range) => {
+            const clean = safeRange(range);
+            if (!clean) return;
+            try { window.localStorage?.setItem(chartStorageKey, JSON.stringify(clean)); } catch (_) { /* ignore */ }
+            setVisibleBars(Math.max(0, Math.round(clean.to - clean.from)));
+        };
         const syncFromMain = (range) => {
-            const next = clampLogicalRange(range, seriesRef.current.totalBars || 0);
-            if (!next || syncingRef.current) return;
+            const clean = safeRange(range);
+            if (!clean || syncingRef.current) return;
             syncingRef.current = true;
-            rsiChart.timeScale().setVisibleLogicalRange(next);
-            try { window.localStorage?.setItem(chartStorageKey, JSON.stringify(next)); } catch (_) { /* ignore */ }
-            setVisibleBars(Math.max(0, Math.round(next.to - next.from)));
+            rsiChart.timeScale().setVisibleLogicalRange(clean);
+            saveRange(clean);
             requestAnimationFrame(() => { syncingRef.current = false; });
         };
         const syncFromRsi = (range) => {
-            const next = clampLogicalRange(range, seriesRef.current.totalBars || 0);
-            if (!next || syncingRef.current) return;
+            const clean = safeRange(range);
+            if (!clean || syncingRef.current) return;
             syncingRef.current = true;
-            mainChart.timeScale().setVisibleLogicalRange(next);
-            try { window.localStorage?.setItem(chartStorageKey, JSON.stringify(next)); } catch (_) { /* ignore */ }
-            setVisibleBars(Math.max(0, Math.round(next.to - next.from)));
+            mainChart.timeScale().setVisibleLogicalRange(clean);
+            saveRange(clean);
             requestAnimationFrame(() => { syncingRef.current = false; });
         };
         mainChart.timeScale().subscribeVisibleLogicalRangeChange(syncFromMain);
         rsiChart.timeScale().subscribeVisibleLogicalRangeChange(syncFromRsi);
+
+        const blockDoubleClick = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+        };
+        mainEl.addEventListener("dblclick", blockDoubleClick, { passive: false });
+        rsiEl.addEventListener("dblclick", blockDoubleClick, { passive: false });
 
         mainChartRef.current = mainChart;
         rsiChartRef.current = rsiChart;
@@ -421,117 +444,12 @@ function CandleChart({
             ma25Series,
             volumeSeries,
             rsiSeries,
-            totalBars: chartData.length,
+            totalBars: 0,
         };
-
-        const saveAndApplyRange = (range) => {
-            const next = clampLogicalRange(range, seriesRef.current.totalBars || chartData.length || 0);
-            if (!next) return;
-            syncingRef.current = true;
-            mainChart.timeScale().setVisibleLogicalRange(next);
-            rsiChart.timeScale().setVisibleLogicalRange(next);
-            try { window.localStorage?.setItem(chartStorageKey, JSON.stringify(next)); } catch (_) { /* ignore */ }
-            setVisibleBars(Math.max(0, Math.round(next.to - next.from)));
-            requestAnimationFrame(() => { syncingRef.current = false; });
-        };
-        const getCurrentRange = () => safeRange(mainChart.timeScale().getVisibleLogicalRange()) || clampLogicalRange({ from: Math.max(0, chartData.length - 54), to: chartData.length + 4 }, chartData.length);
-        const zoomRange = (factor, anchorRatio = 0.5) => {
-            const current = getCurrentRange();
-            if (!current) return;
-            const span = current.to - current.from;
-            const anchor = current.from + span * anchorRatio;
-            const nextSpan = Math.max(6, Math.min(Math.max(36, (seriesRef.current.totalBars || chartData.length) + 12), span * factor));
-            saveAndApplyRange({ from: anchor - nextSpan * anchorRatio, to: anchor + nextSpan * (1 - anchorRatio) });
-        };
-        const panRange = (deltaX, width) => {
-            const current = getCurrentRange();
-            if (!current || !width) return;
-            const span = current.to - current.from;
-            const bars = (deltaX / width) * span;
-            saveAndApplyRange({ from: current.from - bars, to: current.to - bars });
-        };
-        const containers = [mainContainerRef.current, rsiContainerRef.current].filter(Boolean);
-        const dragState = { active: false, x: 0 };
-        const touchState = { lastX: 0, lastDistance: 0 };
-        const onWheel = (event) => {
-            event.preventDefault();
-            const rect = event.currentTarget.getBoundingClientRect();
-            const anchorRatio = rect.width ? Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) : 0.5;
-            const factor = event.deltaY > 0 ? 1.12 : 0.88;
-            zoomRange(factor, anchorRatio);
-        };
-        const onPointerDown = (event) => {
-            if (event.pointerType === "touch") return;
-            dragState.active = true;
-            dragState.x = event.clientX;
-            event.currentTarget.setPointerCapture?.(event.pointerId);
-        };
-        const onPointerMove = (event) => {
-            if (!dragState.active || event.pointerType === "touch") return;
-            const dx = event.clientX - dragState.x;
-            dragState.x = event.clientX;
-            panRange(dx, event.currentTarget.clientWidth);
-        };
-        const onPointerUp = () => { dragState.active = false; };
-        const touchDistance = (touches) => Math.abs(touches[0].clientX - touches[1].clientX);
-        const touchCenterRatio = (touches, element) => {
-            const rect = element.getBoundingClientRect();
-            const center = (touches[0].clientX + touches[1].clientX) / 2;
-            return rect.width ? Math.max(0, Math.min(1, (center - rect.left) / rect.width)) : 0.5;
-        };
-        const onTouchStart = (event) => {
-            if (event.touches.length === 1) {
-                touchState.lastX = event.touches[0].clientX;
-                touchState.lastDistance = 0;
-            } else if (event.touches.length === 2) {
-                touchState.lastDistance = touchDistance(event.touches);
-            }
-        };
-        const onTouchMove = (event) => {
-            if (event.touches.length === 1) {
-                event.preventDefault();
-                const x = event.touches[0].clientX;
-                const dx = x - touchState.lastX;
-                touchState.lastX = x;
-                panRange(dx, event.currentTarget.clientWidth);
-            } else if (event.touches.length === 2) {
-                event.preventDefault();
-                const distance = touchDistance(event.touches);
-                if (touchState.lastDistance > 0 && distance > 0) {
-                    const factor = Math.max(0.75, Math.min(1.35, touchState.lastDistance / distance));
-                    zoomRange(factor, touchCenterRatio(event.touches, event.currentTarget));
-                }
-                touchState.lastDistance = distance;
-            }
-        };
-        const onTouchEnd = () => {
-            touchState.lastDistance = 0;
-            dragState.active = false;
-        };
-        containers.forEach((container) => {
-            container.addEventListener("wheel", onWheel, { passive: false });
-            container.addEventListener("pointerdown", onPointerDown);
-            container.addEventListener("pointermove", onPointerMove);
-            container.addEventListener("pointerup", onPointerUp);
-            container.addEventListener("pointercancel", onPointerUp);
-            container.addEventListener("touchstart", onTouchStart, { passive: false });
-            container.addEventListener("touchmove", onTouchMove, { passive: false });
-            container.addEventListener("touchend", onTouchEnd);
-            container.addEventListener("touchcancel", onTouchEnd);
-        });
 
         return () => {
-            containers.forEach((container) => {
-                container.removeEventListener("wheel", onWheel);
-                container.removeEventListener("pointerdown", onPointerDown);
-                container.removeEventListener("pointermove", onPointerMove);
-                container.removeEventListener("pointerup", onPointerUp);
-                container.removeEventListener("pointercancel", onPointerUp);
-                container.removeEventListener("touchstart", onTouchStart);
-                container.removeEventListener("touchmove", onTouchMove);
-                container.removeEventListener("touchend", onTouchEnd);
-                container.removeEventListener("touchcancel", onTouchEnd);
-            });
+            mainEl.removeEventListener("dblclick", blockDoubleClick);
+            rsiEl.removeEventListener("dblclick", blockDoubleClick);
             mainChart.timeScale().unsubscribeVisibleLogicalRangeChange(syncFromMain);
             rsiChart.timeScale().unsubscribeVisibleLogicalRangeChange(syncFromRsi);
             mainChart.remove();
@@ -540,14 +458,18 @@ function CandleChart({
             rsiChartRef.current = null;
             seriesRef.current = {};
         };
-    // Recreate only when the chart mode shell changes. Data updates are handled in the next effect.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [variant, fullscreen]);
+    }, [variant, fullscreen, chartStorageKey]);
 
     useEffect(() => {
         const refs = seriesRef.current;
-        if (!mainChartRef.current || !rsiChartRef.current || !refs.candleSeries || !chartData.length) return;
-        refs.totalBars = chartData.length;
+        const mainChart = mainChartRef.current;
+        const rsiChart = rsiChartRef.current;
+        if (!mainChart || !rsiChart || !refs.candleSeries || !chartData.length) return;
+
+        const previousTotal = refs.totalBars || 0;
+        const currentRange = safeRange(mainChart.timeScale().getVisibleLogicalRange());
+        const wasFollowingLatest = currentRange ? currentRange.to >= previousTotal - 2 : false;
+
         const candleData = chartData.map((item) => ({ time: item.time, open: item.open, high: item.high, low: item.low, close: item.close }));
         const closeData = chartData.map((item) => ({ time: item.time, value: item.close }));
         const volumeData = chartData.map((item) => ({
@@ -562,30 +484,38 @@ function CandleChart({
         refs.ma25Series.setData(buildMaLine(chartData, 25));
         refs.volumeSeries.setData(volumeData);
         refs.rsiSeries.setData(buildRsiLine(chartData, 6));
+        refs.totalBars = chartData.length;
+
         refs.candleSeries.applyOptions({ visible: chartType === "candles" });
         refs.closeLineSeries.applyOptions({ visible: chartType === "line" });
         refs.ma7Series.applyOptions({ visible: chartType === "candles" });
         refs.ma25Series.applyOptions({ visible: chartType === "candles" });
 
-        let applied = false;
-        try {
-            const stored = JSON.parse(window.localStorage?.getItem(chartStorageKey) || "null");
-            const restored = clampLogicalRange(stored, chartData.length);
-            if (restored) {
-                mainChartRef.current.timeScale().setVisibleLogicalRange(restored);
-                rsiChartRef.current.timeScale().setVisibleLogicalRange(restored);
-                setVisibleBars(Math.round(restored.to - restored.from));
-                applied = true;
+        let nextRange = null;
+        if (currentRange && initialRangeAppliedRef.current) {
+            const addedBars = Math.max(0, chartData.length - previousTotal);
+            nextRange = wasFollowingLatest && addedBars > 0
+                ? { from: currentRange.from + addedBars, to: currentRange.to + addedBars }
+                : currentRange;
+        } else {
+            try {
+                nextRange = safeRange(JSON.parse(window.localStorage?.getItem(chartStorageKey) || "null"));
+            } catch (_) { nextRange = null; }
+            if (!nextRange) {
+                const defaultBars = variant === "analysis" ? 96 : 64;
+                nextRange = { from: Math.max(0, chartData.length - defaultBars), to: chartData.length + 4 };
             }
-        } catch (_) { /* ignore invalid saved ranges */ }
-        if (!applied) {
-            const defaultBars = variant === "analysis" ? 78 : 54;
-            const initialRange = clampLogicalRange({ from: Math.max(0, chartData.length - defaultBars), to: chartData.length + 4 }, chartData.length);
-            if (initialRange) {
-                mainChartRef.current.timeScale().setVisibleLogicalRange(initialRange);
-                rsiChartRef.current.timeScale().setVisibleLogicalRange(initialRange);
-                setVisibleBars(Math.round(initialRange.to - initialRange.from));
-            }
+            initialRangeAppliedRef.current = true;
+        }
+
+        const clamped = clampLogicalRange(nextRange, chartData.length);
+        if (clamped) {
+            syncingRef.current = true;
+            mainChart.timeScale().setVisibleLogicalRange(clamped);
+            rsiChart.timeScale().setVisibleLogicalRange(clamped);
+            setVisibleBars(Math.max(0, Math.round(clamped.to - clamped.from)));
+            try { window.localStorage?.setItem(chartStorageKey, JSON.stringify(clamped)); } catch (_) { /* ignore */ }
+            requestAnimationFrame(() => { syncingRef.current = false; });
         }
     }, [chartData, chartType, chartStorageKey, variant]);
 
@@ -606,10 +536,11 @@ function CandleChart({
 
     return (
         <div className={`${fullscreen ? "fixed inset-0 z-[90] bg-[#1f2732]" : chartHeightClass} flex flex-col overflow-hidden bg-[#1f2732]`}>
+            <style>{`.eregon-lwc-touch, .eregon-lwc-touch * { touch-action: none !important; overscroll-behavior: contain !important; -webkit-user-select: none; user-select: none; }`}</style>
             {showChrome && <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-white/5 bg-[#1f2732]">
                 <div className="min-w-0">
                     <p className="text-[12px] font-semibold text-zinc-200 truncate">{pair} Chart</p>
-                    <p className="text-[9px] uppercase tracking-[0.14em] text-zinc-600">Native Lightweight Charts zoom/pan</p>
+                    <p className="text-[9px] uppercase tracking-[0.14em] text-zinc-600">TradingView Lightweight Charts</p>
                 </div>
                 <div className="flex items-center gap-1">
                     {onToggleFullscreen && (
@@ -619,14 +550,14 @@ function CandleChart({
                     )}
                 </div>
             </div>}
-            <div className="relative min-h-0" style={{ height: mainHeight, touchAction: "none", overscrollBehavior: "contain" }}>
-                <div ref={mainContainerRef} className="absolute inset-0" />
+            <div className="relative min-h-0 eregon-lwc-touch" style={{ height: mainHeight, touchAction: "none", overscrollBehavior: "contain" }}>
+                <div ref={mainContainerRef} className="absolute inset-0 eregon-lwc-touch" style={{ touchAction: "none", overscrollBehavior: "contain" }} />
                 <div className="pointer-events-none absolute left-2 top-2 rounded bg-black/25 px-1.5 py-0.5 text-[9px] font-medium text-zinc-400">
                     {visibleBars ? `${visibleBars} bars` : "native zoom"}
                 </div>
             </div>
-            <div className="relative shrink-0 border-t border-white/5" style={{ height: rsiHeight, touchAction: "none", overscrollBehavior: "contain" }}>
-                <div ref={rsiContainerRef} className="absolute inset-0" />
+            <div className="relative shrink-0 border-t border-white/5 eregon-lwc-touch" style={{ height: rsiHeight, touchAction: "none", overscrollBehavior: "contain" }}>
+                <div ref={rsiContainerRef} className="absolute inset-0 eregon-lwc-touch" style={{ touchAction: "none", overscrollBehavior: "contain" }} />
                 <div className="pointer-events-none absolute left-2 top-1 text-[9px] font-semibold text-[#f0b90b]">RSI(6)</div>
             </div>
             {showChrome && <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-t border-white/5 bg-[#1f2732] overflow-x-auto">
@@ -915,7 +846,7 @@ export default function Trading() {
         let active = true;
         const fetchOhlc = async () => {
             try {
-                const { data } = await api.get("/trading/ohlc", { params: { pair: selectedPair, timeframe, limit: 360 } });
+                const { data } = await api.get("/trading/ohlc", { params: { pair: selectedPair, timeframe, limit: 1000 } });
                 if (active) setOhlcCandles(data.candles || []);
             } catch (error) {
                 if (active) console.warn("Unable to load OHLC candles", error);
@@ -1059,7 +990,7 @@ export default function Trading() {
                         <h1 className="text-3xl font-display font-semibold mt-1">Spot Trading</h1>
                     </div>
                     <div className="flex flex-wrap items-center justify-end gap-2">
-                        <Badge color={marketPayload?.source === "coingecko" ? "emerald" : "gold"}>{marketPayload?.provider || DEFAULT_MARKET_SOURCE}</Badge>
+                        <Badge color={marketPayload?.source === "fallback" ? "gold" : "emerald"}>{marketProviderLabel(marketPayload)}</Badge>
                         <Badge color="purple">Fee {(Number(portfolio?.fee_rate || 0.001) * 100).toFixed(2)}%</Badge>
                         <button className="btn-ghost px-4 py-2 text-sm" onClick={() => load(true)}><RefreshCcw className="w-4 h-4" /> Refresh</button>
                         <RealtimeStatus />
