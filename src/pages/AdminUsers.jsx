@@ -148,7 +148,7 @@ export default function AdminUsers() {
                     <table className="w-full text-sm min-w-[820px]">
                         <thead className="bg-black/40">
                             <tr className="text-xs uppercase tracking-widest text-zinc-500">
-                                <th className="text-left px-5 py-3">User</th><th className="text-left">Coin</th><th className="text-left">Balance</th><th className="text-left">Spins</th><th className="text-left">Tasks</th><th className="text-left">Membership</th><th className="text-left">Status</th><th></th>
+                                <th className="text-left px-5 py-3">User</th><th className="text-left">Coin</th><th className="text-left">Balance</th><th className="text-left">Signals/day</th><th className="text-left">Tasks</th><th className="text-left">Membership</th><th className="text-left">Status</th><th></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -157,7 +157,7 @@ export default function AdminUsers() {
                                     <td className="px-5 py-3"><div><p className="font-medium">{u.name}</p><p className="text-xs text-zinc-500">{u.email}</p><p className="text-[10px] text-amber-300/80 break-all">ID: {u.id}</p></div></td>
                                     <td>{u.coin_symbol}</td>
                                     <td className="gradient-text-gold font-semibold">{Number(u.balance || 0).toLocaleString()}</td>
-                                    <td className="text-emerald-300">{Number(u.spin_tokens || 0).toLocaleString()}</td>
+                                    <td className="text-emerald-300">{Number(u.signals_per_day || 0).toLocaleString()}</td>
                                     <td>{Number(u.tasks_completed || 0)}/{Number(u.tasks_completed || 0) + Number(u.tasks_pending || 0)}</td>
                                     <td><Badge color="purple">{u.membership_name || "Free"}</Badge></td>
                                     <td><Badge color={u.status === "active" ? "emerald" : "rose"}>{u.status}</Badge></td>

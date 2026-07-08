@@ -200,7 +200,7 @@ export default function DashboardLayout({ children }) {
                         <div className="min-w-0">
                             <p className="font-display text-base font-semibold">Plan perks are available</p>
                             <p className="text-sm text-zinc-400 mt-1">
-                                When you are ready, plans can unlock daily plan rewards, extra spins, and faster withdrawal review.
+                                When you are ready, plans can unlock daily plan rewards, option trade signals, and faster withdrawal review.
                             </p>
                             <div className="flex items-center gap-2 mt-4">
                                 <button onClick={openPlans} className="btn-gold py-2 px-4 text-sm">View plans</button>

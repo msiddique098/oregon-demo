@@ -66,7 +66,7 @@ export function RealtimeProvider({ children }) {
                     if (event === "deposit.updated") toast.success(`Deposit ${payload.status}`);
                     if (event === "withdrawal.updated") toast(`Withdrawal ${payload.status}`);
                     if (event === "task.completed") toast.success("Task reward unlocked", { description: `+${payload.reward} ${user.coin_symbol || "USDT"}` });
-                    if (["user.updated", "reward.spin"].includes(event)) refresh?.();
+                    if (["user.updated", "plan.signals_updated"].includes(event)) refresh?.();
                 } catch (e) {
                     void e;
                 }

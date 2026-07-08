@@ -91,13 +91,13 @@ export default function Dashboard() {
                         <div className="dashboard-card-icon w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center"><Wallet className="w-5 h-5 text-white/80" /></div>
                     </div>
                 </Link>
-                <Link to="/dashboard/rewards" className="dashboard-card-interactive glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.20)] focus:outline-none focus:ring-2 focus:ring-emerald-400/40" data-testid="stat-spins">
+                <Link to="/dashboard/active-plan" className="dashboard-card-interactive glass-strong p-6 relative overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.20)] focus:outline-none focus:ring-2 focus:ring-emerald-400/40" data-testid="stat-signals">
                     <div className="absolute top-0 left-0 right-0 h-px bg-emerald-500/40"></div>
-                    <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Plan Spins</p>
+                    <p className="text-xs uppercase tracking-widest text-zinc-500 mb-2">Trade Signals</p>
                     <p className="text-2xl sm:text-3xl font-display font-semibold text-emerald-300">
-                        <AnimatedCounter value={u.spin_tokens || 0} decimals={0} />
+                        <AnimatedCounter value={u.signals_per_day || data.membership?.signals_per_day || 0} decimals={0} />
                     </p>
-                    <p className="text-xs text-zinc-400 mt-2">{Number(u.spin_tokens || 0)} spins remaining</p>
+                    <p className="text-xs text-zinc-400 mt-2">{Number(u.signals_per_day || data.membership?.signals_per_day || 0)} signals/day</p>
                 </Link>
                 <StatCard testId="stat-tasks" label="Tasks Done" accent="purple" icon={CheckSquare}
                     to="/dashboard/tasks"
@@ -162,9 +162,9 @@ export default function Dashboard() {
                     </div>
                     {data.membership ? (
                         <ul className="mt-4 space-y-2 text-sm text-zinc-300">
-                            <li className="flex justify-between"><span>Available spins</span><span>{u.spin_tokens || 0} remaining</span></li>
+                            <li className="flex justify-between"><span>Daily trade signals</span><span>{u.signals_per_day || data.membership.signals_per_day || 0}/day</span></li>
                             <li className="flex justify-between"><span>Daily plan reward</span><span>+9%</span></li>
-                            <li className="flex justify-between"><span>Included plan spins</span><span>{data.membership.spin_tokens || 0}</span></li>
+                            <li className="flex justify-between"><span>Signal entitlement</span><span>{data.membership.signals_per_day || 0}/day</span></li>
                             <li className="flex justify-between"><span>Commission boost</span><span>+{data.membership.commission_boost_pct}%</span></li>
                             <li className="flex justify-between"><span>Task boost</span><span>+{data.membership.task_boost_pct}%</span></li>
                             <li className="flex justify-between"><span>Withdrawal SLA</span><span>{data.membership.priority_withdrawal_hours}h</span></li>

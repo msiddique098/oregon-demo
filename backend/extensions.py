@@ -10,7 +10,6 @@ import jwt
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, Field
 
-from reward_math import normalize_plan_spin_fields
 
 
 
@@ -207,11 +206,10 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
     async def seed_phase2():
         await db.users.update_many(
             {"locked_balance": {"$exists": False}},
-            {"$set": {"locked_balance": 0.0, "bonus_balance": 0.0, "current_streak": 0, "longest_streak": 0, "spin_tokens": 0, "spin_count": 0, "spin_reward_queue": [], "daily_checkin_next_reward": 0.0, "daily_checkin_direction": 0, "achievement_count": 0}},
+            {"$set": {"locked_balance": 0.0, "bonus_balance": 0.0, "current_streak": 0, "longest_streak": 0, "spin_tokens": 0, "spin_count": 0, "spin_reward_queue": [], "daily_checkin_next_reward": 0.0, "daily_checkin_direction": 0, "achievement_count": 0, "signals_per_day": 0}},
         )
-        await db.users.update_many({"spin_tokens": {"$exists": False}, "role": "user"}, {"$set": {"spin_tokens": 0}})
-        await db.users.update_many({"spin_count": {"$exists": False}}, {"$set": {"spin_count": 0}})
-        await db.users.update_many({"spin_reward_queue": {"$exists": False}, "role": "user"}, {"$set": {"spin_reward_queue": []}})
+        await db.users.update_many({"role": "user"}, {"$set": {"spin_tokens": 0, "spin_count": 0, "spin_reward_queue": []}})
+        await db.users.update_many({"signals_per_day": {"$exists": False}, "role": "user"}, {"$set": {"signals_per_day": 0}})
         await db.users.update_many({"daily_checkin_next_reward": {"$exists": False}}, {"$set": {"daily_checkin_next_reward": 0.0}})
         await db.users.update_many({"daily_checkin_direction": {"$exists": False}}, {"$set": {"daily_checkin_direction": 0}})
         await db.users.update_many(
@@ -529,13 +527,7 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
             {"$match": {"user_id": user["id"], "status": {"$in": ["pending", "reviewing", "approved", "processing"]}}},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]).to_list(1)
-        spin_rewards = await db.transactions.aggregate([
-            {"$match": {"user_id": user["id"], "type": "spin_reward"}},
-            {"$group": {"_id": None, "total": {"$sum": "$amount"}, "count": {"$sum": 1}}},
-        ]).to_list(1)
         pending_wd = float(pending_withdrawals[0]["total"]) if pending_withdrawals else 0.0
-        spin_reward_total = float(spin_rewards[0]["total"]) if spin_rewards else 0.0
-        spin_reward_count = int(spin_rewards[0]["count"]) if spin_rewards else 0
         withdrawable = max(0.0, float(user.get("balance", 0)) - float(user.get("locked_balance", 0)) - pending_wd)
         return {
             "wallet": {
@@ -559,19 +551,17 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
                 "max_reward": 0.0,
             },
             "minimum_target": 100.0,
-            "spin_count": int(user.get("spin_count", 0)),
-            "reward_wheel_prizes": REWARD_WHEEL_PRIZES,
+            "signals_per_day": int(user.get("signals_per_day", 0)),
+            "reward_wheel_prizes": [],
             "tasks_completed": approved_tasks,
             "task_summary": {"approved": approved_tasks, "pending_review": pending_tasks, "rejected": rejected_tasks},
             "recent_transactions": recent,
             "recent_bonuses": bonuses,
-            "spin_tokens": int(user.get("spin_tokens", 0)),
-            "plan_spin_rewards": {
-                "source_id": user.get("plan_spin_reward_source_id"),
-                "granted_at": user.get("plan_spin_reward_granted_at"),
-                "remaining_queue": len(user.get("spin_reward_queue", []) or []),
-                "received_reward": spin_reward_total,
-                "received_count": spin_reward_count,
+            "spin_tokens": 0,
+            "trade_signals": {
+                "signals_per_day": int(user.get("signals_per_day", 0)),
+                "source_id": user.get("plan_signal_source_id"),
+                "updated_at": user.get("plan_signal_updated_at"),
             },
             "first_task_reward": {
                 "amount": float(user.get("first_task_reward_amount", 10.0)),
@@ -722,49 +712,18 @@ def build_router(db, get_current_user, admin_required, record_tx, JWT_SECRET: st
 
     @router.post("/rewards/spin")
     async def spin_wheel(user: dict = Depends(get_current_user)):
-        tokens = int(user.get("spin_tokens", 0))
-        queue = user.get("spin_reward_queue", []) or []
-        if tokens <= 0:
-            raise HTTPException(status_code=429, detail="No spin tokens available")
-        if not queue:
-            raise HTTPException(status_code=409, detail="No spin rewards are queued for this account")
+        raise HTTPException(status_code=410, detail="Reward spin wheel has been removed. Plans now provide daily option trade signals.")
 
-        spin_count = int(user.get("spin_count", 0))
-        raw_reward = queue[0]
-        update_ops = {
-            "$inc": {"spin_tokens": -1, "spin_count": 1},
-            "$pop": {"spin_reward_queue": -1},
-            "$set": {"last_spin_at": now_utc().isoformat()},
-        }
-
-        try:
-            reward = round(float(raw_reward), 2)
-        except (TypeError, ValueError):
-            reward = 0.0
-
-        prize = next(
-            (p for p in REWARD_WHEEL_PRIZES if p["type"] == "cash_reward" and float(p["value"]) == reward),
-            {"label": "Try Again" if reward <= 0 else f"${reward:.2f}", "value": reward, "type": "no_reward" if reward <= 0 else "cash_reward"},
-        )
-
-        await db.users.update_one({"id": user["id"]}, update_ops)
-        jackpot = {"id": str(uuid.uuid4()), "user_id": user["id"], "reward": reward, "label": prize.get("label"), "prize_type": prize.get("type"), "type": "spin", "created_at": now_utc().isoformat()}
-        await db.jackpots.insert_one(jackpot)
-        if reward > 0:
-            await _grant_bonus(user, reward, "spin_reward", f"Spin wheel reward: {prize.get('label')}")
-        await ws_manager.emit_user(user["id"], "reward.spin", {"reward": reward, "prize": prize, "remaining_tokens": tokens - 1, "spin_count": spin_count + 1})
-        return {"ok": True, "reward": reward, "prize": prize, "remaining_tokens": tokens - 1, "spin_count": spin_count + 1, "wheel_prizes": REWARD_WHEEL_PRIZES}
 
     @router.get("/achievements")
     async def achievements(user: dict = Depends(get_current_user)):
         tasks_done = await db.task_submissions.count_documents({"user_id": user["id"], "status": "approved"})
         refs = await db.users.count_documents({"referred_by": user["id"]})
-        spin_count = int(user.get("spin_count", 0))
-        plan_spin_goal = max(1, spin_count + int(user.get("spin_tokens", 0)))
+        signals = int(user.get("signals_per_day", 0))
         items = [
             {"id": "first_task", "title": "First Approved Task", "unlocked": tasks_done >= 1, "progress": min(tasks_done, 1), "goal": 1},
             {"id": "task_master_10", "title": "Approved Task Master", "unlocked": tasks_done >= 10, "progress": min(tasks_done, 10), "goal": 10},
-            {"id": "plan_spin_started", "title": "Plan Spin Started", "unlocked": spin_count >= 1, "progress": min(spin_count, plan_spin_goal), "goal": plan_spin_goal},
+            {"id": "trade_signals_active", "title": "Trade Signals Active", "unlocked": signals >= 1, "progress": min(signals, 1), "goal": 1},
             {"id": "referral_3", "title": "Network Builder", "unlocked": refs >= 3, "progress": min(refs, 3), "goal": 3},
         ]
         await db.users.update_one({"id": user["id"]}, {"$set": {"achievement_count": sum(1 for i in items if i["unlocked"])}})

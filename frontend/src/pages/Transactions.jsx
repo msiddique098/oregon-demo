@@ -21,7 +21,7 @@ const TYPE_LABELS = {
     referral_commission: { label: "Referral Bonus", color: "gold", up: true },
     task_reward: { label: "Task Reward", color: "gold", up: true },
     membership_bonus: { label: "Membership Bonus", color: "gold", up: true },
-    spin_reward: { label: "Spin Reward", color: "gold", up: true },
+    spin_reward: { label: "Legacy Reward", color: "gold", up: true },
     trading_buy: { label: "Trading Buy", color: "rose", up: false },
     trading_sell: { label: "Trading Sell", color: "emerald", up: true },
     options_stake: { label: "Options Stake", color: "rose", up: false },

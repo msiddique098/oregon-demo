@@ -4,23 +4,8 @@ import { Badge } from "../components/ui-eregon";
 import { api, formatApiError } from "../lib/api";
 import { Trash2, Plus, Save, X, Edit3 } from "lucide-react";
 
-const EMPTY = { name: "", tier: "Basic", investment: 100, daily_profit_pct: 0, commission_boost_pct: 0, task_boost_pct: 0, duration_days: 30, badge_color: "purple", perks: [], priority_withdrawal_hours: 24, spin_tokens: 2, spin_reward_queue: "" };
+const EMPTY = { name: "", tier: "Basic", investment: 100, daily_profit_pct: 0, commission_boost_pct: 0, task_boost_pct: 0, duration_days: 30, badge_color: "purple", perks: [], priority_withdrawal_hours: 24, signals_per_day: 1 };
 
-function spinValuesToText(values) {
-    return Array.isArray(values) ? values.join(",") : (values || "");
-}
-
-function parseSpinValues(raw) {
-    return String(raw || "")
-        .split(/[,\s]+/)
-        .map((value) => Number(value.trim()))
-        .filter((value) => Number.isFinite(value) && value > 0);
-}
-
-function planRewardTotal(p) {
-    const fromServer = Number(p.plan_spin_reward_total || 0);
-    return fromServer > 0 ? fromServer : Number(p.investment || 0) * 0.01;
-}
 
 export function AdminPackages() {
     const [items, setItems] = useState([]);
@@ -36,8 +21,7 @@ export function AdminPackages() {
             const payload = { ...form, perks: typeof form.perks === "string" ? form.perks.split("\n").filter(Boolean) : form.perks };
             ["investment", "daily_profit_pct", "commission_boost_pct", "task_boost_pct"].forEach(k => payload[k] = parseFloat(payload[k] || 0));
             payload.daily_profit_pct = 0;
-            payload.spin_tokens = parseInt(payload.spin_tokens || 0);
-            delete payload.spin_reward_queue;
+            payload.signals_per_day = parseInt(payload.signals_per_day || 0);
             ["duration_days", "priority_withdrawal_hours"].forEach(k => payload[k] = parseInt(payload[k] || 0));
             if (editing === "new") await api.post("/admin/packages", payload);
             else await api.patch(`/admin/packages/${editing}`, payload);
@@ -68,14 +52,13 @@ export function AdminPackages() {
                             <p className="font-display text-2xl gradient-text-gold">${p.investment}</p>
                         </div>
                         <ul className="text-sm text-zinc-400 mt-3 space-y-1">
-                            <li>Plan spin pool: <span className="text-emerald-300">${planRewardTotal(p).toFixed(2)} ({Number(p.plan_spin_reward_pct || 1)}%)</span></li>
-                            <li>Commission +{p.commission_boost_pct}% · Task +{p.task_boost_pct}%</li>
-                            <li>{p.duration_days} days · WD {p.priority_withdrawal_hours}h</li>
-                            <li><span className="text-amber-300">{p.spin_tokens || 0} spins</span> included with this plan</li>
-                            <li className="text-xs text-zinc-500">Admin outcomes configured: {(p.spin_reward_queue || []).length || 0}</li>
+                            <li>Signals: <span className="text-emerald-300">{Number(p.signals_per_day || 0)} per day</span></li>
+                            <li>Commission +{p.commission_boost_pct}% - Task +{p.task_boost_pct}%</li>
+                            <li>{p.duration_days} days - WD {p.priority_withdrawal_hours}h</li>
+                            <li className="text-xs text-zinc-500">Plans keep the 9% daily plan-owner reward.</li>
                         </ul>
                         <div className="flex flex-wrap gap-2 mt-4">
-                            <button onClick={() => { setEditing(p.id); setForm({ ...p, perks: (p.perks || []).join("\n"), spin_reward_queue: spinValuesToText(p.spin_reward_queue) }); }} className="btn-ghost text-xs py-1.5 px-3"><Edit3 className="w-3.5 h-3.5" /> Edit</button>
+                            <button onClick={() => { setEditing(p.id); setForm({ ...p, perks: (p.perks || []).join("\n") }); }} className="btn-ghost text-xs py-1.5 px-3"><Edit3 className="w-3.5 h-3.5" /> Edit</button>
                             <button onClick={() => del(p.id)} className="btn-ghost text-xs py-1.5 px-3 hover:bg-rose-500/10 hover:text-rose-300"><Trash2 className="w-3.5 h-3.5" /></button>
                         </div>
                     </div>
@@ -97,13 +80,8 @@ export function AdminPackages() {
                             <F label="Task Boost %" type="number" v={form.task_boost_pct} on={v => setForm({...form, task_boost_pct: v})} />
                             <F label="Duration (days)" type="number" v={form.duration_days} on={v => setForm({...form, duration_days: v})} />
                             <F label="Withdrawal Hours" type="number" v={form.priority_withdrawal_hours} on={v => setForm({...form, priority_withdrawal_hours: v})} />
-                            <F label="Plan Spins" type="number" v={form.spin_tokens} on={v => setForm({...form, spin_tokens: v})} />
+                            <F label="Signals / Day" type="number" v={form.signals_per_day} on={v => setForm({...form, signals_per_day: v})} />
                             <F label="Badge Color" v={form.badge_color} on={v => setForm({...form, badge_color: v})} />
-                            <label className="sm:col-span-2 block">
-                                <span className="text-xs text-zinc-500 uppercase tracking-widest">Server-calculated deterministic spin values</span>
-                                <textarea className="input-eregon mt-1 min-h-[90px]" readOnly value={spinValuesToText(form.spin_reward_queue)} placeholder="Saved plans show calculated values here" />
-                                <span className="text-[11px] text-zinc-500">Set only the spin count. The backend calculates outcomes so their total is exactly 1% of the plan value.</span>
-                            </label>
                         </div>
                         <label className="block mt-3">
                             <span className="text-xs text-zinc-500 uppercase tracking-widest">Perks (one per line)</span>
@@ -260,7 +238,6 @@ export function AdminWithdrawals() {
 
 export function AdminDeposits() {
     const [items, setItems] = useState([]);
-    const [spinInputs, setSpinInputs] = useState({});
     const [proofPreview, setProofPreview] = useState(null);
     const [busyId, setBusyId] = useState("");
     const [err, setErr] = useState("");
@@ -276,10 +253,7 @@ export function AdminDeposits() {
         if (!window.confirm(`Confirm you want to ${action} ${label}?`)) return;
         setBusyId(id);
         try {
-            const payload = { status };
-            const values = parseSpinValues(spinInputs[id]);
-            if (status === "approved" && values.length) payload.deterministic_spin_values = values;
-            await api.patch(`/admin/deposits/${id}`, payload);
+            await api.patch(`/admin/deposits/${id}`, { status });
             setMsg(status === "approved" ? "Deposit approved." : "Deposit rejected.");
             load();
         } catch (e) {
@@ -298,7 +272,7 @@ export function AdminDeposits() {
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm min-w-[720px]">
                         <thead className="bg-black/40"><tr className="text-xs uppercase text-zinc-500">
-                            <th className="text-left px-5 py-3">User</th><th className="text-left">Amount</th><th className="text-left">Coin</th><th className="text-left">Plan</th><th className="text-left">Tx</th><th className="text-left">Proof</th><th className="text-left">Spin Values</th><th className="text-left">Status</th><th></th>
+                            <th className="text-left px-5 py-3">User</th><th className="text-left">Amount</th><th className="text-left">Coin</th><th className="text-left">Plan</th><th className="text-left">Tx</th><th className="text-left">Proof</th><th className="text-left">Status</th><th></th>
                         </tr></thead>
                         <tbody>
                             {items.map(d => (
@@ -309,11 +283,6 @@ export function AdminDeposits() {
                                     <td>{d.package_name ? <Badge color="purple">{d.package_name}</Badge> : <span className="text-zinc-500">—</span>}</td>
                                     <td className="truncate max-w-[140px] text-zinc-400">{d.tx_hash || "—"}</td>
                                     <td>{d.proof_data_url ? <button type="button" onClick={() => setProofPreview({ src: d.proof_data_url, title: `${d.user_email} - ${d.amount} ${d.coin}` })} className="text-purple-300 underline text-xs">view</button> : "—"}</td>
-                                    <td className="min-w-[180px]">
-                                        {d.status === "pending" ? (
-                                            <input className="input-eregon text-xs py-2" placeholder="Blank = random 1-7%" value={spinInputs[d.id] || ""} onChange={e => setSpinInputs({...spinInputs, [d.id]: e.target.value})} />
-                                        ) : <span className="text-xs text-zinc-500">locked</span>}
-                                    </td>
                                     <td><Badge color={d.status === "approved" ? "emerald" : d.status === "rejected" ? "rose" : "gold"}>{d.status}</Badge></td>
                                     <td className="pr-5">
                                         <div className="flex flex-wrap gap-2 justify-end">
@@ -323,7 +292,7 @@ export function AdminDeposits() {
                                     </td>
                                 </tr>
                             ))}
-                            {items.length === 0 && <tr><td colSpan={9} className="text-center py-10 text-zinc-500">No deposits.</td></tr>}
+                            {items.length === 0 && <tr><td colSpan={8} className="text-center py-10 text-zinc-500">No deposits.</td></tr>}
                         </tbody>
                     </table>
                 </div>

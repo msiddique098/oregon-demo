@@ -53,12 +53,12 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="glass-strong p-4 sm:p-6 mobile-safe">
-                    <p className="text-[11px] sm:text-xs uppercase tracking-widest text-zinc-500">Plan Spin Tokens</p>
+                    <p className="text-[11px] sm:text-xs uppercase tracking-widest text-zinc-500">Daily Trade Signals</p>
                     <div className="flex items-center gap-3 mt-3">
                         <RotateCcw className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-300 shrink-0" />
-                        <h3 className="text-xl sm:text-2xl font-display font-semibold gradient-text-gold">{Number(stats.total_spin_tokens || 0).toLocaleString()}</h3>
+                        <h3 className="text-xl sm:text-2xl font-display font-semibold gradient-text-gold">{Number(stats.total_signals_per_day || 0).toLocaleString()}</h3>
                     </div>
-                    <p className="text-xs text-zinc-500 mt-2">Queued deterministic spin access across user accounts</p>
+                    <p className="text-xs text-zinc-500 mt-2">Daily option trade signals across user accounts</p>
                     <div className="mt-5 bg-black/40 border border-white/5 rounded-xl p-4 flex items-center gap-3 min-w-0">
                         <Crown className="w-6 h-6 text-amber-300 text-glow-gold shrink-0" />
                         <div className="min-w-0">
