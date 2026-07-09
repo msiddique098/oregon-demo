@@ -98,7 +98,7 @@ export default function Rewards() {
             </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-5 mb-4 sm:mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-5 mb-4 sm:mb-6 items-start">
             <div className="lg:col-span-2 space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"><h2 className="text-lg sm:text-xl font-display">Available Tasks</h2><Badge>{tasks.length} tasks</Badge></div>
                 <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3 sm:gap-4">
@@ -116,6 +116,13 @@ export default function Rewards() {
                         </motion.div>)}
                     </AnimatePresence>
                 </div>
+
+                <Card>
+                    <div className="flex items-center gap-2 mb-3"><Crown className="w-4 h-4 text-amber-300" /><p className="text-xs uppercase tracking-widest text-zinc-500">Next VIP Target</p></div>
+                    <h3 className="text-2xl font-display gradient-text-gold">{nextVip?.name}</h3>
+                    <p className="text-xs sm:text-sm text-zinc-400 mt-2">Required balance: {nextVip?.required_balance || 0} USDT</p>
+                    <div className="h-2 bg-white/5 rounded-full mt-4 overflow-hidden"><div className="h-full gradient-purple" style={{ width: `${Math.min(100, ((overview?.wallet?.total_balance || 0) / Math.max(1, nextVip?.required_balance || 1)) * 100)}%` }} /></div>
+                </Card>
             </div>
 
             <Card>
@@ -123,13 +130,6 @@ export default function Rewards() {
                 <div className="space-y-3">{achievements.map(a => <div key={a.id} className="p-3 rounded-xl bg-black/35 border border-white/5"><div className="flex justify-between text-sm"><span>{a.title}</span><span className={a.unlocked ? "text-emerald-300" : "text-zinc-500"}>{a.progress}/{a.goal}</span></div><div className="h-2 bg-white/5 rounded-full mt-2 overflow-hidden"><div className="h-full gradient-gold" style={{ width: `${Math.min(100, a.progress / Math.max(1, a.goal) * 100)}%` }} /></div></div>)}</div>
             </Card>
         </div>
-
-        <Card>
-            <div className="flex items-center gap-2 mb-3"><Crown className="w-4 h-4 text-amber-300" /><p className="text-xs uppercase tracking-widest text-zinc-500">Next VIP Target</p></div>
-            <h3 className="text-2xl font-display gradient-text-gold">{nextVip?.name}</h3>
-            <p className="text-xs sm:text-sm text-zinc-400 mt-2">Required balance: {nextVip?.required_balance || 0} USDT</p>
-            <div className="h-2 bg-white/5 rounded-full mt-4 overflow-hidden"><div className="h-full gradient-purple" style={{ width: `${Math.min(100, ((overview?.wallet?.total_balance || 0) / Math.max(1, nextVip?.required_balance || 1)) * 100)}%` }} /></div>
-        </Card>
     <div className="h-6 lg:hidden" />
     </DashboardLayout>;
 }

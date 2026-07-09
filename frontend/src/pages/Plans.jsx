@@ -38,16 +38,16 @@ export default function Plans() {
                                     <p className="text-xs uppercase tracking-widest text-zinc-500">{p.tier}</p>
                                 </div>
                                 <h3 className={`text-2xl sm:text-3xl font-display font-semibold ${isFeatured ? "gradient-text-gold" : "text-white"}`}>${p.investment}</h3>
-                                <p className="text-sm text-emerald-300 mt-1">{signals} signals/day - 9% daily</p>
+                                <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                                    <span className="rounded-lg border border-emerald-400/20 bg-emerald-500/10 px-2 py-1 text-emerald-200">{signals} signals/day</span>
+                                    <span className="rounded-lg border border-amber-400/20 bg-amber-500/10 px-2 py-1 text-amber-200">9% daily reward</span>
+                                </div>
                                 <div className="my-4 h-px bg-white/5"></div>
+                                <p className="text-[11px] uppercase tracking-widest text-zinc-500 mb-3">Included bundle</p>
                                 <ul className="space-y-2 text-sm text-zinc-300">
-                                    {(p.perks || []).map((perk, i) => (
+                                    {Array.from(new Set([...(p.perks || []), `${p.duration_days} days duration`, `Withdrawal in ${p.priority_withdrawal_hours}h`])).map((perk, i) => (
                                         <li key={i} className="flex items-start gap-2"><Check className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" /> {perk}</li>
                                     ))}
-                                    <li className="flex items-start gap-2"><Check className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" /> 9% daily plan-owner reward</li>
-                                    <li className="flex items-start gap-2"><Check className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" /> {p.duration_days} days duration</li>
-                                    <li className="flex items-start gap-2"><Check className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" /> Withdrawal in {p.priority_withdrawal_hours}h</li>
-                                    <li className="flex items-start gap-2"><Check className="w-4 h-4 text-amber-300 mt-0.5 shrink-0" /> {signals} option trade signals per day</li>
                                 </ul>
                                 <Link to={joinPath} className={`${isFeatured ? "btn-gold" : "btn-eregon"} w-full mt-6 text-sm py-2.5`}>
                                     Join {p.tier}

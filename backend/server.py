@@ -867,6 +867,61 @@ def _default_signals_per_day(plan: dict) -> int:
     return 0
 
 
+def _plan_perk_bundle(plan: dict) -> list[str]:
+    tier = str(plan.get("tier") or plan.get("name") or "").lower()
+    signals = _default_signals_per_day(plan)
+    common = [
+        f"{signals} daily option trade signal{'s' if signals != 1 else ''}",
+        "9% daily plan-owner reward",
+        "12% deposit bonus eligibility",
+        "Full wallet ledger tracking",
+    ]
+    if "elite" in tier or "vip" in tier:
+        return common + [
+            "Concierge support desk",
+            "+25% referral commission boost",
+            "+100% task reward boost",
+            "2 hour priority withdrawal review",
+            "Instant high-priority deposit review",
+            "Premium signal alerts and recaps",
+            "Elite campaign and event access",
+            "Private account guidance",
+        ]
+    if "platinum" in tier:
+        return common + [
+            "Dedicated account manager",
+            "+15% referral commission boost",
+            "+50% task reward boost",
+            "12 hour priority withdrawal review",
+            "Priority deposit proof review",
+            "Advanced signal recap notes",
+            "High-value task access",
+        ]
+    if "gold" in tier:
+        return common + [
+            "VIP support queue",
+            "+10% referral commission boost",
+            "+25% task reward boost",
+            "24 hour withdrawal review",
+            "Exclusive task access",
+            "Priority proof review",
+        ]
+    if "silver" in tier:
+        return common + [
+            "Priority support",
+            "+5% referral commission boost",
+            "+10% task reward boost",
+            "36 hour withdrawal review",
+            "Priority signal notifications",
+        ]
+    return common + [
+        "Standard support",
+        "48 hour withdrawal review",
+        "Referral reward access",
+        "Starter task access",
+    ]
+
+
 def _normalize_package_document(data: dict) -> dict:
     """Normalize package fields after removing plan spin rewards."""
     payload = dict(data)
@@ -886,9 +941,10 @@ def _normalize_package_document(data: dict) -> dict:
         if "daily" in lower and "reward" in lower:
             text = "Daily option trade signals"
         cleaned_perks.append(text)
-    signal_text = f"{payload['signals_per_day']} option trade signal{'s' if payload['signals_per_day'] != 1 else ''} per day"
-    if payload["signals_per_day"] > 0 and all("signal" not in item.lower() for item in cleaned_perks):
-        cleaned_perks.insert(0, signal_text)
+    bundled_perks = _plan_perk_bundle(payload)
+    for perk in bundled_perks:
+        if all(perk.lower() != item.lower() for item in cleaned_perks):
+            cleaned_perks.append(perk)
     payload["perks"] = cleaned_perks
     return payload
 
@@ -2214,11 +2270,11 @@ async def seed():
     # Seed default packages
     if await db.packages.count_documents({}) == 0:
         defaults = [
-            {"name": "Basic", "tier": "Basic", "investment": 100, "daily_profit_pct": 0.0, "commission_boost_pct": 0, "task_boost_pct": 0, "duration_days": 30, "badge_color": "zinc", "perks": ["1 option trade signal per day", "Standard support"], "priority_withdrawal_hours": 48, "signals_per_day": 1},
-            {"name": "Silver", "tier": "Silver", "investment": 500, "daily_profit_pct": 0.0, "commission_boost_pct": 5, "task_boost_pct": 10, "duration_days": 60, "badge_color": "slate", "perks": ["3 option trade signals per day", "Priority support", "+5% referral commission"], "priority_withdrawal_hours": 36, "signals_per_day": 3},
-            {"name": "Gold", "tier": "Gold", "investment": 2000, "daily_profit_pct": 0.0, "commission_boost_pct": 10, "task_boost_pct": 25, "duration_days": 90, "badge_color": "amber", "perks": ["5 option trade signals per day", "VIP support", "+10% referral commission", "Exclusive tasks"], "priority_withdrawal_hours": 24, "signals_per_day": 5},
-            {"name": "Platinum", "tier": "Platinum", "investment": 5000, "daily_profit_pct": 0.0, "commission_boost_pct": 15, "task_boost_pct": 50, "duration_days": 120, "badge_color": "purple", "perks": ["7 option trade signals per day", "Dedicated manager", "+15% referral", "Priority withdrawals"], "priority_withdrawal_hours": 12, "signals_per_day": 7},
-            {"name": "Elite VIP", "tier": "Elite VIP", "investment": 15000, "daily_profit_pct": 0.0, "commission_boost_pct": 25, "task_boost_pct": 100, "duration_days": 180, "badge_color": "gold", "perks": ["10 option trade signals per day", "Concierge support", "+25% referral", "Instant withdrawals", "Elite events access"], "priority_withdrawal_hours": 2, "signals_per_day": 10},
+            {"name": "Basic", "tier": "Basic", "investment": 100, "daily_profit_pct": 0.0, "commission_boost_pct": 0, "task_boost_pct": 0, "duration_days": 30, "badge_color": "zinc", "perks": _plan_perk_bundle({"tier": "Basic", "signals_per_day": 1}), "priority_withdrawal_hours": 48, "signals_per_day": 1},
+            {"name": "Silver", "tier": "Silver", "investment": 500, "daily_profit_pct": 0.0, "commission_boost_pct": 5, "task_boost_pct": 10, "duration_days": 60, "badge_color": "slate", "perks": _plan_perk_bundle({"tier": "Silver", "signals_per_day": 3}), "priority_withdrawal_hours": 36, "signals_per_day": 3},
+            {"name": "Gold", "tier": "Gold", "investment": 2000, "daily_profit_pct": 0.0, "commission_boost_pct": 10, "task_boost_pct": 25, "duration_days": 90, "badge_color": "amber", "perks": _plan_perk_bundle({"tier": "Gold", "signals_per_day": 5}), "priority_withdrawal_hours": 24, "signals_per_day": 5},
+            {"name": "Platinum", "tier": "Platinum", "investment": 5000, "daily_profit_pct": 0.0, "commission_boost_pct": 15, "task_boost_pct": 50, "duration_days": 120, "badge_color": "purple", "perks": _plan_perk_bundle({"tier": "Platinum", "signals_per_day": 7}), "priority_withdrawal_hours": 12, "signals_per_day": 7},
+            {"name": "Elite VIP", "tier": "Elite VIP", "investment": 15000, "daily_profit_pct": 0.0, "commission_boost_pct": 25, "task_boost_pct": 100, "duration_days": 180, "badge_color": "gold", "perks": _plan_perk_bundle({"tier": "Elite VIP", "signals_per_day": 10}), "priority_withdrawal_hours": 2, "signals_per_day": 10},
         ]
         for d in defaults:
             await db.packages.insert_one(_normalize_package_document({"id": str(uuid.uuid4()), "created_at": now_utc().isoformat(), **d}))
