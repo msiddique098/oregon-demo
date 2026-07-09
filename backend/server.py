@@ -878,23 +878,23 @@ def _plan_perk_bundle(plan: dict) -> list[str]:
     ]
     if "elite" in tier or "vip" in tier:
         return common + [
+            "Premium signal alerts and recap notes",
+            "Private account guidance",
             "Concierge support desk",
             "+25% referral commission boost",
             "+100% task reward boost",
             "2 hour priority withdrawal review",
             "Instant high-priority deposit review",
-            "Premium signal alerts and recaps",
             "Elite campaign and event access",
-            "Private account guidance",
         ]
     if "platinum" in tier:
         return common + [
+            "Advanced signal recap notes",
             "Dedicated account manager",
             "+15% referral commission boost",
             "+50% task reward boost",
             "12 hour priority withdrawal review",
             "Priority deposit proof review",
-            "Advanced signal recap notes",
             "High-value task access",
         ]
     if "gold" in tier:
@@ -908,11 +908,11 @@ def _plan_perk_bundle(plan: dict) -> list[str]:
         ]
     if "silver" in tier:
         return common + [
+            "Priority signal notifications",
             "Priority support",
             "+5% referral commission boost",
             "+10% task reward boost",
             "36 hour withdrawal review",
-            "Priority signal notifications",
         ]
     return common + [
         "Standard support",
@@ -920,6 +920,35 @@ def _plan_perk_bundle(plan: dict) -> list[str]:
         "Referral reward access",
         "Starter task access",
     ]
+
+
+def _is_generated_plan_perk(text: str) -> bool:
+    lower = text.lower()
+    generated_bits = (
+        "signal",
+        "daily plan-owner reward",
+        "deposit bonus",
+        "wallet ledger",
+        "withdrawal review",
+        "withdrawal in",
+        "referral commission",
+        "referral",
+        "task reward boost",
+        "task boost",
+        "proof review",
+        "support",
+        "badge",
+        "dedicated manager",
+        "account manager",
+        "concierge",
+        "campaign",
+        "event access",
+        "starter task",
+        "exclusive task",
+        "high-value task",
+        "private account",
+    )
+    return any(bit in lower for bit in generated_bits)
 
 
 def _normalize_package_document(data: dict) -> dict:
@@ -932,20 +961,15 @@ def _normalize_package_document(data: dict) -> dict:
     payload["plan_spin_reward_total"] = 0.0
     payload["plan_spin_reward_pct"] = 0.0
     perks = payload.get("perks") or []
-    cleaned_perks = []
+    custom_perks = []
     for perk in perks:
         text = str(perk).strip()
         lower = text.lower()
-        if not text or "spin" in lower or "wheel" in lower:
+        if not text or "spin" in lower or "wheel" in lower or _is_generated_plan_perk(text):
             continue
-        if "daily" in lower and "reward" in lower:
-            text = "Daily option trade signals"
-        cleaned_perks.append(text)
-    bundled_perks = _plan_perk_bundle(payload)
-    for perk in bundled_perks:
-        if all(perk.lower() != item.lower() for item in cleaned_perks):
-            cleaned_perks.append(perk)
-    payload["perks"] = cleaned_perks
+        if all(text.lower() != item.lower() for item in custom_perks):
+            custom_perks.append(text)
+    payload["perks"] = _plan_perk_bundle(payload) + custom_perks[:3]
     return payload
 
 
