@@ -75,7 +75,14 @@ DEPOSIT_BONUS_RATE = float(os.environ.get("DEPOSIT_BONUS_RATE", "0.12"))
 
 
 mongo_url = os.environ["MONGO_URL"]
-client = AsyncIOMotorClient(mongo_url)
+
+client = AsyncIOMotorClient(
+    mongo_url,
+    serverSelectionTimeoutMS=10_000,
+    connectTimeoutMS=10_000,
+    socketTimeoutMS=30_000,
+)
+
 db = client[os.environ["DB_NAME"]]
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -2436,12 +2443,40 @@ async def import_legacy_app_data_users():
     if inserted or skipped:
         logger.info("Legacy app data user import complete: inserted=%s skipped=%s", inserted, skipped)
 
-async def run_startup_task(name: str, task):
+async def run_startup_task(
+    name: str,
+    task,
+    timeout_seconds: int = 20,
+) -> bool:
+    """
+    Run a startup database task without allowing it to block the
+    entire Railway deployment indefinitely.
+    """
+    logger.info("STARTUP BEGIN: %s", name)
+
     try:
-        await task()
+        await asyncio.wait_for(
+            task(),
+            timeout=timeout_seconds,
+        )
+
+        logger.info("STARTUP COMPLETE: %s", name)
         return True
-    except Exception as exc:
-        logger.error("%s skipped during startup: %s", name, exc)
+
+    except asyncio.TimeoutError:
+        logger.error(
+            "STARTUP TIMEOUT: %s exceeded %s seconds. "
+            "Application startup will continue.",
+            name,
+            timeout_seconds,
+        )
+        return False
+
+    except Exception:
+        logger.exception(
+            "STARTUP FAILED: %s. Application startup will continue.",
+            name,
+        )
         return False
 
 async def send_plan_promo_reminders_once() -> int:
